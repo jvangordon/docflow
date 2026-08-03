@@ -264,8 +264,21 @@ def ensure_ka() -> None:
                               "display": KA_DISPLAY}
         have_source = False
         try:
-            for s in w.knowledge_assistants.list_knowledge_sources(ka.name):
-                have_source = True
+            for src in w.knowledge_assistants.list_knowledge_sources(ka.name):
+                path = ""
+                try:
+                    path = (src.files.path or "") if src.files else ""
+                except Exception:
+                    pass
+                if path.startswith(pipeline.VOL_ROOT):
+                    have_source = True
+                elif path:
+                    # A source pointing somewhere else means this assistant is
+                    # left over from an earlier install. Say so and attach the
+                    # current volume alongside rather than trusting stale files.
+                    _log("Knowledge source", "warn",
+                         f"existing source points at {path[:80]} · attaching the "
+                         f"current volume as well")
         except Exception:
             pass
         if not have_source:
