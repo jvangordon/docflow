@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DocFlow · Document Theater · Flow</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { background:#06090D; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; color:#EEEDE9; }
+  .mono { font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; }
+
+  .stage { position:relative; width:1440px; height:900px; overflow:hidden;
+    background:
+      radial-gradient(1100px 700px at 700px 260px, #16232D 0%, #101B23 45%, #0A121A 75%, #06090D 100%); }
+
+  /* ---------- house lighting ---------- */
+  .beam { position:absolute; left:0; top:0; width:1440px; height:780px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(255,138,0,.21) 0%, rgba(255,54,33,.08) 46%, rgba(255,54,33,0) 82%);
+    clip-path:polygon(41.5% 0, 50.5% 0, 67% 100%, 25% 100%);
+    animation:breathe 6s ease-in-out infinite; }
+  .beam2 { position:absolute; left:0; top:0; width:1440px; height:780px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,138,0,0) 70%);
+    clip-path:polygon(44.4% 0, 47.6% 0, 58% 100%, 34% 100%); }
+  @keyframes breathe { 0%,100% { opacity:.9 } 50% { opacity:1 } }
+  .floorGlow { position:absolute; left:390px; top:640px; width:660px; height:120px; border-radius:50%;
+    background:radial-gradient(closest-side, rgba(255,84,20,.22), rgba(255,84,20,0)); }
+  .vignette { position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(1200px 820px at 720px 400px, rgba(0,0,0,0) 55%, rgba(2,4,6,.55) 100%); }
+
+  /* constellation of the rest of the fleet */
+  .dots { position:absolute; width:3px; height:3px; border-radius:50%; background:rgba(238,237,233,.5); }
+  .dots.wings { left:70px; top:520px;
+    box-shadow: 12px 14px 0 0 rgba(255,138,0,.55), 44px 2px 0 0 rgba(238,237,233,.30), 78px 24px 0 0 rgba(238,237,233,.42),
+      108px 6px 0 0 rgba(255,54,33,.45), 150px 30px 0 0 rgba(238,237,233,.28), 186px 12px 0 0 rgba(238,237,233,.40),
+      224px 34px 0 0 rgba(78,163,255,.5), 258px 8px 0 0 rgba(238,237,233,.30), 26px 52px 0 0 rgba(238,237,233,.35),
+      66px 64px 0 0 rgba(255,138,0,.4), 118px 58px 0 0 rgba(238,237,233,.28), 168px 70px 0 0 rgba(238,237,233,.38),
+      214px 62px 0 0 rgba(238,237,233,.26), 254px 74px 0 0 rgba(255,54,33,.35), 8px 92px 0 0 rgba(238,237,233,.30),
+      52px 104px 0 0 rgba(238,237,233,.38), 98px 96px 0 0 rgba(78,163,255,.4), 142px 108px 0 0 rgba(238,237,233,.26),
+      190px 100px 0 0 rgba(255,138,0,.38), 238px 112px 0 0 rgba(238,237,233,.30), 30px 140px 0 0 rgba(238,237,233,.24),
+      84px 148px 0 0 rgba(238,237,233,.34), 136px 138px 0 0 rgba(238,237,233,.22), 184px 150px 0 0 rgba(238,237,233,.30),
+      232px 142px 0 0 rgba(78,163,255,.35), 270px 152px 0 0 rgba(238,237,233,.22); }
+  .dots.rig { left:120px; top:84px;
+    box-shadow: 90px 8px 0 0 rgba(238,237,233,.22), 210px 2px 0 0 rgba(238,237,233,.16), 330px 12px 0 0 rgba(255,138,0,.3),
+      980px 6px 0 0 rgba(238,237,233,.2), 1090px 14px 0 0 rgba(238,237,233,.16), 1180px 4px 0 0 rgba(255,54,33,.3); }
+  .wingsCap { position:absolute; left:70px; top:706px; font-size:12px; letter-spacing:.14em; color:rgba(238,237,233,.55); text-transform:uppercase; }
+  .wingsCap b { color:#FF8A00; font-weight:600; }
+
+  /* ---------- header ---------- */
+  .top { position:absolute; left:0; top:0; width:1440px; height:58px; display:flex; align-items:center;
+    padding:0 26px; gap:22px; background:rgba(6,10,14,.55); border-bottom:1px solid rgba(238,237,233,.08); z-index:40; }
+  .brand { display:flex; align-items:center; gap:11px; }
+  .mark { width:26px; height:26px; border-radius:7px; background:linear-gradient(135deg,#FF3621,#FF8A00);
+    box-shadow:0 0 18px rgba(255,54,33,.55); }
+  .brand .nm { font-size:17px; font-weight:800; letter-spacing:.02em; }
+  .brand .sub { font-size:12px; color:rgba(238,237,233,.6); margin-top:1px; }
+  .certChip { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#3DDC97;
+    border:1px solid rgba(61,220,151,.35); border-radius:999px; padding:3px 10px; background:rgba(61,220,151,.07); }
+  .tickerWrap { flex:1; display:flex; justify-content:center; }
+  .ticker { display:flex; align-items:center; gap:14px; font-size:12.5px; color:rgba(238,237,233,.72); white-space:nowrap; }
+  .live { display:inline-flex; align-items:center; gap:6px; color:#FF8A00; font-weight:700; letter-spacing:.1em; font-size:12px; }
+  .live i { width:7px; height:7px; border-radius:50%; background:#FF3621; box-shadow:0 0 8px #FF3621; animation:blink 1.6s infinite; display:inline-block; }
+  @keyframes blink { 50% { opacity:.35 } }
+  .tick b { color:#EEEDE9; font-weight:600; }
+  .tick .sec { color:#4EA3FF; } .tick .aud { color:#FF8A00; }
+  .board { display:flex; align-items:center; gap:18px; }
+  .board .cell { text-align:right; }
+  .board .v { font-size:21px; font-weight:800; letter-spacing:-.01em; }
+  .board .v.caught { background:linear-gradient(135deg,#FF3621,#FF8A00); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .board .k { font-size:11.5px; letter-spacing:.14em; color:rgba(238,237,233,.55); text-transform:uppercase; margin-top:0px; }
+  .board .div { width:1px; height:30px; background:rgba(238,237,233,.14); }
+  .board .src { font-size:11.5px; color:rgba(238,237,233,.4); max-width:86px; text-align:left; line-height:1.3; }
+
+  /* ---------- scene chrome shared ---------- */
+  .sceneTag { font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:rgba(238,237,233,.55); font-weight:700; }
+  .played { color:#3DDC97; font-size:12px; letter-spacing:.1em; font-weight:700; }
+  .badge { display:inline-block; font-size:11.5px; font-weight:700; letter-spacing:.08em; padding:2px 7px; border-radius:5px; }
+  .ga { color:#3DDC97; border:1px solid rgba(61,220,151,.4); background:rgba(61,220,151,.06); }
+  .beta { color:#FF8A00; border:1px solid rgba(255,138,0,.45); background:rgba(255,138,0,.07); }
+  .preview { color:#D9B8FF; border:1px solid rgba(196,150,255,.4); background:rgba(196,150,255,.07); }
+
+  .flat { position:absolute; border-radius:14px; background:linear-gradient(180deg, rgba(27,49,57,.72), rgba(16,27,35,.85));
+    border:1px solid rgba(238,237,233,.10); box-shadow:0 18px 40px rgba(0,0,0,.45); padding:14px; }
+
+  /* Scene 1 (deep upstage) */
+  .s1 { left:36px; top:158px; width:168px; height:196px; opacity:.5; }
+  .s1 .glyph { margin:12px auto 10px; width:64px; height:46px; border:1.5px solid rgba(238,237,233,.5); border-radius:6px; position:relative; }
+  .s1 .glyph::before { content:""; position:absolute; left:-1.5px; top:-9px; width:26px; height:8px; border:1.5px solid rgba(238,237,233,.5); border-bottom:none; border-radius:4px 4px 0 0; }
+  .s1 .n { text-align:center; font-size:20px; font-weight:800; }
+  .s1 .d { text-align:center; font-size:12px; color:rgba(238,237,233,.65); margin-top:2px; }
+
+  /* Scene 2 */
+  .s2 { left:198px; top:126px; width:224px; height:262px; opacity:.8; z-index:5; }
+  .miniDoc { margin:10px auto 8px; width:110px; height:126px; background:#F1EEE7; border-radius:3px; position:relative; box-shadow:0 6px 14px rgba(0,0,0,.4); }
+  .miniDoc i { position:absolute; border:1.2px dashed #FF8A00; border-radius:2px; }
+  .miniDoc .l1 { left:8px; top:8px; width:60px; height:12px; }
+  .miniDoc .l2 { left:8px; top:30px; width:94px; height:34px; border-color:#FF3621; }
+  .miniDoc .l3 { left:8px; top:74px; width:94px; height:40px; }
+  .miniDoc s { position:absolute; left:8px; height:3px; background:rgba(27,49,57,.25); border-radius:2px; }
+  .s2row { display:flex; justify-content:space-between; align-items:center; font-size:12px; color:rgba(238,237,233,.75); margin-top:5px; }
+
+  /* time thread under played scenes */
+  .thread { position:absolute; left:60px; top:404px; width:760px; height:70px; z-index:2; }
+
+  /* ---------- HERO ---------- */
+  .sceneTitle { position:absolute; left:452px; top:76px; width:560px; z-index:12; }
+  .sceneTitle .big { font-size:24px; font-weight:800; letter-spacing:.01em; }
+  .sceneTitle .big em { font-style:normal; background:linear-gradient(135deg,#FF3621,#FF8A00); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .sceneTitle .sub2 { font-size:13px; color:rgba(238,237,233,.66); margin-top:3px; }
+
+  .doc { position:absolute; left:452px; top:132px; width:396px; height:556px; background:#F7F5EF; border-radius:6px;
+    box-shadow:0 30px 70px rgba(0,0,0,.6), 0 0 0 1px rgba(238,237,233,.12), 0 0 60px rgba(255,84,20,.18);
+    color:#1B3139; z-index:10; padding:20px 22px; }
+  .doc .wm { position:absolute; left:-30px; top:242px; width:456px; text-align:center; transform:rotate(-24deg);
+    font-size:34px; font-weight:800; letter-spacing:.14em; color:rgba(27,49,57,.11); pointer-events:none; }
+  .doc .synth { position:absolute; right:16px; bottom:34px; font-size:11.5px; font-weight:800; letter-spacing:.1em; color:#FF3621;
+    border:1.5px solid rgba(255,54,33,.65); border-radius:4px; padding:2px 7px; transform:rotate(-4deg); background:rgba(255,54,33,.05); }
+  .dHead { display:flex; align-items:baseline; justify-content:space-between; padding-bottom:8px; border-bottom:2px solid #1B3139; }
+  .dHead .co { font-size:15px; font-weight:800; letter-spacing:.06em; }
+  .dHead .ttl { font-size:12px; font-weight:700; letter-spacing:.14em; color:#8A4A00; }
+  .dMeta { display:flex; justify-content:space-between; font-size:12px; margin-top:7px; color:#3A5560; }
+  .dMeta b { color:#1B3139; }
+  .dSec { font-size:11px; font-weight:800; letter-spacing:.12em; color:#7A8B92; margin:12px 0 4px; }
+  table.dt { width:100%; border-collapse:collapse; font-size:12px; }
+  table.dt th { text-align:left; font-weight:700; color:#3A5560; border-bottom:1px solid #C9C4B8; padding:3px 4px; font-size:11px; letter-spacing:.04em; }
+  table.dt td { border-bottom:1px solid #E2DED2; padding:4px; color:#1B3139; }
+  table.dt td.r, table.dt th.r { text-align:right; }
+  .dPara { font-size:12px; line-height:1.5; color:#2A434E; margin-top:3px; }
+  .dSig { display:flex; justify-content:space-between; margin-top:14px; font-size:11px; color:#3A5560; }
+  .dSig .line { border-top:1px solid #1B3139; width:150px; padding-top:3px; }
+  .dFoot { position:absolute; left:22px; right:22px; bottom:10px; font-size:10.5px; color:#8A8577; display:flex; justify-content:space-between; border-top:1px solid #DDD8CC; padding-top:5px; }
+
+  /* parse overlay boxes on hero */
+  .ov { position:absolute; border:1.5px dashed rgba(255,138,0,.85); border-radius:3px; z-index:11; pointer-events:none; }
+  .ov.red { border-color:rgba(255,54,33,.8); }
+  .ov b { position:absolute; right:-1px; top:-18px; font-size:11.5px; font-weight:800; letter-spacing:.08em;
+    background:#FF8A00; color:#231A10; padding:1px 6px; border-radius:3px 3px 0 0; }
+  .ov.red b { background:#FF3621; color:#FFF3EE; }
+  .ov b.lft { right:auto; left:-1px; border-radius:3px 3px 0 0; }
+  table.dt td.nw, table.dt th.nw { white-space:nowrap; }
+
+  .underDoc { position:absolute; left:452px; top:700px; width:396px; display:flex; justify-content:space-between; align-items:center; z-index:10; }
+  .underDoc .l { font-size:12px; color:rgba(238,237,233,.62); }
+  .underDoc .l b { color:#EEEDE9; font-weight:600; }
+
+  /* ---------- verdict panel ---------- */
+  .panel { position:absolute; left:876px; top:132px; width:266px; z-index:12; display:flex; flex-direction:column; gap:10px; }
+  .card { background:linear-gradient(180deg, rgba(27,49,57,.85), rgba(16,27,35,.92)); border:1px solid rgba(238,237,233,.12);
+    border-radius:12px; padding:12px 14px; box-shadow:0 14px 34px rgba(0,0,0,.45); }
+  .card .hd { font-size:11.5px; letter-spacing:.16em; text-transform:uppercase; color:rgba(238,237,233,.5); font-weight:700; margin-bottom:8px; }
+  .actorNm { font-size:14.5px; font-weight:700; }
+  .actorSub { font-size:12px; color:rgba(238,237,233,.6); margin-top:3px; }
+  .badgeRow { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+
+  .verdictType { display:flex; align-items:baseline; justify-content:space-between; }
+  .verdictType .t { font-size:16.5px; font-weight:800; }
+  .verdictType .c { font-size:13px; color:#FF8A00; font-weight:700; }
+  .bar { height:7px; border-radius:4px; background:rgba(238,237,233,.12); margin-top:7px; overflow:hidden; }
+  .bar i { display:block; height:100%; border-radius:4px; background:linear-gradient(90deg,#FF3621,#FF8A00); width:97%;
+    box-shadow:0 0 10px rgba(255,110,10,.6); }
+  .delta { display:flex; align-items:center; gap:7px; font-size:12px; color:rgba(238,237,233,.65); margin-top:7px; }
+  .delta .old { text-decoration:line-through; opacity:.75; }
+  .delta .arr { color:#FF8A00; }
+  .delta .new { color:#EEEDE9; font-weight:700; }
+  .sens { display:flex; justify-content:space-between; font-size:12.5px; margin-top:9px; padding-top:8px; border-top:1px solid rgba(238,237,233,.09); color:rgba(238,237,233,.72); }
+  .sens b { color:#EEEDE9; font-weight:600; }
+
+  .fields { display:flex; flex-direction:column; gap:0; }
+  .fRow { display:flex; justify-content:space-between; align-items:center; padding:5px 0; border-bottom:1px solid rgba(238,237,233,.06); }
+  .fRow:last-child { border-bottom:none; }
+  .fRow .k { font-size:12px; color:rgba(238,237,233,.55); }
+  .fRow .v { font-size:12.5px; font-weight:600; color:#EEEDE9; }
+  .fRow .v.hot { color:#FF8A00; }
+
+  .routeChips { display:flex; gap:8px; }
+  .rc { flex:1; text-align:center; font-size:13px; font-weight:800; letter-spacing:.06em; padding:8px 0; border-radius:8px; }
+  .rc.on { background:rgba(255,90,20,.08); border:1px solid rgba(255,120,10,.45); color:#FFB27A; }
+  .cta { display:block; width:100%; text-align:center; font-size:14.5px; font-weight:800; letter-spacing:.03em; color:#FFF6F2;
+    background:linear-gradient(135deg,#FF3621,#FF8A00); border:none; border-radius:10px; padding:12px 0;
+    box-shadow:0 6px 24px rgba(255,60,20,.45); cursor:pointer; }
+  .cta small { display:block; font-weight:600; font-size:11.5px; color:rgba(255,246,242,.85); margin-top:2px; letter-spacing:.08em; }
+
+  /* ---------- lanes (ahead, stage right) ---------- */
+  .lanesCol { position:absolute; left:1168px; top:112px; width:246px; z-index:8; }
+  .lanesHd { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+  .upnext { font-size:12px; color:#FF8A00; letter-spacing:.12em; font-weight:700; }
+  .door { position:relative; border-radius:12px; padding:10px 12px 10px 14px; margin-bottom:9px;
+    background:linear-gradient(180deg, rgba(27,49,57,.6), rgba(16,27,35,.8)); border:1px solid rgba(238,237,233,.1); opacity:.92; }
+  .door.dim { opacity:.55; }
+  .door.hot { border-color:rgba(255,120,10,.55); box-shadow:0 0 22px rgba(255,80,20,.18); }
+  .door.hot::before { content:""; position:absolute; left:0; top:10px; bottom:10px; width:3px; border-radius:2px; background:linear-gradient(180deg,#FF3621,#FF8A00); }
+  .door.blue { border-color:rgba(78,163,255,.4); }
+  .door.blue::before { content:""; position:absolute; left:0; top:10px; bottom:10px; width:3px; border-radius:2px; background:#4EA3FF; }
+  .doorTop { display:flex; align-items:center; gap:8px; }
+  .mg { width:24px; height:24px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; letter-spacing:.02em; }
+  .mg.ex { background:rgba(255,138,0,.16); color:#FFB27A; border:1px solid rgba(255,138,0,.4); }
+  .mg.au { background:rgba(255,54,33,.14); color:#FF9A8C; border:1px solid rgba(255,54,33,.4); }
+  .mg.se { background:rgba(78,163,255,.14); color:#9CCBFF; border:1px solid rgba(78,163,255,.4); }
+  .mg.ar { background:rgba(238,237,233,.08); color:rgba(238,237,233,.6); border:1px solid rgba(238,237,233,.2); }
+  .doorTop .nm { font-size:13.5px; font-weight:800; letter-spacing:.05em; flex:1; }
+  .inb { font-size:11.5px; font-weight:800; color:#FFB27A; letter-spacing:.06em; }
+  .doorSub { font-size:12px; color:rgba(238,237,233,.62); margin-top:5px; line-height:1.45; }
+  .doorSub b { color:#EEEDE9; font-weight:600; }
+  .doorStat { display:flex; justify-content:space-between; font-size:12px; color:rgba(238,237,233,.55); margin-top:5px; }
+  .doorStat .money { color:#FF8A00; font-weight:700; }
+
+  /* payoff far card */
+  .s5 { position:absolute; left:1168px; top:626px; width:246px; opacity:.62; z-index:6; border-radius:12px;
+    background:linear-gradient(180deg, rgba(27,49,57,.5), rgba(16,27,35,.7)); border:1px solid rgba(238,237,233,.09); padding:11px 13px; }
+  .s5 .q { font-size:12.5px; color:rgba(238,237,233,.8); margin-top:6px; font-style:italic; }
+  .s5 .a { font-size:12px; color:rgba(238,237,233,.5); margin-top:5px; }
+
+  /* program card (corpus provenance) */
+  .program { position:absolute; left:36px; top:392px; width:386px; z-index:6; border-radius:12px;
+    background:linear-gradient(180deg, rgba(27,49,57,.55), rgba(16,27,35,.75)); border:1px solid rgba(238,237,233,.09); padding:11px 14px; opacity:.9; }
+  .program .t { font-size:11.5px; letter-spacing:.16em; text-transform:uppercase; color:rgba(238,237,233,.5); font-weight:700; }
+  .program .b { font-size:12.5px; color:rgba(238,237,233,.75); line-height:1.55; margin-top:5px; }
+  .program .b b { color:#EEEDE9; font-weight:600; }
+  .program .b .wmNote { color:#FF8A00; font-weight:700; }
+
+  /* ---------- run-of-show rail ---------- */
+  .rail { position:absolute; left:0; bottom:0; width:1440px; height:96px; background:rgba(5,8,11,.78);
+    border-top:1px solid rgba(238,237,233,.09); display:flex; align-items:center; padding:0 22px; gap:10px; z-index:40; }
+  .railTag { font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:rgba(238,237,233,.45); font-weight:800; width:74px; line-height:1.5; }
+  .beat { flex:1; border-radius:10px; border:1px solid rgba(238,237,233,.1); background:rgba(27,49,57,.35); padding:9px 12px; position:relative; }
+  .beat .r1 { display:flex; align-items:center; gap:8px; }
+  .key { font-size:11.5px; font-weight:800; color:rgba(238,237,233,.65); border:1px solid rgba(238,237,233,.28); border-radius:5px; padding:1px 6px; font-family:ui-monospace,"SF Mono",Menlo,monospace; }
+  .beat .bt { font-size:13px; font-weight:800; letter-spacing:.03em; }
+  .beat .bs { font-size:12px; color:rgba(238,237,233,.55); margin-top:3px; }
+  .beat.done { opacity:.62; }
+  .beat.done .bt::after { content:" ✓"; color:#3DDC97; font-size:12px; }
+  .beat.active { border-color:rgba(255,120,10,.65); background:linear-gradient(180deg, rgba(255,54,33,.12), rgba(27,49,57,.4)); box-shadow:0 0 24px rgba(255,80,20,.25); }
+  .beat.active .bt { color:#FFB27A; }
+  .beat.active .here { position:absolute; right:12px; top:-10px; font-size:11px; font-weight:800; letter-spacing:.12em; color:#FF8A00;
+    background:#0A0F14; border:1px solid rgba(255,138,0,.6); border-radius:5px; padding:2px 8px; }
+  .resetChip { width:96px; text-align:center; font-size:12px; color:rgba(238,237,233,.5); border:1px dashed rgba(238,237,233,.22); border-radius:10px; padding:10px 6px; line-height:1.5; }
+  .resetChip b { color:rgba(238,237,233,.8); }
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <!-- house -->
+  <div class="beam"></div><div class="beam2"></div>
+  <div class="floorGlow"></div>
+  <div class="dots rig"></div>
+  <div class="dots wings"></div>
+  <div class="wingsCap"><b>41 in the wings</b> · full company 47</div>
+  <div class="vignette"></div>
+
+  <!-- header -->
+  <div class="top">
+    <div class="brand">
+      <div class="mark"></div>
+      <div>
+        <div class="nm">DOCFLOW <span style="font-weight:600;color:rgba(238,237,233,.55)">· Document Theater</span></div>
+        <div class="sub">Acme Manufacturing · Document Intelligence</div>
+      </div>
+      <span class="certChip">✓ profile certified 9:39</span>
+    </div>
+    <div class="tickerWrap">
+      <div class="ticker">
+        <span class="live"><i></i>ACT 2</span>
+        <span class="tick"><b>parsing 6 of 47</b></span>
+        <span class="tick">QI-1108 → <span class="aud">AUDIT</span></span>
+        <span class="tick">MSDS-221 sealed → <span class="sec">SECURE</span></span>
+        <span class="tick">INV-0431 → EXTRACT</span>
+      </div>
+    </div>
+    <div class="board">
+      <div class="cell"><div class="v caught">$3,310</div><div class="k">caught</div></div>
+      <div class="div"></div>
+      <div class="cell"><div class="v">$0.61</div><div class="k">cost</div></div>
+      <div class="src">live tally<br>run_metrics</div>
+    </div>
+  </div>
+
+  <!-- scene 1 · inbox (deep upstage) -->
+  <div class="flat s1">
+    <div style="display:flex;justify-content:space-between"><span class="sceneTag">Scene 1 · Inbox</span></div>
+    <div class="glyph"></div>
+    <div class="n">47</div>
+    <div class="d">docs landed in<br>UC Volume /inbox</div>
+    <div style="display:flex;justify-content:space-between;margin-top:10px"><span class="played">PLAYED</span><span style="font-size:12px;color:rgba(238,237,233,.5)">9:42:10</span></div>
+  </div>
+
+  <!-- scene 2 · parse -->
+  <div class="flat s2">
+    <div style="display:flex;justify-content:space-between;align-items:center"><span class="sceneTag">Scene 2 · Parse</span><span class="badge ga">GA</span></div>
+    <div class="miniDoc">
+      <i class="l1"></i><i class="l2"></i><i class="l3"></i>
+      <s style="top:12px;width:40px"></s><s style="top:40px;width:80px"></s><s style="top:48px;width:74px"></s>
+      <s style="top:56px;width:80px"></s><s style="top:82px;width:78px"></s><s style="top:92px;width:70px"></s><s style="top:102px;width:76px"></s>
+    </div>
+    <div class="s2row"><span>ai_parse_document</span><span style="color:#EEEDE9;font-weight:600">VARIANT out</span></div>
+    <div class="s2row"><span>tables recovered</span><span style="color:#EEEDE9;font-weight:600">9 from scans</span></div>
+    <div class="s2row"><span class="played">PLAYED</span><span>9:43:05</span></div>
+  </div>
+
+  <!-- corpus program card -->
+  <div class="program">
+    <div class="t">Tonight's corpus · generated 9:42</div>
+    <div class="b"><b>47 synthetic docs · 8 types</b> written for Acme by the demo designer. Fictional vendors only, canonical fake values, and every generated page carries a visible <span class="wmNote">SYNTHETIC DEMO DATA</span> watermark. No real records on stage.</div>
+  </div>
+
+  <!-- hero scene title -->
+  <div class="sceneTitle">
+    <div class="big">SCENE 3 · <em>THE LABEL</em></div>
+    <div class="sub2">One document under the light. The labeling agent decides where WC-2214 goes next.</div>
+  </div>
+
+  <!-- HERO DOCUMENT -->
+  <div class="doc">
+    <div class="wm">SYNTHETIC DEMO DATA</div>
+    <div class="synth">SYNTHETIC</div>
+    <div class="dHead">
+      <div class="co">ACME MANUFACTURING</div>
+      <div class="ttl">WARRANTY CLAIM</div>
+    </div>
+    <div class="dMeta"><span>Claim No. <b>WC-2214</b></span><span>Filed <b>2026-07-21</b></span></div>
+    <div class="dMeta"><span>Dealer <b>Redline Equipment Co.</b></span><span>ID <b>4471</b></span></div>
+
+    <div class="dSec">PRODUCT</div>
+    <table class="dt">
+      <tr><th style="width:33%">Model</th><th class="nw">Serial</th><th class="nw">Purchased</th><th class="nw">Installed</th></tr>
+      <tr><td>HX-220 Heat Exchanger</td><td class="nw">AXM-88213-C</td><td class="nw">2026-02-14</td><td class="nw">2026-03-02</td></tr>
+    </table>
+
+    <div class="dSec" style="margin-top:14px">REPORTED FAILURE</div>
+    <div class="dPara">Coolant manifold developed a hairline crack at the weld seam after approximately 2,100 operating hours. Unit removed from service on 2026-07-18. Supplier part lot CH-5518 (Cascadia Hydraulics).</div>
+
+    <div class="dSec" style="margin-top:14px">CLAIM AMOUNT</div>
+    <table class="dt">
+      <tr><th>Item</th><th class="r">Amount</th></tr>
+      <tr><td>Replacement manifold assembly</td><td class="r">$1,240.00</td></tr>
+      <tr><td>Labor, 6.0 hr @ $90</td><td class="r">$540.00</td></tr>
+      <tr><td>Freight</td><td class="r">$60.00</td></tr>
+      <tr><td><b>Total claim</b></td><td class="r"><b>$1,840.00</b></td></tr>
+    </table>
+
+    <div class="dSig">
+      <div class="line">Dealer signature</div>
+      <div class="line">Date</div>
+    </div>
+    <div class="dFoot"><span>SYNTHETIC DEMO DATA · generated by DocFlow</span><span>Page 1 of 2</span></div>
+  </div>
+
+  <!-- parse overlay boxes (set dressing from Scene 2) -->
+  <div class="ov red" style="left:468px; top:150px; width:362px; height:80px;"><b class="lft">HEADER</b></div>
+  <div class="ov" style="left:468px; top:250px; width:362px; height:60px;"><b>TABLE · 4 col</b></div>
+  <div class="ov" style="left:468px; top:336px; width:362px; height:80px;"><b>PARA</b></div>
+  <div class="ov" style="left:468px; top:442px; width:362px; height:122px;"><b>TABLE · 2 col</b></div>
+  <div class="ov red" style="left:468px; top:582px; width:362px; height:30px;"><b class="lft">SIG</b></div>
+
+  <div class="underDoc">
+    <span class="l">layout by <b>ai_parse_document</b> <span class="badge ga">GA</span></span>
+    <span class="l">journey so far <b>8.2s · $0.014</b></span>
+  </div>
+
+  <!-- verdict panel -->
+  <div class="panel">
+    <div class="card">
+      <div class="hd">On stage · the labeling agent</div>
+      <div class="actorNm">Agent Bricks · Classification</div>
+      <div class="actorSub">doc analysis UI, swapped in live at 9:47</div>
+      <div class="badgeRow"><span class="badge preview">PUBLIC PREVIEW</span><span class="badge ga">fallback ai_classify · GA</span></div>
+    </div>
+
+    <div class="card">
+      <div class="hd">Verdict</div>
+      <div class="verdictType"><span class="t">warranty_claim</span><span class="c">0.97</span></div>
+      <div class="bar"><i></i></div>
+      <div class="delta"><span>re-score</span><span class="old">0.81 fallback</span><span class="arr">→</span><span class="new">0.97 brick</span></div>
+      <div class="sens"><span>sensitivity</span><b>low · business doc</b></div>
+    </div>
+
+    <div class="card">
+      <div class="hd">Read from the page</div>
+      <div class="fields">
+        <div class="fRow"><span class="k">claim_id</span><span class="v mono">WC-2214</span></div>
+        <div class="fRow"><span class="k">dealer</span><span class="v">Redline Equipment Co.</span></div>
+        <div class="fRow"><span class="k">serial</span><span class="v mono">AXM-88213-C</span></div>
+        <div class="fRow"><span class="k">supplier_lot</span><span class="v mono">CH-5518 · Cascadia</span></div>
+        <div class="fRow"><span class="k">claim_total</span><span class="v hot mono">$1,840.00</span></div>
+        <div class="fRow"><span class="k">coverage</span><span class="v">in window · ends 2028-02</span></div>
+      </div>
+    </div>
+
+    <div class="routeChips"><span class="rc on">→ EXTRACT</span><span class="rc on">→ AUDIT</span></div>
+    <button class="cta">ROUTE WC-2214 TO ITS LANES<small>SPACE · next beat follows the doc</small></button>
+  </div>
+
+  <!-- lanes column -->
+  <div class="lanesCol">
+    <div class="lanesHd"><span class="sceneTag">Scene 4 · The Lanes</span><span class="upnext">UP NEXT</span></div>
+
+    <div class="door hot">
+      <div class="doorTop"><span class="mg ex">EX</span><span class="nm">EXTRACT</span><span class="inb">WC-2214 INBOUND</span></div>
+      <div class="doorSub">typed rows into Delta<br>ai_extract <span class="badge ga">GA</span> · IE Brick <span class="badge beta">BETA</span></div>
+      <div class="doorStat"><span class="mono">extract_warranty_claims</span><span>31 rows</span></div>
+    </div>
+
+    <div class="door hot">
+      <div class="doorTop"><span class="mg au">AU</span><span class="nm">AUDIT</span><span class="inb">WC-2214 INBOUND</span></div>
+      <div class="doorSub">human approve or override<br>LLM judge via ai_query <span class="badge ga">GA</span></div>
+      <div class="doorStat"><span>queue 3 waiting</span><span class="money">caught $3,310</span></div>
+    </div>
+
+    <div class="door blue">
+      <div class="doorTop"><span class="mg se">SE</span><span class="nm" style="color:#9CCBFF">SECURE</span></div>
+      <div class="doorSub">PII sealed into the locked zone<br>ai_mask <span class="badge ga">GA</span> · locked by UC grants</div>
+      <div class="doorStat"><span>6 sealed</span><span style="color:#9CCBFF">hr_admins only</span></div>
+    </div>
+
+    <div class="door dim">
+      <div class="doorTop"><span class="mg ar">AR</span><span class="nm" style="color:rgba(238,237,233,.7)">ARCHIVE</span></div>
+      <div class="doorSub">no signal · kept cold, lineage retained</div>
+      <div class="doorStat"><span>7 filed</span><span>$0.00 spend</span></div>
+    </div>
+  </div>
+
+  <!-- payoff, far downstage -->
+  <div class="s5">
+    <div style="display:flex;justify-content:space-between"><span class="sceneTag">Scene 5 · The Prestige</span></div>
+    <div class="q">"Which suppliers drive warranty exposure?"</div>
+    <div class="a">The 9:41 question returns at 9:51, answered with receipts. One box · Supervisor <span class="badge ga">GA</span></div>
+  </div>
+
+  <!-- run of show -->
+  <div class="rail">
+    <div class="railTag">Run of<br>show</div>
+    <div class="beat done"><div class="r1"><span class="key">1</span><span class="bt">The Wager</span></div><div class="bs">cold ask 9:41 · zero tables, honest no</div></div>
+    <div class="beat done"><div class="r1"><span class="key">2</span><span class="bt">Raise the Inbox</span></div><div class="bs">47 synthetic docs pour in · 9:42</div></div>
+    <div class="beat active"><span class="here">YOU ARE HERE</span><div class="r1"><span class="key">3</span><span class="bt">Brick Live Build</span></div><div class="bs">built in product UI · re-score flips 0.81 → 0.97</div></div>
+    <div class="beat"><div class="r1"><span class="key">4</span><span class="bt">Lanes Run</span></div><div class="bs">judge catches · one human approve</div></div>
+    <div class="beat"><div class="r1"><span class="key">5</span><span class="bt">The Prestige</span></div><div class="bs">same question, answered · money board</div></div>
+    <div class="resetChip"><b>R</b> clean reset<br>run #38</div>
+  </div>
+
+</div>
+</body>
+</html>

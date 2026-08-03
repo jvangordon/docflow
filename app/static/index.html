@@ -1,0 +1,814 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DocFlow</title>
+<style>
+:root{
+  --bg:#0E1114; --bg2:#111519; --surf:#14181D; --raise:#1A1F26; --inset:#0B0E11;
+  --ink:#F2F0EC; --ink2:#C7CBD1; --dim:#9BA3AD; --faint:#5C6670; --ghost:#343B44;
+  --hair:rgba(242,240,236,.07); --hair2:rgba(242,240,236,.14);
+  --lava:#FF3B20; --lava2:#FF7A45;
+  --ie:#4ADE97; --ka:#B49BF6; --sec:#5CA8E8; --arch:#8A939E; --warn:#F5A524;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0}
+body{min-height:100vh;background:
+  radial-gradient(1200px 500px at 80% -180px, rgba(255,59,32,.05), transparent 60%),var(--bg);
+  color:var(--ink);font:14px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+.mono{font-family:var(--mono)} .num{font-variant-numeric:tabular-nums}
+.mast{display:flex;align-items:center;gap:34px;height:58px;padding:0 clamp(20px,4vw,48px);
+  border-bottom:1px solid var(--hair);position:sticky;top:0;background:rgba(14,17,20,.86);
+  backdrop-filter:blur(10px);z-index:10}
+.wordmark{display:flex;align-items:center;gap:9px;font-size:15.5px;font-weight:800;letter-spacing:-.02em}
+.mk{width:11px;height:11px;border-radius:2.5px;background:linear-gradient(135deg,var(--lava),var(--lava2));
+  box-shadow:0 0 16px rgba(255,59,32,.45)}
+.mast nav{display:flex;gap:4px;height:100%}
+.mast nav button{background:none;border:0;color:var(--faint);font:500 13.5px var(--sans);
+  padding:0 13px;cursor:pointer;position:relative;height:100%}
+.mast nav button:hover{color:var(--ink2)}
+.mast nav button.on{color:var(--ink)}
+.mast nav button.on::after{content:"";position:absolute;left:12px;right:12px;bottom:-1px;height:2px;
+  background:linear-gradient(90deg,var(--lava),var(--lava2));border-radius:2px}
+.mast-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.ws{font-size:12.5px;color:var(--dim)}
+main{max-width:1140px;margin:0 auto;padding:44px clamp(20px,4vw,48px) 96px}
+.over{font:600 10px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+h1{font-size:clamp(24px,3.2vw,34px);font-weight:800;letter-spacing:-.03em;line-height:1.1;
+  margin:10px 0 10px;text-wrap:balance}
+.dek{color:var(--dim);font-size:15px;max-width:68ch;line-height:1.65}
+.rule{height:1px;background:var(--hair);margin:30px 0}
+.sect{font:600 10px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--faint);
+  margin:38px 0 16px;display:flex;align-items:center;gap:14px}
+.sect::after{content:"";flex:1;height:1px;background:var(--hair)}
+.tag{display:inline-flex;align-items:center;gap:6px;font:600 10.5px var(--mono);
+  padding:2.5px 8px;border-radius:100px;border:1px solid var(--hair2);color:var(--dim)}
+.tag .d{width:5px;height:5px;border-radius:50%;background:currentColor}
+.tag.ie{color:var(--ie);border-color:rgba(74,222,151,.3)}
+.tag.ka{color:var(--ka);border-color:rgba(180,155,246,.32)}
+.tag.sec{color:var(--sec);border-color:rgba(92,168,232,.32)}
+.tag.warn{color:var(--warn);border-color:rgba(245,165,36,.34)}
+.tag.mut{color:var(--faint)}
+.btn{font:600 13px var(--sans);padding:9px 18px;border-radius:8px;border:1px solid var(--hair2);
+  background:transparent;color:var(--ink2);cursor:pointer;transition:border-color .15s,color .15s;
+  white-space:nowrap}
+.btn:hover{border-color:var(--dim);color:var(--ink)}
+.btn.hot{background:linear-gradient(135deg,var(--lava),var(--lava2));border:0;color:#fff;
+  font-weight:700;box-shadow:0 6px 22px rgba(255,59,32,.3)}
+.btn.hot:hover{filter:brightness(1.06)}
+.btn:focus-visible{outline:2px solid var(--lava);outline-offset:2px}
+.btn[disabled]{opacity:.42;cursor:not-allowed;box-shadow:none}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font:600 9.5px var(--mono);letter-spacing:.13em;text-transform:uppercase;
+  color:var(--faint);padding:0 12px 10px;border-bottom:1px solid var(--hair2)}
+td{padding:11px 12px;border-bottom:1px solid var(--hair);color:var(--ink2);vertical-align:middle}
+td.r,th.r{text-align:right}
+tr:last-child td{border-bottom:0}
+.figs{display:flex;gap:0;flex-wrap:wrap}
+.fig{flex:1;min-width:170px;padding:4px 26px 4px 0;margin-right:26px;border-right:1px solid var(--hair)}
+.fig:last-child{border-right:0;margin-right:0}
+.fig .v{font:700 28px/1.1 var(--mono);letter-spacing:-.03em}
+.fig .v.hot{background:linear-gradient(135deg,var(--lava),var(--lava2));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.fig .k{font:600 9.5px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-top:7px}
+.fig .n{font-size:12px;color:var(--dim);margin-top:5px;line-height:1.5}
+.split{display:grid;grid-template-columns:5fr 6fr;gap:clamp(24px,4vw,56px)}
+@media (max-width:900px){.split{grid-template-columns:1fr}}
+.f{padding:16px 0;border-bottom:1px solid var(--hair)}
+.f label{display:flex;align-items:center;gap:9px;font:600 9.5px var(--mono);letter-spacing:.14em;
+  text-transform:uppercase;color:var(--faint);margin-bottom:9px}
+.f label em{font-style:normal;margin-left:auto;color:var(--ghost);letter-spacing:.08em}
+.f.done label em{color:var(--ie)}
+.f.done label em::before{content:"✓ "}
+.fnum{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;
+  border-radius:50%;border:1px solid var(--hair2);font:700 10px var(--mono);color:var(--dim)}
+.f.done .fnum{border-color:rgba(74,222,151,.45);color:var(--ie)}
+input.ctl, select.ctl{width:100%;padding:11px 14px;border:1px solid var(--hair2);border-radius:9px;
+  background:var(--inset);color:var(--ink);font:600 14.5px var(--sans);outline:none}
+input.ctl:focus, select.ctl:focus{border-color:var(--dim)}
+select.ctl{appearance:none}
+.hint{font-size:12px;color:var(--faint);margin-top:8px;line-height:1.55}
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.tag.pick{cursor:pointer}
+.tag.pick.on{color:var(--ink);border-color:var(--dim);background:rgba(242,240,236,.05)}
+.chk{padding:14px 0;border-bottom:1px solid var(--hair)}
+.chk .toprow{display:flex;align-items:center;gap:12px}
+.chk .glyph{font:700 12px var(--mono);width:16px}
+.chk.ok .glyph{color:var(--ie)} .chk.fx .glyph{color:var(--warn)} .chk.ad .glyph{color:var(--faint)}
+.chk h4{font-size:14px;font-weight:600;flex:1}
+.chk p{font-size:12.5px;color:var(--dim);margin:5px 0 0 28px;max-width:56ch}
+.fixbtn{font:700 12px var(--sans);color:var(--warn);background:rgba(245,165,36,.08);
+  border:1px solid rgba(245,165,36,.4);border-radius:7px;padding:7px 14px;cursor:pointer;
+  white-space:nowrap;display:inline-block}
+.fixbtn:hover{background:rgba(245,165,36,.16)}
+.chk .req{font:700 8.5px var(--mono);letter-spacing:.12em;color:var(--lava2);
+  border:1px solid rgba(255,122,69,.45);border-radius:3px;padding:1px 5px;vertical-align:2px}
+.chk .opt{font:700 8.5px var(--mono);letter-spacing:.12em;color:var(--ghost);
+  border:1px solid var(--hair2);border-radius:3px;padding:1px 5px;vertical-align:2px}
+.steps{margin:9px 0 0 28px;padding:0;color:var(--dim);font-size:12.5px;line-height:1.75}
+.steps li{margin:0 0 2px}
+.dlink{display:inline-block;margin:8px 0 0 28px;font:600 11.5px var(--mono);color:var(--sec);
+  text-decoration:none;border-bottom:1px solid rgba(92,168,232,.35)}
+.fixout{margin:8px 0 0 28px;font:500 11.5px var(--mono);line-height:1.6}
+.fixout.good{color:var(--ie)} .fixout.bad{color:var(--warn)}
+.fixout.good:not(:empty)::before{content:"✓ "}
+.fixout.bad:not(:empty)::before{content:"! "}
+.said{margin-top:6px;color:var(--faint);font-size:11px}
+.said summary{cursor:pointer;color:var(--dim);list-style:none}
+.said summary::after{content:" ▾"}
+.said[open] summary::after{content:" ▴"}
+.waitfor{font:600 11px var(--mono);color:var(--faint);border:1px dashed var(--hair2);
+  border-radius:7px;padding:6px 11px;white-space:nowrap}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin:10px 0 4px;
+  font:500 10.5px var(--mono);color:var(--faint)}
+.legend b{color:var(--dim);font-weight:700;margin-right:4px}
+.gobar{display:flex;align-items:center;gap:16px;margin-top:24px;padding:14px 16px;
+  border:1px solid var(--hair2);border-radius:12px;background:var(--surf)}
+.gobar .msg{font-size:13px;color:var(--dim)}
+.spine{position:relative;padding-left:26px;margin-top:8px}
+.spine::before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:1.5px;
+  background:linear-gradient(180deg,var(--lava),rgba(255,122,69,.4) 30%,var(--hair2))}
+.snode{position:relative;padding:0 0 14px;font-size:13px;color:var(--ink2)}
+.snode::before{content:"";position:absolute;left:-25.5px;top:5px;width:8px;height:8px;border-radius:50%;
+  background:var(--bg);border:1.5px solid var(--faint)}
+.snode.ok::before{border-color:var(--ie);background:var(--ie)}
+.snode.run::before{border-color:var(--lava);background:var(--lava);box-shadow:0 0 10px rgba(255,59,32,.6)}
+.snode.err::before{border-color:var(--warn);background:var(--warn)}
+.snode .st{font:600 11px var(--mono);color:var(--faint);margin-right:10px}
+.snode .det{display:block;font:500 11px var(--mono);color:var(--faint);margin-top:2px}
+.riverwrap{position:relative;width:100%;aspect-ratio:2/1;max-height:560px}
+.river{position:absolute;inset:0;width:100%;height:100%}
+.rp{fill:none;stroke-width:1.75;stroke-linecap:round;stroke:var(--hair2)}
+.rp.on{stroke-dasharray:4 8;animation:flow 1.5s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-12}}
+.hero{border:1px solid var(--hair);border-radius:16px;background:
+  linear-gradient(180deg,rgba(242,240,236,.015),transparent 120px),var(--bg2);
+  padding:16px 10px 20px;overflow:hidden}
+.node{position:absolute;text-align:center}
+.nlbl{margin-top:9px;font:700 9.5px var(--mono);letter-spacing:.13em;color:var(--dim)}
+.nlbl span{display:block;font:500 9px var(--mono);color:var(--faint);margin-top:3px;text-transform:none}
+.pilewrap{position:relative;width:70px;height:84px;margin:0 auto}
+.sheet{position:absolute;inset:0;border-radius:7px;background:var(--raise);border:1px solid var(--hair2)}
+.sheet:nth-child(1){transform:rotate(-5deg) translate(-7px,3px);opacity:.45}
+.sheet:nth-child(2){transform:rotate(3.5deg) translate(6px,1px);opacity:.7}
+.sheet:nth-child(3){display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.sheet .cnt{font:700 24px var(--mono)}
+.sheet .cl{font:600 8.5px var(--mono);color:var(--faint)}
+.ring{width:82px;height:82px;border-radius:50%;border:1.5px solid rgba(255,122,69,.55);margin:0 auto;
+  display:flex;align-items:center;justify-content:center;position:relative;
+  background:radial-gradient(circle,rgba(255,59,32,.12),transparent 70%)}
+.ring span{font:700 18px var(--mono)}
+.ring2{position:absolute;inset:-7px;border-radius:50%;border:1px dashed rgba(255,122,69,.3);animation:spin 14s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.term{position:absolute;width:24%;min-width:198px;padding:10px 13px;border:1px solid var(--hair);
+  border-radius:11px;background:rgba(20,24,29,.85);backdrop-filter:blur(4px)}
+.term b{display:block;font-size:12.5px;font-weight:700}
+.term>span{display:block;font:500 9.5px var(--mono);color:var(--faint);margin-top:3px}
+.term .tmeta{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+.term.hotT{border-color:rgba(180,155,246,.4);box-shadow:inset 3px 0 0 var(--ie),inset 6px 0 0 var(--ka)}
+.term.archT{opacity:.62}
+.tickline{display:flex;gap:24px;margin:8px 24px 0;padding-top:14px;border-top:1px solid var(--hair);
+  font:500 11.5px var(--mono);color:var(--faint);flex-wrap:wrap}
+.tickline b{color:var(--ink2)}
+.insp{margin-top:20px;border:1px solid var(--hair);border-radius:14px;background:var(--bg2);padding:20px 24px}
+.kvrow{display:grid;grid-template-columns:repeat(4,1fr);gap:16px 22px;margin-top:14px}
+@media(max-width:900px){.kvrow{grid-template-columns:1fr 1fr}}
+.kv .k{font:600 9px var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--faint)}
+.kv .v{font:600 13px var(--mono);margin-top:4px;color:var(--ink2)}
+.pull{margin-top:16px;padding:14px 18px;border-left:2px solid var(--lava);background:rgba(255,59,32,.035);
+  border-radius:0 10px 10px 0;font-size:13.5px;line-height:1.6;color:var(--ink2)}
+.pull .plbl{font:600 9px var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--faint);
+  display:block;margin-bottom:5px}
+.qa{margin:24px 0}
+.qq{display:flex;justify-content:flex-end}
+.qq span{font-size:14.5px;font-weight:600;background:var(--raise);border:1px solid var(--hair2);
+  padding:10px 16px;border-radius:12px 12px 4px 12px;max-width:78%}
+.path{display:flex;align-items:center;gap:10px;margin:12px 0;font:500 11px var(--mono);color:var(--faint);flex-wrap:wrap}
+.path .eng{font-weight:700;padding:3px 10px;border-radius:100px;border:1px solid}
+.path .eng.g{color:var(--sec);border-color:rgba(92,168,232,.4)}
+.path .eng.k{color:var(--ka);border-color:rgba(180,155,246,.4)}
+.aa{border:1px solid var(--hair);border-radius:4px 14px 14px 14px;background:var(--bg2);padding:16px 20px;
+  position:relative;overflow:hidden}
+.aa::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:var(--ac,var(--hair2))}
+.aa .lede{font-size:14.5px;line-height:1.65;color:var(--ink2);white-space:pre-wrap}
+.code{margin-top:12px;padding:11px 14px;border-radius:9px;background:var(--inset);
+  border:1px solid var(--hair);font:12px/1.6 var(--mono);color:#8FC7EE;overflow-x:auto}
+.meta{margin-top:11px;font:500 10.5px var(--mono);color:var(--faint)}
+.askrow{display:flex;gap:12px;margin-top:28px;padding:8px 8px 8px 20px;border:1px solid var(--hair2);
+  border-radius:14px;background:var(--surf);align-items:center}
+.askrow input{flex:1;background:none;border:0;outline:none;color:var(--ink);font:15px var(--sans)}
+.askrow input::placeholder{color:var(--faint)}
+.trend{display:grid;grid-template-columns:minmax(90px,160px) 1fr 90px;gap:14px;align-items:center;padding:7px 0}
+.trend .d{font:500 12px var(--mono);color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trend .bar{height:7px;border-radius:100px;background:var(--raise);overflow:hidden}
+.trend .bar i{display:block;height:100%;border-radius:100px;background:var(--ghost)}
+.trend .v{font:600 12px var(--mono);text-align:right;color:var(--ink2)}
+.callout{margin-top:30px;padding:18px 22px;border:1px solid var(--hair);border-radius:14px;
+  background:linear-gradient(135deg,rgba(255,59,32,.05),transparent 55%),var(--bg2)}
+.callout b{display:block;font-size:14px;margin-bottom:6px}
+.callout p{font-size:13.5px;color:var(--dim);line-height:1.65}
+.empty{padding:52px 20px;text-align:center;border:1px dashed var(--hair2);border-radius:14px;color:var(--dim)}
+.empty b{display:block;font-size:16px;color:var(--ink);margin-bottom:6px}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--hair2);
+  border-top-color:var(--lava);border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<header class="mast">
+  <div class="wordmark"><span class="mk"></span>DocFlow</div>
+  <nav id="nav">
+    <button data-go="start" class="on">Start</button>
+    <button data-go="docs">Documents</button>
+    <button data-go="flow">Flow</button>
+    <button data-go="ask">Ask</button>
+    <button data-go="claims">Claims</button>
+    <button data-go="suppliers">Suppliers</button>
+    <button data-go="built">Built</button>
+  </nav>
+  <div class="mast-right"><span class="ws" id="wsname"></span></div>
+</header>
+<main id="stage"><div class="empty"><span class="spin"></span></div></main>
+
+<script>
+const $ = (s,el=document)=>el.querySelector(s);
+const stage = $("#stage");
+const S = { cfg:null, scan:null, ready:null, golog:null, state:null, page:"start",
+            pollers:[], asking:false, turns:[], fixout:{} };
+
+const esc = s => String(s??"").replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const mdb = s => esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>");
+const isMoneyCol = n => /amount|total|sum|cost|usd|value|spend/i.test(n||"");
+const fmtCell = (v,col)=>{ const n=parseFloat(v);
+  if(!isNaN(n) && String(v).match(/^-?\d+(\.\d+)?$/))
+    return isMoneyCol(col)?("$"+n.toLocaleString(undefined,{maximumFractionDigits:2})):n.toLocaleString();
+  return esc(v); };
+const j = async (url, opts) => { const r = await fetch(url, opts); const ct = r.headers.get("content-type")||"";
+  const body = ct.includes("json") ? await r.json() : await r.text();
+  if (!r.ok) throw new Error((body&&body.error)||("request failed: "+r.status)); return body; };
+const post = (url, data) => j(url, {method:"POST", headers:{"Content-Type":"application/json"},
+  body: JSON.stringify(data||{})});
+const money = v => v==null?"":"$"+Number(v).toLocaleString(undefined,{maximumFractionDigits:0});
+function stopPollers(){ S.pollers.forEach(clearInterval); S.pollers=[]; }
+function poll(fn, ms){ fn(); const id=setInterval(fn, ms); S.pollers.push(id); return id; }
+
+/* ---------------- START ---------------- */
+async function loadStart(){
+  const [cfg, scan, ready] = await Promise.all([
+    j("/api/config"), j("/api/scan").catch(e=>({error:String(e)})), j("/api/readiness").catch(e=>({checks:[],error:String(e)}))]);
+  S.cfg=cfg; S.scan=scan; S.ready=ready;
+  renderStart();
+}
+function formComplete(){
+  const c=S.cfg||{}; return !!(c.company && c.industry && c.catalog && c.schema);
+}
+function renderStart(){
+  const c=S.cfg||{}, scan=S.scan||{}, rd=S.ready||{checks:[]};
+  // Once a run exists the log is the story; readiness folds into a summary.
+  const started = !!(S.golog && S.golog.steps && S.golog.steps.length);
+  const cats = scan.catalogs||[];
+  const catOptions = [];
+  cats.forEach(cat=> (cat.schemas.length?cat.schemas:["docflow"]).forEach(s=>
+    catOptions.push(`${cat.name}.${s}`)));
+  if(!catOptions.includes("workspace.docflow")) catOptions.unshift("workspace.docflow");
+  const cur = `${c.catalog||"workspace"}.${c.schema||"docflow"}`;
+  const vols = scan.volumes||[];
+  const doneN = ["company","industry"].filter(k=>c[k]).length + (c.catalog?1:0) + 1;
+  // Go is gated on BOTH the form and the required checks, which is the promise
+  // the Start page makes. Optional checks never block.
+  const running = !!(S.golog && S.golog.phase==="running");
+  const blockers = (rd.blockers||[]);
+  const goOK = formComplete() && !blockers.length && !running;
+  const golabel = running ? "Running" : "Go";
+  const gomsg = running ? "The run is working. The log is on the right."
+    : !formComplete() ? "Fill in the four fields above to enable go."
+    : blockers.length ? `Blocked by ${blockers.length} required check${blockers.length>1?"s":""}: ${blockers.join(", ")}.`
+    : "Setup can be re-run safely and removed with one click after the demo.";
+  stage.innerHTML = `
+  <div class="over">Portable installer · this workspace</div>
+  <h1>Four answers, one button.</h1>
+  <p class="dek">DocFlow prepares this workspace for a live document demo. It scans what exists, creates what is missing, and runs documents through Databricks agents while you watch.</p>
+  <div class="rule"></div>
+  <div class="split">
+    <div>
+      <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:4px">
+        <span class="over">Set up the demo</span>
+        <span style="font:500 11.5px var(--mono);color:var(--dim)">${doneN} of 4</span>
+        <span style="margin-left:auto;font:500 11px var(--mono);color:var(--faint)">
+          scanned · ${cats.length} catalogs · ${vols.length} volumes</span>
+      </div>
+      <div class="f ${c.company?"done":""}"><label><i class="fnum">1</i>Customer name<em>required</em></label>
+        <input class="ctl" id="f-company" value="${esc(c.company)}" placeholder="Who is this demo for?">
+        <div class="hint">Appears on every page and inside every generated document.</div></div>
+      <div class="f ${c.industry?"done":""}"><label><i class="fnum">2</i>Industry<em>required</em></label>
+        <input class="ctl" id="f-industry" value="${esc(c.industry)}" placeholder="Manufacturing, Insurance, Healthcare...">
+        <div class="chips">${["Manufacturing","Insurance","Healthcare","Financial services","Retail"]
+          .map(x=>`<span class="tag pick ${c.industry===x?"on":""}" data-ind="${x}">${x}</span>`).join("")}</div>
+        <div class="hint">Drives the demo vocabulary, the questions, and both operations pages.</div></div>
+      <div class="f ${c.catalog?"done":""}"><label><i class="fnum">3</i>Catalog · schema<em>required</em></label>
+        <select class="ctl mono" id="f-target">
+          ${catOptions.map(o=>`<option ${o===cur?"selected":""}>${esc(o)}</option>`).join("")}
+          <option value="__new">workspace.docflow — create if missing</option>
+        </select>
+        <div class="hint">Extracted tables, the Genie space, and run state land here. Missing pieces are created on go.</div></div>
+      <div class="f done"><label><i class="fnum">4</i>Documents<em>ready</em></label>
+        <select class="ctl mono" id="f-cvol">
+          <option value="">No customer documents · generate everything</option>
+          ${vols.map(v=>`<option ${c.customer_volume===v?"selected":""}>${esc(v)}</option>`).join("")}
+        </select>
+        <div class="hint">Pick a volume if the customer has PDFs; the run copies them in read-only. Generated documents always get their own folder and a SYNTHETIC watermark.</div></div>
+      <div class="f" style="border-bottom:0"><label>Setup model · Databricks AI Gateway</label>
+        <input class="ctl mono" id="f-model" style="font-size:13px" value="${esc(c.chat_endpoint||"databricks-claude-sonnet-4-6")}">
+      </div>
+      <div class="gobar">
+        <button class="btn hot" id="gobtn" ${goOK?"":"disabled"}>${golabel}</button>
+        <button class="btn" id="savebtn">Save</button>
+        <span class="msg" id="gomsg">${esc(gomsg)}</span>
+      </div>
+    </div>
+    <div>${started ? `
+      <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:14px">
+        <span class="over">Run log</span>
+        <span style="font:500 11.5px var(--mono);color:var(--dim)" id="runsum">${
+          S.golog.phase==="running"?"working":S.golog.phase==="done"
+            ?`ready in ${S.golog.sections["Total, go to ready"]||"—"}s`:"stopped"}</span>
+      </div>
+      <div class="spine" id="golog">${renderGolog()}</div>
+      <details style="margin-top:26px">
+        <summary style="cursor:pointer;font:600 10px var(--mono);letter-spacing:.16em;
+          text-transform:uppercase;color:var(--faint);list-style:none">Readiness · ${
+          (rd.checks||[]).filter(x=>x.ok).length} of ${(rd.checks||[]).length} pass ▾</summary>
+        <div id="rdlist" style="margin-top:12px">${renderChecks(rd)}</div>
+      </details>` : `
+      <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:6px">
+        <span class="over">Readiness</span>
+        <span style="font:500 11.5px var(--mono);color:var(--dim)" id="rdsum"></span>
+        <button class="btn" style="margin-left:auto;padding:5px 13px;font-size:11.5px" id="recheck">Re-check</button>
+      </div>
+      <div class="legend"><span><b>✓</b>passing</span><span><b>!</b>blocks go</span>
+        <span><b>?</b>not tested yet</span><span><b>○</b>optional, not present</span></div>
+      <div id="rdlist">${renderChecks(rd)}</div>`}
+    </div>
+  </div>`;
+  $("#wsname").textContent = c.company || "";
+  bindStart();
+  const rs=$("#rdsum");
+  if(rs){
+    // Required progress is the number that decides whether go unlocks.
+    const opt=(rd.checks||[]).filter(x=>x.optional);
+    const optOK=opt.filter(x=>x.ok).length;
+    rs.textContent = `${rd.required_ok??0} of ${rd.required_total??0} required`
+      + (opt.length?` · ${optOK} of ${opt.length} optional`:"");
+  }
+}
+function renderChecks(rd){
+  const byKey = Object.fromEntries((rd.checks||[]).map(c=>[c.key,c]));
+  return (rd.checks||[]).map(ch=>{
+    const blocking = !ch.ok && !ch.optional;
+    const cls = ch.ok?"ok":(ch.fixable_by_app?"fx":"ad");
+    const glyph = ch.ok?"✓":(ch.untested?"?":(blocking?"!":"○"));
+    // A remedy that cannot succeed yet is shown as a waiting note, not a button.
+    const dep = ch.depends_on ? byKey[ch.depends_on] : null;
+    const waiting = dep && !dep.ok ? dep.label : null;
+    const act = ch.ok?"":(waiting
+      ? `<span class="waitfor">after ${esc(waiting)}</span>`
+      : ch.fixable_by_app
+      ? `<button class="fixbtn" data-fix="${esc(ch.fix_endpoint)}" data-key="${esc(ch.key)}">${esc(ch.fix_label||"Fix")}</button>`
+      : (ch.link?`<a class="fixbtn" style="text-decoration:none" href="${esc(ch.link)}" target="_blank" rel="noopener">${esc(ch.link_label||"Open")} ↗</a>`:""));
+    const steps = (!ch.ok && ch.steps && ch.steps.length)
+      ? `<ol class="steps">${ch.steps.map(s=>`<li>${esc(s)}</li>`).join("")}</ol>` : "";
+    const link2 = (!ch.ok && ch.link && ch.fixable_by_app)
+      ? `<a class="dlink" href="${esc(ch.link)}" target="_blank" rel="noopener">${esc(ch.link_label||"Open in workspace")} ↗</a>` : "";
+    return `<div class="chk ${cls}" id="chk-${esc(ch.key)}">
+      <div class="toprow"><span class="glyph" title="${ch.ok?'passing':ch.untested?'not tested yet':blocking?'blocks go':'optional'}">${glyph}</span>
+        <h4>${esc(ch.label)} <span class="${ch.optional?"opt":"req"}">${ch.optional?"optional":"required"}</span></h4>
+        <div>${act}</div></div>
+      <p>${esc(ch.detail||"")}${ch.human_action&&!ch.ok?" "+esc(ch.human_action):""}</p>
+      ${steps}${link2}
+      <div class="fixout ${S.fixout[ch.key]?S.fixout[ch.key].cls:""}" id="out-${esc(ch.key)}">${
+        S.fixout[ch.key]?esc(S.fixout[ch.key].text):""}${
+        S.fixout[ch.key]&&S.fixout[ch.key].detail
+          ? `<details class="said"><summary>what Databricks reported</summary>${esc(S.fixout[ch.key].detail)}</details>`
+          : ""}</div></div>`;
+  }).join("") || `<p class="hint">Readiness could not load. Re-check.</p>`;
+}
+function renderGolog(){
+  const g=S.golog;
+  if(!g || !g.steps || !g.steps.length)
+    return `<div class="snode"><span class="st">—</span>Waiting for go. The log streams here.</div>`;
+  return g.steps.map(s=>`<div class="snode ${s.status==="ok"?"ok":s.status==="err"?"err":"run"}">
+    <span class="st num">${s.t}s</span>${esc(s.name)}<span class="det">${esc(s.detail)}</span></div>`).join("")
+    + (g.phase==="running"?`<div class="snode run"><span class="st"><span class="spin"></span></span>working</div>`:"");
+}
+function bindStart(){
+  document.querySelectorAll(".tag.pick").forEach(t=>t.onclick=()=>{
+    $("#f-industry").value=t.dataset.ind; saveCfg(); });
+  $("#savebtn").onclick=saveCfg;
+  ["f-company","f-industry","f-model"].forEach(id=>{ const el=$("#"+id);
+    el && (el.onchange=saveCfg); });
+  $("#f-target").onchange=saveCfg; $("#f-cvol").onchange=saveCfg;
+  const rc=$("#recheck");
+  if(rc) rc.onclick=async()=>{ S.ready=await j("/api/readiness").catch(()=>S.ready); renderStart(); };
+  document.querySelectorAll("button.fixbtn").forEach(b=>b.onclick=async()=>{
+    const key=b.dataset.key, label=b.textContent;
+    b.disabled=true; b.innerHTML=`<span class="spin"></span>`;
+    let res=null;
+    try{ res=await post(b.dataset.fix); }
+    catch(e){ res={ok:false,error:e.message}; }
+    // Success is only claimed when the platform actually reports success, and
+    // the message survives the re-check that follows.
+    const good = res && res.ok !== false && !res.error;
+    // On failure the instruction leads; the platform's wording is kept but
+    // demoted, because the reader needs the next action first.
+    S.fixout[key] = {
+      cls: good?"good":"bad",
+      text: good
+        ? (Array.isArray(res.created) ? "created "+res.created.join(", ")
+           : res.warehouse_id ? `created ${esc(res.name||"warehouse")}, stops after ${res.auto_stop_mins||10} idle minutes`
+           : res.started ? "started "+res.started : "done")
+        : ((res&&res.human_action) ? res.human_action : "Could not complete."),
+      detail: good ? "" : ((res&&res.error) ? "Databricks said: "+res.error : "")
+    };
+    S.ready = (res && res.readiness) ? res.readiness
+            : await j("/api/readiness").catch(()=>S.ready);
+    renderStart();
+  });
+  $("#gobtn").onclick=async()=>{
+    await saveCfg();
+    try{ await post("/api/go"); }catch(e){ $("#gomsg").textContent=e.message; return; }
+    pollGo();
+  };
+}
+async function saveCfg(){
+  const t=($("#f-target").value==="__new"?"workspace.docflow":$("#f-target").value).split(".");
+  const body={ company:$("#f-company").value.trim(), industry:$("#f-industry").value.trim(),
+    catalog:t[0], schema:t[1]||"docflow", customer_volume:$("#f-cvol").value,
+    chat_endpoint:$("#f-model").value.trim() };
+  S.cfg = await post("/api/config", body).catch(()=>S.cfg);
+  renderStart();
+  const sb=$("#savebtn"); if(sb){ sb.textContent="Saved ✓"; setTimeout(()=>{const b=$("#savebtn"); if(b) b.textContent="Save";},1600); }
+}
+function pollGo(){
+  stopPollers();
+  poll(async()=>{
+    S.golog = await j("/api/golog").catch(()=>S.golog);
+    if(S.page==="start"){ const el=$("#golog"); if(el) el.innerHTML=renderGolog();
+      const gb=$("#gobtn"); if(gb){ gb.disabled = S.golog && S.golog.phase==="running";
+        gb.textContent = S.golog&&S.golog.phase==="running"?"Running":"Go"; } }
+    if(S.golog && (S.golog.phase==="done"||S.golog.phase==="error")){
+      stopPollers();
+      // Re-render fully so the header stops saying "working" and Go re-enables.
+      if(S.page==="start"){
+        S.ready = await j("/api/readiness").catch(()=>S.ready);
+        renderStart();
+        const m=$("#gomsg");
+        if(m && S.golog.phase==="done")
+          m.innerHTML=`Ready in <b class="num">${S.golog.sections["Total, go to ready"]||""}s</b>. Open the Flow page.`;
+      }
+    }
+  }, 2000);
+}
+
+/* ---------------- DOCUMENTS ---------------- */
+async function loadDocs(){
+  const g = await j("/api/golog").catch(()=>null); S.golog=g;
+  const st = g && g.pipeline; const docs = st? Object.values(st.docs||{}):[];
+  const a = (g&&g.assets&&g.assets.documents)||{};
+  stage.innerHTML = `
+  <div class="over">Corpus</div><h1>The document set</h1>
+  <p class="dek">Every document in this run, where it came from, and which capability handles it.</p>
+  <div class="rule"></div>
+  ${docs.length? `
+  <div class="figs">
+    <div class="fig"><div class="v num">${a.customer||0}</div><div class="k">customer documents</div></div>
+    <div class="fig"><div class="v num">${a.generated||0}</div><div class="k">generated</div>
+      <div class="n">watermarked SYNTHETIC DEMO DATA</div></div>
+    <div class="fig"><div class="v num">${docs.length}</div><div class="k">in this run</div></div>
+  </div>
+  <div class="sect">Documents</div>
+  <table><thead><tr><th>Document</th><th>Type</th><th>Confidence</th><th>Sensitivity</th><th>Lane</th><th class="r">Stage</th></tr></thead>
+  <tbody>${docs.sort((x,y)=>String(x.doc_id).localeCompare(String(y.doc_id))).map(d=>`<tr>
+    <td class="mono" style="font-size:12px;color:var(--ink)">${esc(d.filename||d.doc_id)}</td>
+    <td>${esc(d.doc_type||"—")}</td>
+    <td class="mono num">${d.confidence!=null?Number(d.confidence).toFixed(2):"—"}</td>
+    <td>${esc(d.sensitivity||"—")}</td>
+    <td>${laneTag(d.lane)}</td>
+    <td class="r"><span class="tag mut" style="font-size:9.5px">${esc(d.stage||"")}</span></td></tr>`).join("")}
+  </tbody></table>
+  <div class="callout"><b>Document policy</b><p>Generated documents use fictional vendors and people and carry a visible watermark on every page. Customer files are read-only and never leave this workspace.</p></div>`
+  : `<div class="empty"><b>No documents yet</b>Press go on the Start page. The set appears here as it is built.</div>`}`;
+}
+function laneTag(l){
+  const m={ie:["IE","ie"],ka:["KA","ka"],ie_ka:["IE + KA","ie"],secure:["SECURE","sec"],archive:["ARCHIVE","mut"]};
+  const t=m[l]||["—","mut"]; return `<span class="tag ${t[1]}" style="font-size:9.5px">${t[0]}</span>`;
+}
+
+/* ---------------- FLOW ---------------- */
+function loadFlow(){
+  stage.innerHTML = `
+  <div class="over" id="flowover">Run</div>
+  <h1>Documents moving through the bricks</h1>
+  <p class="dek">Each document is parsed, classified with a written reason, and routed to the capability it needs. The board updates as stages complete.</p>
+  <div class="rule"></div>
+  <div class="hero">
+    <div class="riverwrap" id="river"></div>
+    <div class="tickline num" id="tick"></div>
+  </div>
+  <div class="insp" id="insp" style="display:none"></div>`;
+  poll(renderFlow, 2500);
+}
+async function renderFlow(){
+  const g = await j("/api/golog").catch(()=>null); if(!g) return; S.golog=g;
+  const st=g.pipeline||{}; const docs=Object.values(st.docs||{});
+  const lanes={ie:[],ka:[],ie_ka:[],secure:[],archive:[]};
+  docs.forEach(d=>{ if(lanes[d.lane]) lanes[d.lane].push(d); });
+  const inFlight = docs.filter(d=>!d.lane).length;
+  const running = g.phase==="running" || st.phase && !["done","error","idle"].includes(st.phase);
+  $("#flowover").textContent = `Run ${st.run_id||""} · ${g.phase==="running"?"live":g.phase||""}`;
+  const termY={ie:7, ka:26, ie_ka:45, secure:64, archive:81};
+  const laneMeta={
+    ie:["Information Extraction","fields → Delta tables",`${lanes.ie.length} landed`,"ie",""],
+    ka:["Knowledge Assistant","Agent Bricks · cited answers",`${lanes.ka.length+lanes.ie_ka.length} askable · incl. Both`,"ka",""],
+    ie_ka:["Both · IE + KA","one document, two capabilities",`${lanes.ie_ka.length} docs`,"ie","hotT"],
+    secure:["Secure filing only","redacted · restricted grants",`${lanes.secure.length} sealed`,"sec",""],
+    archive:["No action","retained · lineage kept",`${lanes.archive.length}`,"mut","archT"]};
+  $("#river").innerHTML = `
+    <svg viewBox="0 0 1120 560" class="river">
+      <defs>
+        <linearGradient id="gIE" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5C6670"/><stop offset="1" stop-color="#4ADE97"/></linearGradient>
+        <linearGradient id="gKA" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5C6670"/><stop offset="1" stop-color="#B49BF6"/></linearGradient>
+        <linearGradient id="gSEC" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5C6670"/><stop offset="1" stop-color="#5CA8E8"/></linearGradient>
+        <linearGradient id="gIN" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FF3B20"/><stop offset="1" stop-color="#FF7A45"/></linearGradient>
+      </defs>
+      <path d="M118,268 C 190,268 210,268 282,268" class="rp ${running?"on":""}" stroke="url(#gIN)" stroke-width="2.25"/>
+      <path d="M418,252 C 560,240 640,86  838,86"  class="rp ${lanes.ie.length||running?"on":""}" stroke="url(#gIE)"/>
+      <path d="M418,262 C 580,258 660,192 838,192" class="rp ${lanes.ka.length||running?"on":""}" stroke="url(#gKA)"/>
+      <path d="M418,272 C 560,286 640,296 836,296" class="rp ${lanes.ie_ka.length||running?"on":""}" stroke="url(#gIE)"/>
+      <path d="M418,276 C 566,292 646,302 836,302" class="rp ${lanes.ie_ka.length||running?"on":""}" stroke="url(#gKA)"/>
+      <path d="M418,284 C 560,306 640,402 838,402" class="rp ${lanes.secure.length||running?"on":""}" stroke="url(#gSEC)"/>
+      <path d="M418,290 C 540,318 620,492 838,492" class="rp" stroke="var(--ghost)"/>
+    </svg>
+    <div class="node" style="left:2.2%;top:38%">
+      <div class="pilewrap"><div class="sheet"></div><div class="sheet"></div>
+        <div class="sheet"><span class="cnt num">${docs.length||"·"}</span><span class="cl">docs</span></div></div>
+      <div class="nlbl">INBOX<span>ai_parse_document</span></div></div>
+    <div class="node" style="left:26.5%;top:34%">
+      <div class="ring"><div class="ring2"></div><span class="num">${inFlight||docs.length||"·"}</span></div>
+      <div class="nlbl">CLASSIFY + ROUTE<span>one decision record per doc</span></div></div>
+    ${Object.entries(laneMeta).map(([k,m])=>`
+      <div class="term ${m[4]}" style="left:75%;top:${termY[k]}%">
+        <b>${m[0]}</b><span>${m[1]}</span>
+        <div class="tmeta"><span class="tag ${m[3]}" style="font-size:9px"><i class="d"></i>${m[2]}</span></div>
+      </div>`).join("")}`;
+  const money = st.money||{};
+  $("#tick").innerHTML = docs.length
+    ? `<span>documents <b>${docs.length}</b></span>
+       <span>caught <b style="color:var(--lava2)">${moneyFmt(money.caught_usd)}</b></span>
+       <span>est. cost <b>${money.cost_usd!=null?("$"+money.cost_usd):"—"}</b></span>
+       <span>elapsed <b>${st.elapsed_s||0}s</b></span>
+       <span>phase <b>${esc(st.phase||g.phase||"idle")}</b></span>`
+    : `<span>Waiting for a run. Press go on the Start page and the river comes alive.</span>`;
+  const hero = docs.find(d=>d.why) ;
+  if(hero){ $("#insp").style.display="block";
+    $("#insp").innerHTML = `
+    <div style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap">
+      <span class="mono" style="font-weight:600">${esc(hero.filename||hero.doc_id)}</span>
+      ${laneTag(hero.lane)}
+      <span style="margin-left:auto;font:500 10px var(--mono);letter-spacing:.12em;color:var(--faint);text-transform:uppercase">routing decision record</span></div>
+    <div class="kvrow">
+      <div class="kv"><div class="k">type</div><div class="v">${esc(hero.doc_type||"")}</div></div>
+      <div class="kv"><div class="k">confidence</div><div class="v num">${hero.confidence!=null?Number(hero.confidence).toFixed(2):""}</div></div>
+      <div class="kv"><div class="k">sensitivity</div><div class="v">${esc(hero.sensitivity||"")}</div></div>
+      <div class="kv"><div class="k">retention</div><div class="v">${esc(hero.retention_class||"")}</div></div>
+      <div class="kv"><div class="k">needs extraction</div><div class="v" style="color:var(--ie)">${hero.needs_extraction?"yes":"no"}</div></div>
+      <div class="kv"><div class="k">needs q&a</div><div class="v" style="color:var(--ka)">${hero.needs_qa?"yes":"no"}</div></div>
+      <div class="kv"><div class="k">lane</div><div class="v">${esc(hero.lane||"")}</div></div>
+      <div class="kv"><div class="k">agent agrees</div><div class="v">${hero.policy_agrees===false?"no · shown":"yes"}</div></div>
+    </div>
+    <div class="pull"><span class="plbl">why it went where it went</span>${esc(hero.why||"")}</div>`; }
+}
+const moneyFmt = v => v!=null?("$"+Number(v).toLocaleString(undefined,{maximumFractionDigits:0})):"—";
+// Cents matter when a customer cross-checks a page against Genie's own total.
+const moneyExact = v => v!=null
+  ? "$"+Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) : "—";
+// Where the numbers on a results page came from, so nobody mistakes an old run
+// for a fresh one.
+function runProvenance(){
+  const g=S.golog||{}, a=g.assets||{};
+  if(g.phase==="running") return "A run is in progress. These figures are from the previous run until it finishes.";
+  if(a.run_label) return `From ${a.run_label}, in this workspace.`;
+  return "From an earlier session in this workspace, not from a run started here.";
+}
+
+/* ---------------- ASK ---------------- */
+function loadAsk(){
+  stage.innerHTML = `
+  <div class="over">Genie + Knowledge Assistant</div>
+  <h1>Ask the documents</h1>
+  <p class="dek">Questions about numbers go to Genie over the extracted tables. Questions about wording go to the Knowledge Assistant over the documents themselves.</p>
+  <div class="rule"></div>
+  <div id="turns">${S.turns.map(t=>t.html).join("")||""}</div>
+  <div class="askrow"><input id="q" placeholder="Ask about this run's documents" aria-label="Ask">
+    <button class="btn hot" id="askbtn">Ask</button></div>
+  <div class="chips" id="suggest" style="margin-top:14px"></div>
+  <div class="callout"><b>Every answer shows its work</b>
+  <p>Genie includes the SQL it ran. The assistant cites the document it read. Both live in this workspace and keep answering after the demo ends.</p></div>`;
+  const theme=(S.golog&&S.golog.theme)||{};
+  const sugg=[...(theme.genie_questions||[]),...(theme.assistant_questions||[])].slice(0,4);
+  $("#suggest").innerHTML = (sugg.length?sugg:[
+    "How many warranty claims are outside their coverage window and what is the total?",
+    "Which vendor billed the most across the invoices?",
+    "What does the warranty claim for unit SN-44781 say about the failure?"])
+    .map(q=>`<span class="tag pick" data-q="${esc(q)}">${esc(q)}</span>`).join("");
+  document.querySelectorAll("#suggest .pick").forEach(t=>t.onclick=()=>{$("#q").value=t.dataset.q;});
+  $("#askbtn").onclick=doAsk; $("#q").onkeydown=e=>{ if(e.key==="Enter") doAsk(); };
+  // Prepared question link: /?q=...#ask asks on load, so a rehearsed question
+  // can be bookmarked and opened mid-presentation.
+  const pre=new URLSearchParams(location.search).get("q");
+  if(pre && !S.turns.length){ $("#q").value=pre; doAsk(); }
+}
+async function doAsk(){
+  if(S.asking) return; const q=$("#q").value.trim(); if(!q) return;
+  $("#q").value="";
+  S.asking=true; $("#askbtn").disabled=true; $("#askbtn").innerHTML=`<span class="spin"></span>`;
+  const qh=`<div class="qa"><div class="qq"><span>${esc(q)}</span></div>
+    <div class="path" id="path-live"><span class="spin"></span> routing</div><div id="ans-live"></div></div>`;
+  $("#turns").insertAdjacentHTML("beforeend", qh);
+  window.scrollTo(0,document.body.scrollHeight);
+  let r; try{ r = await post("/api/ask",{question:q}); }catch(e){ r={error:e.message}; }
+  const isG = r.engine==="genie";
+  const pathEl=$("#path-live"), ansEl=$("#ans-live");
+  pathEl.removeAttribute("id");
+  const engLabel = isG?"GENIE":(r.engine==="sql"?"GOVERNED SQL":"KNOWLEDGE ASSISTANT");
+  pathEl.innerHTML = r.route
+    ? `${r.route==="tables"?"a question about numbers":"a question about wording"}
+       <span style="color:var(--ghost)">──▸</span>
+       <span class="eng ${isG||r.engine==="sql"?"g":"k"}">${engLabel}</span>
+       ${r.seconds?`<span>${r.seconds}s</span>`:""}`
+    : "";
+  let inner="";
+  if(r.error) inner=`<div class="aa"><p class="lede">${esc(r.error)}</p></div>`;
+  else if(r.pending) inner=`<div class="aa" style="--ac:var(--ka)"><p class="lede">${esc(r.text)}</p>
+    <div class="meta">sources: ${esc((r.sources||[]).join(", ")||"none yet")}</div></div>`;
+  else inner=`<div class="aa" style="--ac:${isG?"var(--sec)":"var(--ka)"}">
+    <p class="lede">${mdb(r.text||"")}</p>
+    ${r.sql?`<div class="code">${esc(r.sql)}</div>`:""}
+    ${r.rows&&r.rows.length?`<table style="margin-top:12px">
+      ${r.columns&&r.columns.length?`<thead><tr>${r.columns.map(c=>`<th>${esc(c.replace(/_/g," "))}</th>`).join("")}</tr></thead>`:""}
+      <tbody>${r.rows.map(row=>
+      `<tr>${row.map((c,i)=>`<td class="mono num">${fmtCell(c,(r.columns||[])[i])}</td>`).join("")}</tr>`).join("")}</tbody></table>`:""}
+    <div class="meta">${isG?`Genie wrote and ran this query · space in this workspace`
+      :r.engine==="sql"?`governed SQL over the extracted tables · this workspace`
+      :`answered by ${esc(r.endpoint||"the assistant")} · Agent Bricks`}</div>
+  </div>`;
+  ansEl.removeAttribute("id"); ansEl.innerHTML=inner;
+  S.turns.push({html:document.querySelectorAll(".qa")[document.querySelectorAll(".qa").length-1].outerHTML});
+  S.asking=false; $("#askbtn").disabled=false; $("#askbtn").textContent="Ask";
+}
+
+/* ---------------- CLAIMS ---------------- */
+async function loadClaims(){
+  let d; try{ d=await j("/api/uc/claims"); }catch(e){ d={error:e.message}; }
+  const theme=(S.golog&&S.golog.theme)||{};
+  const rows=d.claims||[];
+  if(d.error||!rows.length){
+    stage.innerHTML=`<div class="over">Claims operations</div><h1>${esc(theme.claims_page_title||"Warranty claims desk")}</h1>
+    <div class="rule"></div><div class="empty"><b>No claims yet</b>${d.error?esc(d.error):"Run the pipeline from the Start page first."}</div>`;
+    return;
+  }
+  const outside=rows.filter(r=>r[7]==="outside window");
+  const within=rows.filter(r=>r[7]==="within warranty");
+  const review=rows.filter(r=>r[7]==="needs review");
+  // Sum exactly and show cents, so a cross-check against Genie's own total
+  // reconciles to the penny.
+  const sum=a=>a.reduce((s,r)=>s+(parseFloat(r[5])||0),0);
+  const covText=r=>{
+    const p=Date.parse(r[2]), f=Date.parse(r[3]), m=parseInt(r[4]);
+    if(!p||!f||!m) return r[7]||"";
+    const end=new Date(p); end.setMonth(end.getMonth()+m);
+    const days=Math.round((f-end)/86400000);
+    return days>0?`${days} days past term`:`${-days} days inside term`;
+  };
+  stage.innerHTML=`
+  <div class="over">Claims operations${theme.source==="generic"?' · generic wording':''}</div>
+  <h1>${esc(theme.claims_page_title||"Warranty claims desk")}</h1>
+  ${theme.source==="generic"?`<p class="hint" style="margin:0 0 10px">This page is using default wording because company research did not run for this run.</p>`:""}
+  <p class="dek">${runProvenance()} Coverage is computed from the extracted dates and terms.</p>
+  <div class="rule"></div>
+  <div class="figs">
+    <div class="fig"><div class="v num hot">${moneyExact(sum(outside))}</div><div class="k">deny candidates</div>
+      <div class="n">${outside.length} claims outside their coverage window</div></div>
+    <div class="fig"><div class="v num">${moneyExact(sum(within))}</div><div class="k">approve candidates</div>
+      <div class="n">${within.length} claims within coverage</div></div>
+    <div class="fig"><div class="v num">${review.length}</div><div class="k">need a person</div>
+      <div class="n">fields unreadable, routed to review</div></div>
+  </div>
+  <div class="sect">Queue</div>
+  <table><thead><tr><th>Claim</th><th>Unit</th><th>Purchased</th><th>Failed</th><th class="r">Amount</th><th class="r">Coverage</th></tr></thead>
+  <tbody>${rows.map(r=>`<tr>
+    <td class="mono" style="color:var(--ink)">${esc(r[0])}</td><td class="mono">${esc(r[1]||"")}</td>
+    <td class="mono num">${esc(r[2]||"")}</td><td class="mono num">${esc(r[3]||"")}</td>
+    <td class="mono num r">${moneyExact(r[5])}</td>
+    <td class="r" style="color:${r[7]==="outside window"?"var(--warn)":r[7]==="needs review"?"var(--ka)":"var(--faint)"}">${esc(covText(r))}</td></tr>`).join("")}
+  </tbody></table>
+  <div class="callout"><b>From documents to decisions</b>
+  <p>Coverage status is date arithmetic on extracted fields, reproducible from the source document. The audit lane recorded ${ (d.findings||[]).length } findings for this run.</p></div>`;
+}
+
+/* ---------------- SUPPLIERS ---------------- */
+async function loadSuppliers(){
+  let d; try{ d=await j("/api/uc/suppliers"); }catch(e){ d={error:e.message}; }
+  const theme=(S.golog&&S.golog.theme)||{};
+  const spend=d.spend||[];
+  if(d.error||!spend.length){
+    stage.innerHTML=`<div class="over">Supplier operations</div><h1>${esc(theme.suppliers_page_title||"Supplier spend watch")}</h1>
+    <div class="rule"></div><div class="empty"><b>No supplier data yet</b>${d.error?esc(d.error):"Run the pipeline from the Start page first."}</div>`;
+    return;
+  }
+  const max=Math.max(...spend.map(r=>parseFloat(r[2])||0),1);
+  stage.innerHTML=`
+  <div class="over">Supplier operations${theme.source==="generic"?' · generic wording':''}</div>
+  <h1>${esc(theme.suppliers_page_title||"Supplier spend watch")}</h1>
+  <p class="dek">${runProvenance()} Invoices grouped by vendor and joined to the audit findings.</p>
+  <div class="rule"></div>
+  <div class="split">
+    <div>
+      <div class="sect" style="margin-top:0">Spend by vendor · extracted this run</div>
+      ${spend.map(r=>`<div class="trend"><span class="d">${esc(r[0]||"unknown")}</span>
+        <div class="bar"><i style="width:${(parseFloat(r[2])||0)/max*100}%;background:linear-gradient(90deg,var(--ghost),var(--lava2))"></i></div>
+        <span class="v num">${moneyExact(r[2])}</span></div>`).join("")}
+      <p class="hint" style="margin-top:12px">${spend.reduce((s,r)=>s+(parseInt(r[1])||0),0)} invoices extracted to Delta by Document Intelligence.</p>
+    </div>
+    <div>
+      <div class="sect" style="margin-top:0">Findings on file</div>
+      ${(d.flagged||[]).length?(d.flagged||[]).map(f=>`
+        <div style="padding:12px 0;border-bottom:1px solid var(--hair)">
+          <div style="display:flex;gap:10px;align-items:baseline">
+            <span class="mono" style="color:var(--ink)">${esc(f[0])}</span>
+            <span class="tag warn" style="font-size:9.5px">${esc(f[2]||"")}</span>
+            <span class="mono num" style="margin-left:auto">${moneyFmt(f[3])}</span></div>
+          <p class="hint" style="margin-top:4px">${esc(f[1]||"")}</p>
+        </div>`).join(""):`<p class="hint">No findings recorded.</p>`}
+    </div>
+  </div>`;
+}
+
+/* ---------------- BUILT ---------------- */
+async function loadBuilt(){
+  let a; try{ a=await j("/api/assets"); }catch(e){ a={error:e.message}; }
+  const sec=a.sections||{}; const ka=a.ka||{}; const t=a.tables||{};
+  const rows=[
+    ["Parse","ai_parse_document", sec["stage:parse"]!=null?`${Number(sec["stage:parse"]).toFixed(1)}s`:"", "ok"],
+    ["Classify + route","AI Gateway structured routing", sec["stage:label"]!=null?`${Number(sec["stage:label"]).toFixed(1)}s`:"", "ok"],
+    ["Information Extraction","Document Intelligence · fields to Delta", sec["stage:extract"]!=null?`${Number(sec["stage:extract"]).toFixed(1)}s`:"", "ok"],
+    ["Knowledge Assistant", esc(ka.endpoint||"docflow-ka"), ka.ready?"ready":(ka.sources||[]).join(", ")||"—", ka.ready?"ok":"warn"],
+    ["Q&A over tables", a.assets&&a.assets.genie_space_id?("Genie space · "+a.assets.genie_space_id.slice(0,8)+"…"):"Genie space", a.assets&&a.assets.genie_space_id?"created":"—", a.assets&&a.assets.genie_space_id?"ok":"warn"],
+    ["Secure filing","ai_mask + restricted volume path", sec["stage:secure"]!=null?`${Number(sec["stage:secure"]).toFixed(1)}s`:"", "ok"],
+  ];
+  stage.innerHTML=`
+  <div class="over">This workspace · this run</div>
+  <h1>What was created</h1>
+  <p class="dek">Every asset this run made, the service behind each stage, and how long each took. All of it is governed in Unity Catalog and stays after the demo.</p>
+  <div class="rule"></div>
+  <table><thead><tr><th>Stage</th><th>Service</th><th class="r">Status</th></tr></thead><tbody>
+  ${rows.map(r=>`<tr><td style="color:var(--ink);font-weight:600">${r[0]}</td>
+    <td class="mono" style="font-size:12px;color:var(--dim)">${r[1]}</td>
+    <td class="r"><span class="tag ${r[3]==="ok"?"ie":"warn"}" style="font-size:9.5px"><i class="d"></i>${esc(String(r[2]||"—"))}</span></td></tr>`).join("")}
+  </tbody></table>
+  <div class="sect">Sections, timed</div>
+  <div id="secs">${Object.entries(sec).filter(([k])=>!k.startsWith("stage:")).map(([k,v])=>`
+    <div class="trend" style="grid-template-columns:280px 1fr 90px"><span class="d">${esc(k)}</span>
+      <div class="bar"><i style="width:${Math.min(100,v/1.5)}%;background:var(--ghost)"></i></div>
+      <span class="v num">${v}s</span></div>`).join("")||"<p class='hint'>Run go to populate timings.</p>"}</div>
+  <div class="sect">Tables</div>
+  <div class="figs">
+    <div class="fig"><div class="v num">${t.claims??"—"}</div><div class="k">warranty claims</div></div>
+    <div class="fig"><div class="v num">${t.invoices??"—"}</div><div class="k">supplier invoices</div></div>
+    <div class="fig"><div class="v num">${t.findings??"—"}</div><div class="k">audit findings</div></div>
+  </div>
+  <div class="callout"><b>Built on the platform it runs on</b>
+  <p>A Databricks App, agents governed by Unity Catalog, a Genie space over Delta tables, deployed from one bundle. Everything on this page works the same way in your own workspace.</p></div>`;
+}
+
+/* ---------------- router ---------------- */
+const LOADERS={start:loadStart,docs:loadDocs,flow:loadFlow,ask:loadAsk,claims:loadClaims,suppliers:loadSuppliers,built:loadBuilt};
+async function go(page, push){
+  if(!LOADERS[page]) page="start";
+  stopPollers(); S.page=page;
+  if(push!==false && location.hash.slice(1)!==page) location.hash=page;
+  document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("on",b.dataset.go===page));
+  stage.innerHTML=`<div class="empty"><span class="spin"></span></div>`;
+  try{ if(!S.golog) S.golog=await j("/api/golog").catch(()=>null); await LOADERS[page](); }
+  catch(e){ stage.innerHTML=`<div class="empty"><b>This page could not load</b>${esc(e.message)}</div>`; }
+  if(page==="start" && S.golog && S.golog.phase==="running") pollGo();
+  document.body.dataset.ready="1";
+}
+document.querySelectorAll("#nav button").forEach(b=>b.onclick=()=>go(b.dataset.go));
+window.addEventListener("hashchange",()=>{ const p=location.hash.slice(1);
+  if(p && p!==S.page) go(p,false); });
+go(location.hash.slice(1)||"start", false);
+</script>
+</body>
+</html>

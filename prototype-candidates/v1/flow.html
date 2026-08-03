@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DocFlow · V1 Swimlane Highway</title>
+<style>
+  :root{
+    --bg:#0C161E;
+    --panel:#16242E;
+    --panel2:#131F29;
+    --ink:#EEEDE9;
+    --ink70:rgba(238,237,233,.70);
+    --ink55:rgba(238,237,233,.55);
+    --line:rgba(238,237,233,.12);
+    --line2:rgba(238,237,233,.07);
+    --lava1:#FF3621;
+    --lava2:#FF7A29;
+    --warm:#FFAD93;
+    --blue:#5AA9E6;
+    --blue-dim:rgba(90,169,230,.16);
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:1440px;height:900px;overflow:hidden}
+  body{
+    background:
+      radial-gradient(900px 420px at 46% -8%, rgba(255,54,33,.06), transparent 60%),
+      radial-gradient(700px 380px at 108% 108%, rgba(90,169,230,.05), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    display:flex;flex-direction:column;
+  }
+  .kicker{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink55);font-weight:600}
+  .mono{font-family:var(--mono)}
+
+  /* ---------- header ---------- */
+  header{
+    height:62px;flex:0 0 62px;display:flex;align-items:center;gap:16px;
+    padding:0 32px;border-bottom:1px solid var(--line2);
+  }
+  .mark{width:24px;height:24px;border-radius:7px;background:linear-gradient(135deg,var(--lava1),var(--lava2));
+    display:flex;align-items:center;justify-content:center}
+  .mark span{width:10px;height:12px;border:2px solid #fff;border-radius:2px;display:block}
+  .brand{font-size:17px;font-weight:700;letter-spacing:.01em}
+  .headsub{font-size:13.5px;color:var(--ink70)}
+  .headsub b{color:var(--ink);font-weight:600}
+  .hsep{width:1px;height:22px;background:var(--line)}
+  .spacer{flex:1}
+  .money{display:flex;align-items:baseline;gap:14px}
+  .money .num{font-size:21px;font-weight:750;letter-spacing:-.01em}
+  .money .caught .num{background:linear-gradient(100deg,#FF5A38,#FF9A52);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .money .lbl{font-size:13px;color:var(--ink55);margin-left:7px}
+  .money .vs{font-size:13px;color:var(--ink55)}
+  .runbtn{
+    margin-left:22px;border:0;cursor:pointer;border-radius:9px;padding:10px 20px;
+    background:linear-gradient(120deg,var(--lava1),var(--lava2));color:#fff;
+    font-size:14px;font-weight:650;letter-spacing:.01em;
+    box-shadow:0 4px 18px rgba(255,54,33,.28);
+  }
+
+  /* ---------- canvas ---------- */
+  #canvas{flex:1;position:relative;display:flex;align-items:center;padding:10px 32px 6px 32px}
+  #wires{position:absolute;inset:0;pointer-events:none;z-index:0}
+  .col{position:relative;z-index:1}
+
+  .nodecard{
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:13px 14px;width:176px;
+  }
+  .nodecard .kicker{margin-bottom:7px}
+  .nodecard h2{font-size:15px;font-weight:650;margin-bottom:4px}
+  .nodecard .path{font-size:13px;color:var(--ink70)}
+  .nodecard .meta{font-size:13px;color:var(--ink70);margin-top:3px}
+  .nodecard hr{border:0;border-top:1px solid var(--line2);margin:10px 0}
+  .pillrow{display:flex;flex-wrap:wrap;gap:6px}
+  .pill{
+    font-size:13px;line-height:1;padding:4px 8px;border-radius:999px;
+    border:1px solid var(--line);color:var(--ink70);white-space:nowrap;
+  }
+  .pill.ga{color:var(--ink);border-color:rgba(238,237,233,.28)}
+  .pill.preview{color:var(--warm);border-color:rgba(255,173,147,.35)}
+  .pill.bluep{color:var(--blue);border-color:rgba(90,169,230,.40)}
+  .livepill{
+    margin-top:10px;display:inline-flex;align-items:center;gap:8px;
+    font-size:13px;font-weight:600;color:#FFD9CF;
+    border:1px solid rgba(255,54,33,.45);border-radius:999px;padding:6px 11px;
+    background:rgba(255,54,33,.08);
+  }
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--lava2);position:relative}
+  .dot::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1px solid rgba(255,122,41,.6);animation:halo 1.6s ease-out infinite}
+  @keyframes halo{0%{transform:scale(.5);opacity:.9}100%{transform:scale(1.5);opacity:0}}
+
+  .gap-a{width:54px;flex:0 0 54px}
+  .gap-b{width:62px;flex:0 0 62px}
+
+  /* ---------- lanes ---------- */
+  #lanes{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:12px}
+  .lane-head{display:flex;align-items:center;gap:10px;height:22px;margin-bottom:6px}
+  .tick{width:14px;height:3px;border-radius:2px;background:rgba(238,237,233,.4)}
+  .tick.lava{background:linear-gradient(90deg,var(--lava1),var(--lava2))}
+  .tick.blue{background:var(--blue)}
+  .lane-name{font-size:14px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+  .lane-types{font-size:13px;color:var(--ink55)}
+  .lane-head .spacer{flex:1}
+  .tally{font-size:13px;color:var(--ink70)}
+
+  .track{
+    position:relative;height:76px;border-radius:11px;
+    background:rgba(238,237,233,.025);border:1px solid var(--line2);
+    display:flex;align-items:center;gap:12px;padding:0 0 0 22px;
+  }
+  .track::before{ /* lane centerline */
+    content:"";position:absolute;left:14px;right:196px;top:50%;
+    border-top:1px dashed rgba(238,237,233,.10);
+  }
+  .chip{
+    position:relative;z-index:1;width:184px;flex:0 0 184px;
+    background:#17252F;border:1px solid rgba(238,237,233,.11);border-radius:10px;
+    padding:8px 11px 7px 11px;
+  }
+  .chip .r1{display:flex;align-items:center;gap:6px}
+  .chip .id{font-family:var(--mono);font-size:13px;font-weight:700}
+  .chip .r1 .spacer{flex:1}
+  .cap{
+    font-size:13px;line-height:1;font-weight:700;letter-spacing:.04em;
+    padding:2.5px 5.5px;border-radius:5px;border:1px solid;
+  }
+  .cap.ie{color:var(--warm);border-color:rgba(255,173,147,.4)}
+  .cap.ka{color:var(--ink);border-color:rgba(238,237,233,.32)}
+  .cap.noai{color:var(--blue);border-color:rgba(90,169,230,.45)}
+  .chip .type{font-size:13px;color:var(--ink);margin-top:2px}
+  .chip .r3{font-size:13px;color:var(--ink55);margin-top:1px;display:flex;align-items:center;gap:6px}
+  .sens-pii{color:var(--blue);font-weight:650}
+
+  .dest{
+    margin-left:auto;flex:0 0 180px;width:180px;align-self:stretch;
+    border-left:1px solid var(--line2);
+    display:flex;flex-direction:column;justify-content:center;gap:2px;
+    padding:0 16px;
+  }
+  .dest .word{font-size:14px;font-weight:750;letter-spacing:.16em}
+  .dest .d1,.dest .d2{font-size:13px;color:var(--ink70);line-height:1.35}
+  .arrow{color:var(--ink55);font-size:14px;margin-left:2px}
+
+  /* lane 3 panel */
+  .lane3{
+    border-radius:14px;padding:12px 15px 13px 15px;
+    background:linear-gradient(180deg,#1A2A36,#152430) padding-box,
+      linear-gradient(120deg,rgba(255,54,33,.6),rgba(255,140,66,.32) 45%,rgba(255,54,33,.12)) border-box;
+    border:1px solid transparent;
+    box-shadow:0 12px 46px rgba(255,54,33,.09);
+  }
+  .lane3 .lane-head{margin-bottom:8px}
+  .lane3-body{display:flex;align-items:stretch;gap:13px}
+  .hero{
+    flex:0 0 462px;width:462px;background:#0F1B24;border:1px solid rgba(238,237,233,.14);
+    border-radius:12px;padding:11px 14px 10px 14px;
+  }
+  .hero-top{display:flex;align-items:baseline;gap:8px}
+  .hero-top .id{font-family:var(--mono);font-size:15px;font-weight:750}
+  .hero-top .t{font-size:14px;font-weight:600}
+  .hero-top .spacer{flex:1}
+  .rectag{display:flex;align-items:center;gap:7px;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--warm);font-weight:650}
+  .rectag i{width:7px;height:7px;border-radius:50%;background:linear-gradient(120deg,var(--lava1),var(--lava2));display:block}
+  .hero-sub{font-size:13px;color:var(--ink55);margin-top:1px}
+  .fields{
+    display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px 14px;
+    margin:8px 0 8px 0;padding:7px 0;border-top:1px solid var(--line2);border-bottom:1px solid var(--line2);
+  }
+  .f .k{font-size:13px;color:var(--ink55)}
+  .f .v{font-size:13px;font-family:var(--mono);color:var(--ink)}
+  .why{display:flex;gap:10px}
+  .why .bar{flex:0 0 3px;border-radius:2px;background:linear-gradient(180deg,var(--lava1),var(--lava2))}
+  .why p{font-size:13.5px;line-height:1.42;color:var(--ink)}
+  .why p b{color:var(--warm);font-weight:650}
+  .downstream{margin-top:7px;font-size:13px;color:var(--ink70)}
+  .lane3-mid{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:12px;position:relative}
+  .lane3-mid::before{content:"";position:absolute;left:6px;right:6px;top:50%;border-top:1px dashed rgba(238,237,233,.10)}
+  .lane3 .chip{width:230px;flex:0 0 auto}
+  .lane3 .dest{border-left:1px solid rgba(238,237,233,.10)}
+  .note{font-size:13px;color:var(--ink55)}
+
+  /* junk tail */
+  .junk{
+    height:30px;border:1px dashed rgba(238,237,233,.16);border-radius:9px;
+    display:flex;align-items:center;gap:10px;padding:0 14px;color:var(--ink55);font-size:13px;
+  }
+  .junk .spacer{flex:1}
+
+  /* ---------- footer ---------- */
+  footer{
+    height:74px;flex:0 0 74px;border-top:1px solid var(--line2);
+    display:flex;align-items:center;gap:24px;padding:0 32px;
+  }
+  footer .kicker{white-space:nowrap}
+  .foot-notes .l1,.foot-notes .l2{white-space:nowrap}
+  .beats{display:flex;align-items:center;gap:9px}
+  .beat{
+    font-size:13px;color:var(--ink55);border:1px solid var(--line2);border-radius:8px;
+    padding:7px 11px;display:flex;align-items:center;gap:7px;white-space:nowrap;
+  }
+  .beat .key{font-family:var(--mono);font-size:13px;color:var(--ink55)}
+  .beat.done{color:var(--ink55)}
+  .beat.done .chk{color:#7FBF8E}
+  .beat.now{color:#FFD9CF;border-color:rgba(255,54,33,.6);background:rgba(255,54,33,.07)}
+  .beat.now .key{color:#FFD9CF}
+  .foot-notes{margin-left:auto;text-align:right;font-size:13px;line-height:1.5}
+  .foot-notes .l1{color:var(--ink70)}
+  .foot-notes .l1 b{color:var(--ink);letter-spacing:.06em}
+  .foot-notes .l2{color:var(--ink55)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="mark"><span></span></div>
+  <div class="brand">DocFlow</div>
+  <div class="hsep"></div>
+  <div class="headsub"><b>Acme Manufacturing</b> · document intelligence on Agent Bricks</div>
+  <div class="spacer"></div>
+  <div class="money">
+    <div class="caught"><span class="num">$3,310</span><span class="lbl">caught in audit</span></div>
+    <div class="vs">vs</div>
+    <div class="cost"><span class="num">$0.61</span><span class="lbl">pipeline cost</span></div>
+  </div>
+  <button class="runbtn">Run pipeline</button>
+</header>
+
+<div id="canvas">
+  <svg id="wires"></svg>
+
+  <!-- SOURCE -->
+  <div class="col" id="srccol">
+    <div class="nodecard" id="srcnode">
+      <div class="kicker">Source</div>
+      <h2>UC Volume inbox</h2>
+      <div class="path mono">/Volumes/acme/docs/inbox</div>
+      <div class="meta">47 documents today</div>
+      <hr>
+      <div class="pillrow"><span class="pill ga">ai_parse_document · GA</span></div>
+      <div class="livepill"><span class="dot"></span>parsing 6 of 47</div>
+    </div>
+  </div>
+
+  <div class="gap-a"></div>
+
+  <!-- CLASSIFIER -->
+  <div class="col" id="clscol">
+    <div class="nodecard" id="clsnode">
+      <div class="kicker">Label · Classify</div>
+      <h2>Routing agent</h2>
+      <div class="meta">Reads each parsed doc, emits one routing decision record, picks the lane.</div>
+      <hr>
+      <div class="pillrow"><span class="pill ga">ai_classify · GA</span></div>
+      <div class="meta">record via ai_query structured output</div>
+    </div>
+  </div>
+
+  <div class="gap-b"></div>
+
+  <!-- LANES -->
+  <div id="lanes">
+
+    <!-- Lane 1 -->
+    <section class="lane" id="lane1">
+      <div class="lane-head">
+        <span class="tick"></span>
+        <span class="lane-name">Information Extraction</span>
+        <span class="pill preview">Public Preview</span>
+        <span class="pill ga">ai_extract · GA</span>
+        <span class="lane-types">invoices · purchase orders · shipping manifests</span>
+        <span class="spacer"></span>
+        <span class="tally">11 routed</span>
+      </div>
+      <div class="track" id="track1">
+        <div class="chip">
+          <div class="r1"><span class="id">INV-0093</span><span class="spacer"></span><span class="cap ie">IE</span></div>
+          <div class="type">Supplier invoice</div>
+          <div class="r3">0.98 conf · low sensitivity</div>
+        </div>
+        <div class="chip">
+          <div class="r1"><span class="id">PO-1187</span><span class="spacer"></span><span class="cap ie">IE</span></div>
+          <div class="type">Purchase order</div>
+          <div class="r3">0.97 conf · low sensitivity</div>
+        </div>
+        <div class="chip">
+          <div class="r1"><span class="id">SM-0412</span><span class="spacer"></span><span class="cap ie">IE</span></div>
+          <div class="type">Shipping manifest</div>
+          <div class="r3">0.95 conf · low sensitivity</div>
+        </div>
+        <div class="dest">
+          <div class="word">ROWS</div>
+          <div class="d1">typed Delta tables</div>
+          <div class="d2">Genie Agents · GA</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Lane 2 -->
+    <section class="lane" id="lane2">
+      <div class="lane-head">
+        <span class="tick"></span>
+        <span class="lane-name">Knowledge Assistant</span>
+        <span class="pill ga">GA</span>
+        <span class="lane-types">policy manuals · MSDS sheets · reference docs</span>
+        <span class="spacer"></span>
+        <span class="tally">6 routed</span>
+      </div>
+      <div class="track" id="track2">
+        <div class="chip">
+          <div class="r1"><span class="id">POL-0031</span><span class="spacer"></span><span class="cap ka">KA</span></div>
+          <div class="type">Safety policy manual</div>
+          <div class="r3">0.96 conf · low sensitivity</div>
+        </div>
+        <div class="chip">
+          <div class="r1"><span class="id">DS-0144</span><span class="spacer"></span><span class="cap ka">KA</span></div>
+          <div class="type">MSDS sheet</div>
+          <div class="r3">0.99 conf · low sensitivity</div>
+        </div>
+        <div class="dest">
+          <div class="word">ANSWERS</div>
+          <div class="d1">no fixed schema</div>
+          <div class="d2">askable with citations</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Lane 3 : IE + KA -->
+    <section class="lane lane3" id="lane3">
+      <div class="lane-head">
+        <span class="tick lava"></span>
+        <span class="lane-name">IE + KA Together</span>
+        <span class="pill preview">IE · Public Preview</span>
+        <span class="pill ga">KA · GA</span>
+        <span class="lane-types">contracts · warranty claims</span>
+        <span class="note">one document, two capabilities</span>
+        <span class="spacer"></span>
+        <span class="tally">4 routed</span>
+      </div>
+      <div class="lane3-body" id="track3">
+        <div class="hero">
+          <div class="hero-top">
+            <span class="id">WC-2214</span><span class="t">Warranty claim</span>
+            <span class="spacer"></span>
+            <span class="rectag"><i></i>Routing decision record</span>
+          </div>
+          <div class="hero-sub">Miller Tooling LLC · unit SN-44781 · purchased 2023-11-02 · Line 3</div>
+          <div class="fields">
+            <div class="f"><div class="k">doc_type</div><div class="v">warranty_claim</div></div>
+            <div class="f"><div class="k">confidence</div><div class="v">0.94</div></div>
+            <div class="f"><div class="k">sensitivity</div><div class="v">low</div></div>
+            <div class="f"><div class="k">needs_extraction</div><div class="v">yes</div></div>
+            <div class="f"><div class="k">needs_qa</div><div class="v">yes</div></div>
+            <div class="f"><div class="k">retention_class</div><div class="v">claims_7y</div></div>
+          </div>
+          <div class="why">
+            <div class="bar"></div>
+            <p><b>why:</b> The $2,140 claim and its dates are table fields, but coverage turns on how the 24 month term reads against the 2026-03-18 failure, so this doc goes to extraction and Q&amp;A together.</p>
+          </div>
+          <div class="downstream">Downstream: extract_warranty_claims flags it 137 days past term · clauses answer with citations</div>
+        </div>
+        <div class="lane3-mid">
+          <div class="chip">
+            <div class="r1"><span class="id">CT-0071</span><span class="spacer"></span><span class="cap ie">IE</span><span class="cap ka">KA</span></div>
+            <div class="type">Supply contract · Vexler Steel Co</div>
+            <div class="r3">0.91 conf · low sensitivity</div>
+          </div>
+        </div>
+        <div class="dest">
+          <div class="word">BOTH</div>
+          <div class="d1">one Delta row</div>
+          <div class="d2">plus cited answers</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Lane 4 -->
+    <section class="lane" id="lane4">
+      <div class="lane-head">
+        <span class="tick blue"></span>
+        <span class="lane-name">Secure Filing Only</span>
+        <span class="pill bluep">ai_mask · Public Preview</span>
+        <span class="lane-types">HR records · medical notes · anything with PII</span>
+        <span class="spacer"></span>
+        <span class="tally">5 routed</span>
+      </div>
+      <div class="track" id="track4">
+        <div class="chip">
+          <div class="r1"><span class="id">MED-0019</span><span class="spacer"></span><span class="cap noai">NO AI</span></div>
+          <div class="type">Clinic visit note</div>
+          <div class="r3">0.97 conf · <span class="sens-pii">PII</span></div>
+        </div>
+        <div class="chip">
+          <div class="r1"><span class="id">HR-0067</span><span class="spacer"></span><span class="cap noai">NO AI</span></div>
+          <div class="type">Benefits enrollment</div>
+          <div class="r3">0.96 conf · <span class="sens-pii">PII</span></div>
+        </div>
+        <div class="dest">
+          <div class="word" style="color:var(--blue)">SEALED</div>
+          <div class="d1">redacted copy only</div>
+          <div class="d2">restricted UC grants</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- junk tail -->
+    <div class="junk" id="junkrow">
+      <span>Junk and marketing mail · no action, retained 90 days</span>
+      <span class="spacer"></span>
+      <span class="mono">MKT-0114 · MKT-0117 · 2 docs</span>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  <span class="kicker">Run of show</span>
+  <div class="beats">
+    <span class="beat done"><span class="key">1</span>Cold open <span class="chk">&#10003;</span></span>
+    <span class="beat done"><span class="key">2</span>Corpus pours in <span class="chk">&#10003;</span></span>
+    <span class="beat now"><span class="key">3</span>Label and route</span>
+    <span class="beat"><span class="key">4</span>Brick swap · live</span>
+    <span class="beat"><span class="key">5</span>Re-ask with receipts</span>
+  </div>
+  <div class="foot-notes">
+    <div class="l1"><b>SYNTHETIC DEMO DATA</b> · generated, watermarked, vendors fictional</div>
+    <div class="l2">Canvas replays recorded run_metrics only · nothing is simulated</div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var svg=document.getElementById('wires');
+  var canvas=document.getElementById('canvas');
+
+  function rectOf(id){
+    var r=document.getElementById(id).getBoundingClientRect();
+    var c=canvas.getBoundingClientRect();
+    return {x:r.left-c.left,y:r.top-c.top,w:r.width,h:r.height};
+  }
+  function curve(x1,y1,x2,y2){
+    var dx=(x2-x1)*0.55;
+    return 'M'+x1+' '+y1+' C '+(x1+dx)+' '+y1+', '+(x2-dx)+' '+y2+', '+x2+' '+y2;
+  }
+  function draw(){
+    var c=canvas.getBoundingClientRect();
+    svg.setAttribute('width',c.width);svg.setAttribute('height',c.height);
+    svg.setAttribute('viewBox','0 0 '+c.width+' '+c.height);
+    var defs='<defs>'
+      +'<linearGradient id="lava" x1="0" y1="0" x2="1" y2="0">'
+      +'<stop offset="0" stop-color="#FF3621"/><stop offset="1" stop-color="#FF7A29"/></linearGradient>'
+      +'</defs>';
+    var s=rectOf('srcnode'), k=rectOf('clsnode');
+    var out='';
+    // source -> classifier
+    out+='<path d="'+curve(s.x+s.w, s.y+s.h/2, k.x, k.y+k.h/2)+'" fill="none" stroke="rgba(238,237,233,.28)" stroke-width="1.5"/>';
+    out+='<circle cx="'+(k.x)+'" cy="'+(k.y+k.h/2)+'" r="2.5" fill="rgba(238,237,233,.4)"/>';
+    // classifier -> lanes
+    var startX=k.x+k.w, startY=k.y+k.h/2;
+    var targets=[
+      {id:'track1',stroke:'rgba(238,237,233,.22)',w:1.5,dash:''},
+      {id:'track2',stroke:'rgba(238,237,233,.22)',w:1.5,dash:''},
+      {id:'track3',stroke:'url(#lava)',w:2,dash:''},
+      {id:'track4',stroke:'rgba(90,169,230,.5)',w:1.5,dash:''},
+      {id:'junkrow',stroke:'rgba(238,237,233,.18)',w:1.2,dash:'3 5'}
+    ];
+    targets.forEach(function(t){
+      var r=rectOf(t.id);
+      var ex=r.x, ey=r.y+r.h/2;
+      out+='<path d="'+curve(startX,startY,ex,ey)+'" fill="none" stroke="'+t.stroke+'" stroke-width="'+t.w+'"'
+        +(t.dash?' stroke-dasharray="'+t.dash+'"':'')+'/>';
+      out+='<circle cx="'+ex+'" cy="'+ey+'" r="2.5" fill="'+(t.id==='track3'?'#FF7A29':(t.id==='track4'?'rgba(90,169,230,.8)':'rgba(238,237,233,.4)'))+'"/>';
+    });
+    svg.innerHTML=defs+out;
+  }
+  if(document.readyState==='complete'){draw();}
+  else{window.addEventListener('load',draw);}
+  document.addEventListener('DOMContentLoaded',draw);
+})();
+</script>
+</body>
+</html>

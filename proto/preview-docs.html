@@ -1,0 +1,444 @@
+<!doctype html><html><head><meta charset="utf-8"><title>DocFlow</title><style>html,body{margin:0;padding:0}</style></head><body><div id="root">
+<aside class="rail">
+  <div class="brand"><span class="mk"></span><div><b>DocFlow</b><i>portable demo</i></div></div>
+  <nav>
+    <button data-go="start" class="on"><span class="ix">01</span>Start</button>
+    <button data-go="docs"><span class="ix">02</span>Documents</button>
+    <button data-go="flow"><span class="ix">03</span>Live flow</button>
+    <button data-go="ask"><span class="ix">04</span>Ask</button>
+    <button data-go="uc1"><span class="ix">05</span>Claims desk</button>
+    <button data-go="uc2"><span class="ix">06</span>Supplier quality</button>
+    <button data-go="built"><span class="ix">07</span>What got built</button>
+  </nav>
+  <div class="railfoot">
+    <div class="proto">HTML MOCK</div>
+    <p>Design for approval. Everything shown maps to a verified build path; engine labels tell the truth.</p>
+  </div>
+</aside>
+<main id="stage"></main>
+</div>
+
+<style>
+:root{
+  --bg:#0C151A; --panel:#131F27; --panel2:#182731; --raise:#1F3039;
+  --ink:#E9E7E2; --dim:rgba(233,231,226,.62); --faint:rgba(233,231,226,.36);
+  --line:rgba(233,231,226,.10); --line2:rgba(233,231,226,.20);
+  --red:#FF3621; --ie:#57C99A; --ka:#A98BF5; --secure:#4EA8DE; --arch:#7C8B95; --warn:#F0A83C;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+#root{display:grid;grid-template-columns:224px 1fr;min-height:100vh;background:var(--bg);
+  color:var(--ink);font:14.5px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+.mono{font-family:var(--mono)} .num{font-variant-numeric:tabular-nums}
+.rail{border-right:1px solid var(--line);background:#0A1116;display:flex;flex-direction:column;
+  position:sticky;top:0;height:100vh}
+.brand{display:flex;gap:11px;align-items:center;padding:19px 17px;border-bottom:1px solid var(--line)}
+.brand .mk{width:13px;height:13px;border-radius:3px;background:var(--red)}
+.brand b{display:block;font-size:16px;font-weight:800}
+.brand i{display:block;font-style:normal;font-size:10px;color:var(--faint);letter-spacing:.13em;text-transform:uppercase}
+nav{display:flex;flex-direction:column;padding:9px 8px;gap:1px;flex:1}
+nav button{display:flex;align-items:center;gap:10px;background:none;border:0;color:var(--dim);
+  font:600 13.5px var(--sans);text-align:left;padding:9px 11px;border-radius:5px;cursor:pointer}
+nav button:hover{background:var(--panel);color:var(--ink)}
+nav button.on{background:var(--panel2);color:var(--ink)}
+nav button.on .ix{color:var(--red)}
+.ix{font:700 10px var(--mono);color:var(--faint)}
+.railfoot{padding:13px 17px 17px;border-top:1px solid var(--line)}
+.proto{font:800 9.5px var(--mono);letter-spacing:.15em;color:var(--warn);
+  border:1px solid rgba(240,168,60,.5);display:inline-block;padding:3px 7px;border-radius:3px}
+.railfoot p{margin:8px 0 0;font-size:11.5px;color:var(--faint);line-height:1.5}
+
+main{padding:28px 36px 64px;max-width:1230px}
+.eyebrow{font:700 10.5px var(--mono);letter-spacing:.15em;text-transform:uppercase;color:var(--faint)}
+h1{margin:7px 0 6px;font-size:28px;font-weight:800;letter-spacing:-.02em;line-height:1.12}
+.sub{margin:0 0 20px;color:var(--dim);max-width:78ch;font-size:14.5px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:17px 19px}
+.grid{display:grid;gap:13px}.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
+.sec{font:800 10.5px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint);
+  margin:24px 0 10px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+.pill{display:inline-flex;align-items:center;gap:6px;font:700 10px var(--mono);padding:2.5px 8px;border-radius:3px;border:1px solid}
+.pill.ok{color:var(--ie);border-color:rgba(87,201,154,.4)}
+.pill.warn{color:var(--warn);border-color:rgba(240,168,60,.4)}
+.pill.ka{color:var(--ka);border-color:rgba(169,139,245,.4)}
+.pill.off{color:var(--faint);border-color:var(--line2)}
+.btn{font:700 13px var(--sans);padding:9px 16px;border-radius:6px;border:1px solid var(--line2);
+  background:var(--raise);color:var(--ink);cursor:pointer}
+.btn.pri{background:var(--red);border-color:var(--red);color:#fff;font-weight:800}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font:700 9.5px var(--mono);letter-spacing:.11em;text-transform:uppercase;
+  color:var(--faint);padding:0 9px 8px;border-bottom:1px solid var(--line2)}
+td{padding:9px;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+
+.field{margin-bottom:13px}
+.field label{display:block;font:700 9.5px var(--mono);letter-spacing:.11em;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
+.field .box{border:1px solid var(--line2);border-radius:6px;background:var(--panel2);padding:9px 12px;font-weight:600}
+.golog{font:12.5px var(--mono);line-height:1.9}
+.golog .done{color:var(--dim)} .golog .done b{color:var(--ie);font-weight:700}
+.golog .now{color:var(--ink)} .golog .now b{color:var(--warn)}
+.golog .todo{color:var(--faint)}
+.golog .t{color:var(--faint);display:inline-block;width:52px}
+
+.canvas{position:relative;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:18px;overflow:hidden}
+.canvas-grid{display:grid;grid-template-columns:150px 172px 1fr;gap:18px;align-items:start}
+.pile{border:1px dashed var(--line2);border-radius:8px;padding:13px;text-align:center}
+.pile .n{font:800 30px var(--mono)}
+.pile .docs{display:flex;flex-wrap:wrap;gap:3px;justify-content:center;margin-top:9px}
+.pile .d{width:11px;height:14px;border-radius:2px;background:var(--panel2);border:1px solid var(--line2)}
+.pile .d.hot{border-color:var(--warn)}
+.station{border:1px solid var(--line2);border-radius:8px;background:var(--panel2);padding:13px}
+.station h4{margin:0 0 4px;font-size:13.5px;font-weight:800}
+.station p{margin:0;font:11px var(--mono);color:var(--faint);line-height:1.6}
+.mover{display:flex;align-items:center;gap:8px;margin-top:11px;padding:7px 9px;border:1px solid rgba(240,168,60,.4);
+  border-radius:6px;background:rgba(240,168,60,.06)}
+.mover b{font:700 11.5px var(--mono)} .mover span{font:10.5px var(--mono);color:var(--warn)}
+.lanes{display:flex;flex-direction:column;gap:9px}
+.lane{border:1px solid var(--line2);border-left:3px solid var(--lc);border-radius:8px;background:var(--panel2);padding:11px 13px}
+.lane.both{border-left:none;position:relative}
+.lane.both::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:3px 0 0 3px;
+  background:linear-gradient(180deg,var(--ie) 0 48%,var(--ka) 52% 100%)}
+.lane h4{margin:0;font-size:13.5px;font-weight:800;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.lane h4 .cnt{margin-left:auto;font:800 15px var(--mono)}
+.lane .eng{margin:3px 0 0;font:10.5px var(--mono);color:var(--faint)}
+.dchips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.dchip{border:1px solid var(--line2);border-radius:5px;background:var(--bg);padding:5px 8px;min-width:118px}
+.dchip b{display:block;font:700 11px var(--mono)}
+.dchip span{display:block;font-size:10.5px;color:var(--faint)}
+.dchip.moving{border-color:var(--warn);animation:puls 1.4s infinite}
+@keyframes puls{50%{opacity:.55}}
+.dchip .caps{margin-top:4px;display:flex;gap:3px}
+.cap{font:700 8.5px var(--mono);border:1px solid;border-radius:2px;padding:0 4px}
+.cap.ie{color:var(--ie);border-color:rgba(87,201,154,.4)}
+.cap.ka{color:var(--ka);border-color:rgba(169,139,245,.4)}
+.cap.no{color:var(--faint);border-color:var(--line2)}
+.ticker{margin-top:14px;border-top:1px solid var(--line);padding-top:10px;font:11.5px var(--mono);color:var(--dim);
+  display:flex;gap:22px;flex-wrap:wrap}
+.ticker b{color:var(--ink)}
+
+.record{margin-top:13px;border:1px solid var(--line2);border-radius:9px;background:var(--panel);padding:14px 17px}
+.kv{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 16px}
+.kv span{display:block;font:700 9px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.kv b{display:block;font:600 12.5px var(--mono);margin-top:2px}
+.why{margin-top:11px;padding-left:11px;border-left:2px solid var(--red);font-size:13px;color:var(--dim)}
+
+.turn{margin-bottom:18px}
+.q{background:var(--panel2);border:1px solid var(--line2);border-radius:9px 9px 3px 9px;padding:10px 14px;font-weight:600;display:inline-block}
+.route{display:flex;gap:8px;margin:9px 0;font:11px var(--mono);color:var(--faint);align-items:center;flex-wrap:wrap}
+.route i{font-style:normal;border:1px solid;border-radius:4px;padding:2px 8px;font-weight:700}
+.route i.g{color:var(--secure);border-color:rgba(78,168,222,.5)}
+.route i.k{color:var(--ka);border-color:rgba(169,139,245,.5)}
+.ans{border:1px solid var(--line2);border-left:3px solid var(--lc,var(--line2));border-radius:3px 9px 9px 9px;background:var(--panel);padding:13px 16px}
+.sqlb{margin-top:10px;border:1px solid rgba(78,168,222,.25);background:rgba(78,168,222,.06);border-radius:6px;
+  padding:9px 12px;font:12px var(--mono);color:#9FD4F0;overflow-x:auto}
+.cites{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.cites span{font:11px var(--mono);border:1px solid rgba(169,139,245,.35);color:var(--ka);border-radius:4px;padding:2px 8px}
+
+.stat{border:1px solid var(--line);border-radius:9px;background:var(--panel);padding:13px 15px}
+.stat .v{font:800 23px var(--mono)} .stat .v.hot{color:var(--red)}
+.stat .l{font:700 9px var(--mono);letter-spacing:.11em;text-transform:uppercase;color:var(--faint);margin-top:3px}
+.stat .n{font-size:11.5px;color:var(--dim);margin-top:5px}
+.note{border:1px solid var(--line2);border-left:3px solid var(--red);border-radius:3px 8px 8px 3px;
+  background:var(--panel);padding:13px 16px;margin-top:14px}
+.note b{display:block;margin-bottom:4px}
+.note p{margin:0;color:var(--dim);font-size:13px}
+</style>
+
+<script>
+const P = {};
+
+/* ---------------- 01 START: config + readiness gate + go ---------------- */
+P.start = () => `
+<div class="eyebrow">Portable installer · any workspace</div>
+<h1>Check the workspace, fix what it finds, then go</h1>
+<p class="sub">Go is earned, not assumed. The app verifies everything it needs first. Anything fixable over the API gets a button; anything that needs a human gets instructions. Go unlocks when the required rows pass.</p>
+<div class="grid g2">
+  <div class="card">
+    <div class="field"><label>Company</label><div class="box">Acme Manufacturing</div></div>
+    <div class="field"><label>Industry</label><div class="box">Manufacturing · industrial equipment</div></div>
+    <div class="field"><label>Customer documents · volume, optional</label>
+      <div class="box mono" style="font-size:12.5px;font-weight:400">/Volumes/main/demo/customer_docs</div>
+      <div style="margin-top:7px;font-size:12px;color:var(--dim)">Scanned: <b style="color:var(--ink)">9 PDFs</b> · tell the app what these are so the run understands them:</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px">
+        <span class="pill ok">invoices × 5</span><span class="pill ok">supply contracts × 2</span>
+        <span class="pill warn">unknown × 2 · tag ⌄</span><span class="pill off">+ add type</span>
+      </div></div>
+    <div class="field"><label>Generated documents · volume</label>
+      <div class="box mono" style="font-size:12.5px;font-weight:400">/Volumes/main/demo/docflow_generated</div>
+      <div style="margin-top:6px;font-size:11.5px;color:var(--faint)">Synthetic docs always land in their own directory, never mixed into the customer's volume. With no customer volume set, this is the only one used.</div></div>
+    <div class="field"><label>Coverage after gap analysis</label>
+      <div style="font-size:12.5px;color:var(--dim);line-height:1.7">Customer docs cover <b style="color:var(--ie)">IE</b> and <b style="color:var(--ie)">IE+KA</b>. Gaps to generate: <b style="color:var(--ka)">7 for Knowledge Assistant</b>, <b style="color:var(--secure)">3 secure-filing</b>, <b style="color:var(--ink)">9 more IE variety</b> → 19 synthetic total.</div></div>
+    <div class="field"><label>Setup model · Databricks AI Gateway</label>
+      <div class="box mono" style="font-size:12.5px">databricks-claude-sonnet-4-6 ⌄</div></div>
+    <button class="btn" style="width:100%;padding:12px;font-size:14.5px;opacity:.55;cursor:not-allowed">Go · 2 required fixes pending</button>
+    <p style="margin:10px 0 0;font-size:11.5px;color:var(--faint)">Idempotent. Run it twice, nothing breaks. One-click teardown when the meeting ends.</p>
+    <div class="sec" style="margin-top:18px">What go will do, in order</div>
+    <div class="golog" style="font-size:11.5px">
+      <div class="todo"><span class="t">~0:30</span>research the company · taxonomy, vocabulary, two use cases</div>
+      <div class="todo"><span class="t">~1:10</span>generate themed PDFs to fill lane gaps · watermark synthetic</div>
+      <div class="todo"><span class="t">~1:20</span>create Knowledge Assistant with sources · index in background</div>
+      <div class="todo"><span class="t">~1:30</span>process every document through the lanes, live</div>
+      <div class="todo"><span class="t">~4:00</span>create Genie space when the first extracted rows land</div>
+      <div class="todo"><span class="t">~6:30</span>KA index ready · cited answers go live</div>
+    </div>
+  </div>
+  <div class="card">
+    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px">
+      <div style="font:800 10px var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--faint)">Readiness</div>
+      <div style="font:11.5px var(--mono);color:var(--dim)">5 pass · <b style="color:var(--warn)">2 fixable here</b> · 1 needs an admin</div>
+      <button class="btn" style="margin-left:auto;padding:5px 12px;font-size:11.5px">Re-check</button>
+    </div>
+    ${[
+      ["ok","App identity and grants","Service principal resolved, catalog and volume privileges verified.",""],
+      ["ok","AI Gateway models","14 pay-per-token endpoints reachable for setup calls.",""],
+      ["ok","Agent Bricks enabled","Workspace flags verified, knowledge_assistant on.",""],
+      ["ok","Unity Catalog schema and volume","acme_demo schema and docs volume present, zone folders created.",""],
+      ["fix","Serverless SQL warehouse","None found. Document Intelligence functions require serverless compute.",
+        `<button class="btn pri" style="padding:6px 12px;font-size:12px">Create warehouse</button>
+         <div style="font:10px var(--mono);color:var(--faint);margin-top:5px">via API · 2X-Small · auto-stops at 10 min idle</div>`],
+      ["fix","Lakebase project","None found. Run state and per-document events live here.",
+        `<button class="btn pri" style="padding:6px 12px;font-size:12px">Create project</button>
+         <div style="font:10px var(--mono);color:var(--faint);margin-top:5px">via API · scale-to-zero</div>`],
+      ["ok","Model serving quota","Endpoint headroom for the assistant this run creates.",""],
+      ["man","Billed cost data · optional","The demo shows an estimated cost either way. Real figures need the billing system schema, which only an account admin can enable.",
+        `<details style="font-size:12px;color:var(--dim)"><summary style="cursor:pointer;font-weight:700;color:var(--ink)">Instructions</summary>
+         <div style="margin-top:6px;font:11.5px var(--mono);line-height:1.7">1. Account console → Settings → System schemas<br>2. Enable <b>billing</b> for this metastore<br>3. Re-check here. Optional: go does not wait for this.</div></details>`],
+    ].map(([st,t,p,a])=>`
+      <div style="display:grid;grid-template-columns:34px 1fr 168px;gap:12px;padding:11px 0;border-bottom:1px solid var(--line);align-items:start">
+        <span class="pill ${st==="ok"?"ok":st==="fix"?"warn":"off"}" style="justify-content:center">${st==="ok"?"PASS":st==="fix"?"FIX":"ADMIN"}</span>
+        <div><div style="font-weight:700;font-size:13.5px">${t}</div>
+             <div style="font-size:12px;color:var(--dim);margin-top:2px">${p}</div></div>
+        <div style="text-align:right">${a}</div>
+      </div>`).join("")}
+    <p style="margin:11px 0 0;font-size:11.5px;color:var(--faint)">Fix buttons act as you, with your permissions, and say so before they act. Nothing here starts billing without being pressed.</p>
+  </div>
+</div>
+<div class="note"><b>Where the models run</b>
+<p>Setup calls, company research, and document generation use models on the Databricks AI Gateway. Document processing runs on Databricks itself: parsing, extraction, redaction, and the agents this app creates.</p></div>`;
+
+/* ---------------- 02 DOCUMENTS: the corpus being built ---------------- */
+P.docs = () => `
+<div class="eyebrow">Corpus · customer + generated</div>
+<h1>The documents, as they are made</h1>
+<p class="sub">Everything the run will process, where it came from, and which lane it exists to feed. Synthetic documents are generated live here, watermarked, into their own volume directory.</p>
+<div class="grid g3" style="margin-bottom:14px">
+  <div class="stat"><div class="v num">9</div><div class="l">customer documents</div><div class="n mono" style="font-size:10.5px">/Volumes/main/demo/customer_docs</div></div>
+  <div class="stat"><div class="v num">14 <span style="font-size:13px;color:var(--warn)">of 19</span></div><div class="l">generated so far</div><div class="n mono" style="font-size:10.5px">/Volumes/main/demo/docflow_generated</div></div>
+  <div class="stat"><div class="v num">28</div><div class="l">total corpus</div><div class="n">every lane covered when generation completes</div></div>
+</div>
+<div class="card">
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:11px">
+    <div style="font:800 10px var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--faint)">Generation · live</div>
+    <div class="mover" style="margin:0"><b>QIR-0784_Line3_Inspection.pdf</b><span>writing page 2 of 2 · watermarking</span></div>
+  </div>
+  <table>
+    <thead><tr><th>Document</th><th>Type</th><th>Origin</th><th>Feeds lane</th><th>Status</th></tr></thead>
+    <tbody>
+      ${[
+        ["INV-2201.pdf","invoice","customer","IE","ready"],
+        ["CT-1088_Vexler.pdf","supply contract","customer","IE + KA","ready"],
+        ["INV-8804_unknown.pdf","tagged: invoice","customer · tagged by you","IE","ready"],
+        ["MSDS-0114_Coolant.pdf","safety data sheet","generated · watermarked","KA","ready"],
+        ["POL-0031_Maintenance.pdf","maintenance manual","generated · watermarked","KA","ready"],
+        ["WC-2214_UnitSN-44781.pdf","warranty claim","generated · watermarked","IE + KA","ready"],
+        ["HR-0007_Accommodation.pdf","hr document","generated · watermarked","secure only","ready"],
+        ["QIR-0784_Line3.pdf","quality inspection","generated · watermarking…","IE + KA","<span class='pill warn'>making</span>"],
+        ["SM-0455_Manifest.pdf","shipping manifest","generated · queued","IE","<span class='pill off'>queued</span>"],
+      ].map(r=>`<tr>
+        <td class="mono" style="font-size:12px">${r[0]}</td><td>${r[1]}</td>
+        <td style="color:var(--dim);font-size:12.5px">${r[2]}</td>
+        <td class="mono" style="font-size:11.5px">${r[3]}</td>
+        <td>${r[4]==="ready"?'<span class="pill ok">ready</span>':r[4]}</td></tr>`).join("")}
+    </tbody>
+  </table>
+  <p style="margin:11px 0 0;font-size:11.5px;color:var(--faint)">Showing 9 of 28 · themed to Acme Manufacturing by the setup model · fictional vendors and people, canonical fake values, SYNTHETIC DEMO DATA watermark on every generated page. Customer documents are never modified.</p>
+</div>
+<div class="note"><b>Why generation is visible</b>
+<p>The corpus is part of the demo. Watching the app write documents themed to the customer, then admit exactly which ones are synthetic, buys the credibility the rest of the demo spends.</p></div>`;
+
+/* ---------------- 03 FLOW: the hero ---------------- */
+P.flow = () => `
+<div class="eyebrow">The hero · run 1 · Acme Manufacturing</div>
+<h1>Documents moving through the bricks</h1>
+<p class="sub">Live view. Each document is parsed, classified with a written reason, and routed to the capability it needs. Chips move as stages complete, one document at a time.</p>
+<div class="canvas">
+  <div class="canvas-grid">
+    <div class="pile">
+      <div style="font:700 9px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--faint)">Inbox</div>
+      <div class="n num">9</div>
+      <div style="font-size:11px;color:var(--dim)">remaining of 28</div>
+      <div class="docs">${Array.from({length:9},(_,i)=>`<span class="d ${i===0?"hot":""}"></span>`).join("")}</div>
+      <p style="margin:9px 0 0;font:10px var(--mono);color:var(--faint)">ai_parse_document</p>
+    </div>
+    <div>
+      <div class="station">
+        <h4>Classify + route</h4>
+        <p>one decision record per doc<br>type · sensitivity · needs<br>+ a written why</p>
+      </div>
+      <div class="mover"><b>QIR-0783</b><span>routing → IE + KA</span></div>
+      <div class="mover" style="border-color:var(--line2);background:none"><b>INV-2205</b><span style="color:var(--faint)">parsing p.2</span></div>
+    </div>
+    <div class="lanes">
+      <div class="lane" style="--lc:var(--ie)">
+        <h4>Information Extraction <span class="pill ok">Document Intelligence</span><span class="cnt num">8</span></h4>
+        <p class="eng">fields → Delta · attach an IE agent endpoint if the workspace has one</p>
+        <div class="dchips">
+          <div class="dchip"><b>INV-2201</b><span>invoice · 0.98</span><div class="caps"><i class="cap ie">IE</i></div></div>
+          <div class="dchip"><b>PO-1187</b><span>purchase order · 0.97</span><div class="caps"><i class="cap ie">IE</i></div></div>
+          <div class="dchip moving"><b>SM-0412</b><span>extracting fields…</span><div class="caps"><i class="cap ie">IE</i></div></div>
+        </div>
+      </div>
+      <div class="lane" style="--lc:var(--ka)">
+        <h4>Knowledge Assistant <span class="pill ka">Agent Bricks · created by this app</span><span class="cnt num">4</span></h4>
+        <p class="eng">indexed for cited answers · ka-acme-demo · index 71%</p>
+        <div class="dchips">
+          <div class="dchip"><b>MSDS-0114</b><span>safety data sheet · 0.97</span><div class="caps"><i class="cap ka">KA</i></div></div>
+          <div class="dchip"><b>POL-0031</b><span>maintenance manual · 0.95</span><div class="caps"><i class="cap ka">KA</i></div></div>
+        </div>
+      </div>
+      <div class="lane both">
+        <h4>Both · IE + KA <span class="pill ok">one doc, two agents</span><span class="cnt num">5</span></h4>
+        <p class="eng">contracts and claims become rows and cited answers</p>
+        <div class="dchips">
+          <div class="dchip"><b>WC-2214</b><span>warranty claim · 0.97</span><div class="caps"><i class="cap ie">IE</i><i class="cap ka">KA</i></div></div>
+          <div class="dchip"><b>CT-1088</b><span>supply contract · 0.95</span><div class="caps"><i class="cap ie">IE</i><i class="cap ka">KA</i></div></div>
+        </div>
+      </div>
+      <div class="lane" style="--lc:var(--secure)">
+        <h4>Secure filing only <span class="pill off">no model processing</span><span class="cnt num">2</span></h4>
+        <p class="eng">ai_mask redaction → restricted volume path · hr_admins only</p>
+        <div class="dchips">
+          <div class="dchip"><b>HR-0007</b><span>medical file · PII</span><div class="caps"><i class="cap no">NO AI</i></div></div>
+          <div class="dchip"><b>SI-0112</b><span>safety incident · PII</span><div class="caps"><i class="cap no">NO AI</i></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="ticker num"><span>processed <b>19 / 28</b></span><span>avg <b>7.9s</b> per doc</span><span>Genie space <b>live</b></span><span>KA index <b>71%</b></span><span>elapsed <b>4:12</b></span></div>
+</div>
+<div class="record">
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
+    <b class="mono" style="font-size:13.5px">QIR-0783_Line3_Inspection.pdf</b>
+    <span class="pill warn">just routed</span>
+    <span style="margin-left:auto;font:10.5px var(--mono);color:var(--faint)">routing decision record</span>
+  </div>
+  <div class="kv">
+    <div><span>type</span><b>quality_inspection</b></div>
+    <div><span>confidence</span><b>0.96</b></div>
+    <div><span>sensitivity</span><b>internal</b></div>
+    <div><span>retention</span><b>quality_5yr</b></div>
+    <div><span>needs extraction</span><b style="color:var(--ie)">yes</b></div>
+    <div><span>needs Q&amp;A</span><b style="color:var(--ka)">yes</b></div>
+    <div><span>lane</span><b>IE + KA</b></div>
+    <div><span>engine</span><b>AI Gateway routing</b></div>
+  </div>
+  <div class="why">Defect measurements belong in the quality tables, but the inspector's narrative about the Line 3 press is something engineers will ask questions of, so this document needs both.</div>
+</div>`;
+
+/* ---------------- 03 ASK ---------------- */
+P.ask = () => `
+<div class="eyebrow">Built during the run</div>
+<h1>Ask the documents</h1>
+<p class="sub">Two engines this app created minutes ago: a Genie space over the extracted tables, and the Knowledge Assistant over the documents themselves.</p>
+<div class="turn">
+  <div class="q">Which suppliers show a rising defect rate this quarter?</div>
+  <div class="route">table question → <i class="g">GENIE · created 4 min ago</i></div>
+  <div class="ans" style="--lc:var(--secure)">
+    <p style="margin:0">Vexler Steel trends up across four inspections, 1.2% to 4.8%, all on Line 3 supplied lots. Other suppliers hold steady.</p>
+    <div class="sqlb">SELECT supplier, inspection_date, defect_rate FROM acme_demo.extracted.quality_inspections ORDER BY supplier, inspection_date</div>
+    <p style="margin:9px 0 0;font:10.5px var(--mono);color:var(--faint)">Genie wrote and ran this. The table did not exist ten minutes ago.</p>
+  </div>
+</div>
+<div class="turn">
+  <div class="q">What does the Vexler contract require before we can reject a lot?</div>
+  <div class="route">document question → <i class="k">KNOWLEDGE ASSISTANT · ka-acme-demo</i></div>
+  <div class="ans" style="--lc:var(--ka)">
+    <p style="margin:0">Written notice within 10 business days of inspection, the lot quarantined and made available for supplier review, and rejection above 2% defect rate per section 6.3.</p>
+    <div class="cites"><span>CT-1088 · §6.3 Quality, p.7</span><span>CT-1088 · §6.5 Remedies, p.8</span></div>
+    <p style="margin:9px 0 0;font:10.5px var(--mono);color:var(--faint)">Cited answer from the assistant this app created and indexed during the run.</p>
+  </div>
+</div>
+<div class="note"><b>The line for the room</b>
+<p>Nothing here was staged. The tables, the Genie space, and the assistant were all created by the app in front of you, from documents themed to this company.</p></div>`;
+
+/* ---------------- 04 USE CASE 1 ---------------- */
+P.uc1 = () => `
+<div class="eyebrow">Use case · generated for Acme from the run</div>
+<h1>Warranty claims desk</h1>
+<p class="sub">What Acme's claims team builds on the extracted tables. Real rows from this run, presented as the app a customer would actually operate.</p>
+<div class="grid g3">
+  <div class="stat"><div class="v num hot">$3,310</div><div class="l">deny candidates</div><div class="n">2 claims outside their coverage window</div></div>
+  <div class="stat"><div class="v num">$28,410</div><div class="l">approve candidates</div><div class="n">14 claims within coverage</div></div>
+  <div class="stat"><div class="v num">3</div><div class="l">need a person</div><div class="n">fields unreadable, routed to review</div></div>
+</div>
+<div class="sec">Queue</div>
+<div class="card"><table>
+<thead><tr><th>Claim</th><th>Unit</th><th>Purchased</th><th>Failed</th><th>Amount</th><th>Coverage math</th></tr></thead>
+<tbody>
+<tr><td class="mono">WC-2214</td><td class="mono">SN-44781</td><td class="mono num">2023-11-02</td><td class="mono num">2026-03-18</td><td class="mono num">$2,140</td><td style="color:var(--warn)">136 days past term</td></tr>
+<tr><td class="mono">WC-2231</td><td class="mono">SN-49118</td><td class="mono num">2023-08-15</td><td class="mono num">2026-01-22</td><td class="mono num">$1,170</td><td style="color:var(--warn)">160 days past term</td></tr>
+<tr><td class="mono">WC-2219</td><td class="mono">SN-44902</td><td class="mono num">2024-06-11</td><td class="mono num">2025-08-04</td><td class="mono num">$980</td><td style="color:var(--dim)">within term</td></tr>
+</tbody></table></div>
+<div class="note"><b>Why the SA cares</b>
+<p>The coverage math is date arithmetic on fields the pipeline extracted, deterministic and defensible. The talk track writes itself: your documents became a ledger, and the ledger caught $3,310 this run.</p></div>`;
+
+/* ---------------- 05 USE CASE 2 ---------------- */
+P.uc2 = () => `
+<div class="eyebrow">Use case · generated for Acme from the run</div>
+<h1>Supplier quality watch</h1>
+<p class="sub">Second value surface: inspection extractions joined to contract terms the Knowledge Assistant can quote. One screen, two agents' work.</p>
+<div class="grid g2">
+  <div class="card">
+    <div style="font:800 10px var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--faint);margin-bottom:10px">Line 3 defect trend · Vexler Steel lots</div>
+    ${[["Apr 08","1.2%",12],["May 12","1.9%",19],["Jun 09","3.1%",31],["Jul 07","4.8%",48]]
+      .map(([d,v,w])=>`<div style="display:grid;grid-template-columns:64px 1fr 46px;gap:12px;align-items:center;padding:6px 0">
+      <span class="mono" style="font-size:11.5px;color:var(--dim)">${d}</span>
+      <div style="height:9px;background:var(--panel2);border-radius:2px"><i style="display:block;height:100%;width:${w}%;background:${w>30?"var(--warn)":"var(--dim)"};border-radius:2px"></i></div>
+      <b class="mono num" style="text-align:right;font-size:12px">${v}</b></div>`).join("")}
+    <p style="margin:10px 0 0;font-size:11.5px;color:var(--faint)">from quality_inspections, extracted this run</p>
+  </div>
+  <div class="card">
+    <div style="font:800 10px var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--faint);margin-bottom:10px">What the contract lets Acme do</div>
+    <p style="margin:0 0 9px;font-size:13.5px">Rejection threshold is <b>2% per lot</b>. Two of the last three Vexler lots qualify.</p>
+    <div class="cites"><span>CT-1088 · §6.3, p.7</span></div>
+    <p style="margin:12px 0 0;font-size:13.5px">Notice must land <b>within 10 business days</b> of inspection. The Jul 07 window closes Jul 21.</p>
+    <div class="cites"><span>CT-1088 · §6.3, p.7</span><span>CT-1088 · §6.5, p.8</span></div>
+    <div style="margin-top:14px"><button class="btn">Draft the rejection notice</button></div>
+    <p style="margin:9px 0 0;font-size:11.5px;color:var(--faint)">numbers from Genie, language from the Knowledge Assistant</p>
+  </div>
+</div>`;
+
+/* ---------------- 06 WHAT GOT BUILT ---------------- */
+P.built = () => `
+<div class="eyebrow">The bonus talk track</div>
+<h1>What the go button actually created</h1>
+<p class="sub">Everything on this list was made by the app, in this workspace, this session. Engine labels below are the truth, including where a managed agent is optional rather than assumed.</p>
+<div class="card"><table>
+<thead><tr><th>Stage</th><th>Engine</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>Parse</td><td class="mono">ai_parse_document</td><td><span class="pill ok">proven</span></td></tr>
+<tr><td>Classify + route</td><td class="mono">AI Gateway structured routing · upgrade: Custom LLM agent where enabled</td><td><span class="pill ok">proven</span></td></tr>
+<tr><td>Information Extraction</td><td class="mono">Document Intelligence ai_extract · attach IE agent endpoint if present (no create API today)</td><td><span class="pill ok">proven</span></td></tr>
+<tr><td>Knowledge Assistant</td><td class="mono">created via API with sources · ka-acme-demo</td><td><span class="pill warn">create verified · index E2E to confirm</span></td></tr>
+<tr><td>Q&amp;A over tables</td><td class="mono">Genie space created via API on extracted schema</td><td><span class="pill warn">API present · to verify</span></td></tr>
+<tr><td>Secure filing</td><td class="mono">ai_mask + restricted volume grants</td><td><span class="pill ok">proven</span></td></tr>
+<tr><td>Run state</td><td class="mono">Lakebase · per-document events the canvas reads live</td><td><span class="pill warn">available here · to verify</span></td></tr>
+</tbody></table></div>
+<div class="grid g3" style="margin-top:13px">
+  <div class="stat"><div class="v num">6:41</div><div class="l">go to first answer</div><div class="n">measured, not promised</div></div>
+  <div class="stat"><div class="v num">28</div><div class="l">documents</div><div class="n">19 generated + 9 customer, all watermarked if synthetic</div></div>
+  <div class="stat"><div class="v num">1</div><div class="l">teardown click</div><div class="n">agents, tables, volume folders, Genie space removed</div></div>
+</div>
+<div class="note"><b>And the app itself is the meta-demo</b>
+<p>This is a Databricks App, state in Lakebase, agents governed in the workspace, deployed from one bundle. The demo about the platform is built on the platform, which is the quiet closing line.</p></div>`;
+
+const stage = document.getElementById("stage");
+function go(k){
+  stage.innerHTML = P[k]();
+  document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on", b.dataset.go===k));
+  window.scrollTo(0,0);
+}
+document.querySelectorAll("nav button").forEach(b=>b.addEventListener("click",()=>go(b.dataset.go)));
+go("docs");
+</script>
+</body></html>

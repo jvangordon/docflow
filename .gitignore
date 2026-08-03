@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.databricks/
+*.pyc
+film/frames/
+film/verify/
+film/logs/
+guide/shots/
+guide/preview.html
+archive/
+prototype-candidates/*/shots/

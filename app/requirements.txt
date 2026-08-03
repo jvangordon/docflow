@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+databricks-sdk==0.123.0
+reportlab
+pydantic

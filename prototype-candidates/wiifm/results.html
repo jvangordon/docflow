@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DocFlow · What Acme does with this on Monday</title>
+<style>
+  :root{
+    --bg-top:#101B22;
+    --bg-bot:#0B141A;
+    --oat:#EEEDE9;
+    --oat-90:rgba(238,237,233,.92);
+    --oat-60:rgba(238,237,233,.60);
+    --oat-45:rgba(238,237,233,.45);
+    --rule:rgba(238,237,233,.10);
+    --card:rgba(238,237,233,.025);
+    --red:#FF3621;
+    --sans:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:1440px;height:900px;overflow:hidden}
+  body{
+    background:linear-gradient(180deg,var(--bg-top) 0%,var(--bg-bot) 100%);
+    color:var(--oat-90);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+    font-variant-numeric:tabular-nums;
+  }
+  .page{
+    width:1440px;height:900px;
+    padding:52px 110px 46px;
+    display:flex;flex-direction:column;
+  }
+
+  /* ---- header ---- */
+  .overline{
+    font-size:13px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--oat-45);font-weight:600;
+  }
+  h1{
+    margin-top:10px;
+    font-size:44px;line-height:1.12;font-weight:650;
+    letter-spacing:-.015em;color:var(--oat);
+  }
+
+  /* ---- zone scaffolding ---- */
+  .zone{margin-top:41px}
+  .zonebar{
+    display:flex;align-items:baseline;justify-content:space-between;
+    padding-bottom:12px;border-bottom:1px solid var(--rule);
+  }
+  .zonelabel{
+    font-size:13px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--oat-45);font-weight:600;
+  }
+  .zonenote{font-size:14px;color:var(--oat-60)}
+
+  /* ---- assets ---- */
+  .cards{display:flex;gap:24px;margin-top:16px}
+  .card{
+    flex:1;
+    background:var(--card);
+    border:1px solid var(--rule);
+    border-radius:12px;
+    padding:18px 22px 16px;
+    display:flex;flex-direction:column;
+  }
+  .tname{font-family:var(--mono);font-size:14px;color:var(--oat-60)}
+  .trows{margin-top:8px;font-size:28px;font-weight:600;color:var(--oat)}
+  .trows span{font-size:15px;font-weight:400;color:var(--oat-60);margin-left:6px}
+  .tlink{margin-top:10px;font-size:13px;color:var(--oat-60);text-decoration:none}
+
+  /* ---- actions ---- */
+  .actions{margin-top:6px}
+  .action{
+    display:flex;align-items:baseline;gap:28px;
+    padding:17px 0;border-bottom:1px solid var(--rule);
+  }
+  .action:last-child{border-bottom:none}
+  .role{
+    flex:0 0 128px;
+    font-size:13px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--oat-60);font-weight:600;
+  }
+  .deed{flex:1;font-size:19px;line-height:1.4;color:var(--oat-90)}
+  .deed strong{font-weight:650;color:var(--oat)}
+  .go{
+    flex:0 0 auto;
+    font-size:14px;color:var(--oat-60);text-decoration:none;white-space:nowrap;
+  }
+
+  /* ---- math ---- */
+  .strip{display:flex;align-items:flex-end;gap:72px;margin-top:16px}
+  .stat .v{font-size:32px;font-weight:600;color:var(--oat);letter-spacing:-.01em}
+  .stat .v em{font-style:normal;font-size:20px;font-weight:400;color:var(--oat-60);margin:0 8px}
+  .stat .k{margin-top:6px;font-size:13px;color:var(--oat-60)}
+  .stat.caught .v{color:var(--red)}
+  .fineprint{margin-top:12px;font-size:13px;color:var(--oat-45)}
+
+  /* ---- closer ---- */
+  .closer{
+    margin-top:auto;
+    padding-top:22px;border-top:1px solid var(--rule);
+    display:flex;align-items:baseline;justify-content:space-between;gap:48px;
+  }
+  .lastword{font-size:20px;font-weight:550;color:var(--oat)}
+  .footnote{font-size:13px;color:var(--oat-45);max-width:560px;text-align:right;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- header -->
+  <div>
+    <div class="overline">DocFlow · Acme Manufacturing · run complete</div>
+    <h1>What Acme does with this on Monday morning</h1>
+  </div>
+
+  <!-- the assets -->
+  <div class="zone">
+    <div class="zonebar">
+      <div class="zonelabel">The assets</div>
+      <div class="zonenote">Three Delta tables, governed in Unity Catalog. Yours to query.</div>
+    </div>
+    <div class="cards">
+      <div class="card">
+        <div class="tname">extract_warranty_claims</div>
+        <div class="trows">19<span>rows</span></div>
+        <a class="tlink" href="#">Open in Catalog &#8599;</a>
+      </div>
+      <div class="card">
+        <div class="tname">extract_supplier_invoices</div>
+        <div class="trows">14<span>rows</span></div>
+        <a class="tlink" href="#">Open in Catalog &#8599;</a>
+      </div>
+      <div class="card">
+        <div class="tname">audit_findings</div>
+        <div class="trows">3<span>rows</span></div>
+        <a class="tlink" href="#">Open in Catalog &#8599;</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- the actions -->
+  <div class="zone">
+    <div class="zonebar">
+      <div class="zonelabel">The actions</div>
+      <div class="zonenote">Routed to the people who already own the work.</div>
+    </div>
+    <div class="actions">
+      <div class="action">
+        <div class="role">Claims team</div>
+        <div class="deed"><strong>3 expired-window claims</strong> routed for denial review, worth <strong>$3,310</strong>.</div>
+        <a class="go" href="#">Open the review queue &#8594;</a>
+      </div>
+      <div class="action">
+        <div class="role">AP</div>
+        <div class="deed">Hold payment on <strong>2 invoices</strong> until the linked claims resolve.</div>
+        <a class="go" href="#">See both invoices &#8594;</a>
+      </div>
+      <div class="action">
+        <div class="role">Quality</div>
+        <div class="deed"><strong>Line 3 defect drift</strong> flagged across this week's inspection reports.</div>
+        <a class="go" href="#">Open the supplier scorecard in Genie &#8599;</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- the math -->
+  <div class="zone">
+    <div class="zonebar">
+      <div class="zonelabel">The math</div>
+      <div class="zonenote">One run, measured. No projections.</div>
+    </div>
+    <div class="strip">
+      <div class="stat caught">
+        <div class="v">$3,310</div>
+        <div class="k">caught this run</div>
+      </div>
+      <div class="stat">
+        <div class="v">$0.61</div>
+        <div class="k">total pipeline cost</div>
+      </div>
+      <div class="stat">
+        <div class="v">9m 51s<em>vs</em>3h 55m</div>
+        <div class="k">47 documents, pipeline vs manual triage</div>
+      </div>
+    </div>
+    <div class="fineprint">Assumption, stated: manual triage priced at 5 minutes per document. 47 docs &times; 5 min = 3h 55m. Swap in your own number.</div>
+  </div>
+
+  <!-- closer -->
+  <div class="closer">
+    <div class="lastword">Same pipeline, your volume, tomorrow morning.</div>
+    <div class="footnote">All documents are synthetic and watermarked SYNTHETIC DEMO DATA. Acme is a demo profile, not a customer record. Figures read live from run_metrics.</div>
+  </div>
+
+</div>
+</body>
+</html>

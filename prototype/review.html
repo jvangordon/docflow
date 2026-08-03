@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocFlow · Review Queue</title>
+<style>
+  :root{
+    --bg:#0B141B; --panel:#121F2A; --panel2:#16242F; --ink:#EEEDE9;
+    --dim:rgba(238,237,233,.56); --faint:rgba(238,237,233,.30);
+    --line:rgba(238,237,233,.09); --line2:rgba(238,237,233,.16);
+    --red:#FF3621; --lava:linear-gradient(135deg,#FF3621 0%,#FF8A00 100%);
+    --extract:#4CC38A; --audit:#FFB224; --secure:#FF6369; --archive:#8B98A5;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:radial-gradient(1100px 500px at 78% -10%, rgba(255,54,33,.10), transparent 60%),var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh}
+  .num{font-variant-numeric:tabular-nums}
+  .mono{font-family:"SF Mono",ui-monospace,Menlo,monospace}
+
+  .top{display:flex;align-items:center;gap:16px;height:58px;padding:0 22px;border-bottom:1px solid var(--line);background:rgba(11,20,27,.7)}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:17px}
+  .brand .dot{width:12px;height:12px;border-radius:3px;background:var(--lava);box-shadow:0 0 14px rgba(255,54,33,.55)}
+  .crumb{font-size:12.5px;color:var(--dim)}
+  .crumb b{color:var(--ink)}
+  .qcount{margin-left:auto;font-size:12px;color:var(--dim)}
+  .qcount b{color:#FFD98A}
+
+  .wrap{display:grid;grid-template-columns:270px 1fr;gap:18px;max-width:1280px;margin:56px auto 0;padding:0 22px}
+
+  /* queue rail */
+  .rail h5{font-size:10.5px;letter-spacing:.1em;color:var(--faint);text-transform:uppercase;margin:4px 0 10px}
+  .qitem{border:1px solid var(--line);border-radius:11px;background:var(--panel);padding:11px 13px;margin-bottom:9px;cursor:pointer}
+  .qitem.active{border-color:rgba(255,178,36,.55);background:linear-gradient(180deg,rgba(255,178,36,.07),var(--panel))}
+  .qitem .nm{font-size:12px;font-weight:700}
+  .qitem .why{font-size:10.5px;color:var(--dim);margin-top:3px}
+  .sev{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.06em;border-radius:4px;padding:1.5px 6px;margin-top:6px}
+  .sev.high{color:#FF9B94;border:1px solid rgba(255,99,105,.5)}
+  .sev.med{color:#FFD98A;border:1px solid rgba(255,178,36,.5)}
+  .done-note{font-size:10.5px;color:var(--faint);padding:10px 4px}
+
+  /* review card */
+  .card{border:1px solid var(--line2);border-radius:16px;background:linear-gradient(180deg,var(--panel2),var(--panel));box-shadow:0 16px 44px rgba(0,0,0,.4);padding:20px 24px}
+  .hd{display:flex;align-items:center;gap:12px}
+  .hd .name{font-size:16px;font-weight:800}
+  .chip{font-size:10.5px;font-weight:700;color:#FFD98A;background:rgba(255,178,36,.12);border:1px solid rgba(255,178,36,.45);border-radius:6px;padding:2.5px 8px}
+  .hd .meta{margin-left:auto;font-size:11px;color:var(--dim)}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+  .panel{border:1px solid var(--line);border-radius:12px;background:rgba(11,20,27,.5);padding:14px 16px}
+  .panel h6{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:10px}
+
+  .finding{border-left:3px solid var(--secure);padding:2px 0 2px 12px;margin-bottom:14px}
+  .finding.f2{border-left-color:var(--extract)}
+  .finding .t{font-size:13px;font-weight:700}
+  .finding .d{font-size:12px;color:var(--dim);margin-top:4px;line-height:1.55}
+  .finding .math{margin-top:7px;font-size:11px;background:rgba(255,99,105,.08);border:1px solid rgba(255,99,105,.3);border-radius:8px;padding:7px 10px;color:#FFB4AE}
+  .finding.f2 .math{background:rgba(76,195,138,.07);border-color:rgba(76,195,138,.3);color:#9FE0C0}
+  .judge{display:flex;align-items:center;gap:7px;font-size:10.5px;color:var(--faint);margin-top:10px}
+  .judge i{width:6px;height:6px;border-radius:50%;background:var(--red)}
+
+  table{width:100%;border-collapse:collapse;font-size:11.5px}
+  td{padding:5.5px 4px;border-bottom:1px solid var(--line)}
+  td:first-child{color:var(--dim);width:44%}
+  td:last-child{font-weight:600}
+  td .flag{color:#FF9B94;font-weight:700}
+  .src{margin-top:12px;border:1px solid var(--line);border-radius:9px;background:#F4F1EA;color:#3B3730;font-size:11px;padding:22px 12px 10px;line-height:1.6;position:relative}
+  .src mark{background:rgba(255,138,0,.35);color:#1B1916;border-radius:2px;padding:0 2px}
+  .src .pg{position:absolute;right:8px;top:6px;font-size:9px;color:#8D8574}
+
+  .actions{display:flex;gap:10px;margin-top:18px;align-items:center}
+  .btn{border-radius:10px;font-weight:700;font-size:13px;padding:10px 18px;cursor:pointer;border:1px solid var(--line2);background:var(--panel2);color:var(--ink)}
+  .btn.primary{background:var(--lava);border:none;color:#fff;box-shadow:0 4px 18px rgba(255,54,33,.35)}
+  .btn.ghost{background:transparent;color:var(--dim)}
+  .fine{margin-top:12px;font-size:11px;color:var(--faint)}
+
+  .receipt{position:fixed;left:0;right:0;bottom:14px;display:flex;align-items:center;gap:10px;max-width:1280px;margin:0 auto;padding:0 22px}
+  .receipt .r{flex:1;border:1px solid rgba(76,195,138,.3);background:rgba(76,195,138,.06);border-radius:10px;padding:9px 14px;font-size:11.5px;color:#9FE0C0}
+  .receipt .r b{color:var(--ink)}
+  .receipt .r .undo{float:right;color:var(--dim);font-weight:700;cursor:pointer}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand"><span class="dot"></span>DocFlow</div>
+  <div class="crumb">Acme Manufacturing · <b>Audit review queue</b></div>
+  <div class="qcount num"><b>3 waiting</b> · 8 decided today</div>
+</div>
+
+<div class="wrap">
+  <div class="rail">
+    <h5>Waiting on you</h5>
+    <div class="qitem active">
+      <div class="nm">WC-2214 · Warranty Claim</div>
+      <div class="why">warranty window exceeded</div>
+      <span class="sev high">HIGH</span>
+    </div>
+    <div class="qitem">
+      <div class="nm">CT-1088 · Supplier Contract</div>
+      <div class="why">missing late-delivery penalty clause</div>
+      <span class="sev med">MEDIUM</span>
+    </div>
+    <div class="qitem">
+      <div class="nm">QIR-0781 · Quality Inspection</div>
+      <div class="why">defect rate outside control limits</div>
+      <span class="sev med">MEDIUM</span>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <div class="hd">
+        <span class="name">WC-2214_UnitSN-44781.pdf</span>
+        <span class="chip">Warranty Claim · 0.97</span>
+        <span class="meta num">claimed $2,140 · Miller Tooling · run #38</span>
+      </div>
+
+      <div class="grid">
+        <div class="panel">
+          <h6>Judge findings · 2</h6>
+          <div class="finding">
+            <div class="t">Warranty window exceeded</div>
+            <div class="d">The 24-month warranty term ended before the reported failure date. Purchase and term were cross-checked against the linked invoice.</div>
+            <div class="math num">2023-11-02 + 24 mo = 2025-11-02 · failure 2026-03-18 · <b>137 days past term</b></div>
+          </div>
+          <div class="finding f2">
+            <div class="t">Serial number format valid</div>
+            <div class="d">SN-44781 matches the Acme unit serial pattern and appears on invoice INV-88213.</div>
+            <div class="math num">cross-reference: extract_invoices · INV-88213 · line 3</div>
+          </div>
+          <div class="judge"><i></i>judge: claude-opus-5 via AI Gateway · rubric v2 (warranty) · 4.1s</div>
+        </div>
+
+        <div class="panel">
+          <h6>Extracted fields vs source</h6>
+          <table>
+            <tr><td>claimant</td><td>Miller Tooling LLC</td></tr>
+            <tr><td>unit serial</td><td class="mono">SN-44781</td></tr>
+            <tr><td>purchase date</td><td class="num">2023-11-02</td></tr>
+            <tr><td>failure date</td><td class="num flag">2026-03-18 ⚠</td></tr>
+            <tr><td>warranty term</td><td>24 months</td></tr>
+            <tr><td>claim amount</td><td class="num">$2,140.00</td></tr>
+          </table>
+          <div class="src">
+            <span class="pg">page 2 · ai_parse_document</span>
+            …unit <mark>SN-44781</mark> ceased operation on <mark>March 18, 2026</mark>. Original purchase <mark>November 2, 2023</mark> under standard <mark>24-month</mark> limited warranty…
+          </div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn primary">Confirm · route to claims</button>
+        <button class="btn">Override · approve claim</button>
+        <button class="btn">Re-run judge</button>
+        <button class="btn ghost">Defer</button>
+      </div>
+      <div class="fine">Decisions write to review_decisions with actor, timestamp, and reason. Nothing leaves the workspace.</div>
+    </div>
+  </div>
+</div>
+
+<div class="receipt">
+  <div class="r num">✓ <b>CT-0921 Supplier Contract</b> confirmed 2 min ago by jvangordon · reason: “penalty clause verified on p.4” <span class="undo">undo</span></div>
+</div>
+
+</body>
+</html>

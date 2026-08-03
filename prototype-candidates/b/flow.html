@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DocFlow · The Paper Trail · Production Line</title>
+<style>
+  :root{
+    --oat:#EEEDE9; --oat-warm:#F4F2EC; --oat-deep:#E4E1D8;
+    --ink:#1B3139; --ink-2:#44555E; --ink-3:#5E6E75;
+    --hair:rgba(27,49,57,.16); --hair-soft:rgba(27,49,57,.09);
+    --red:#FF3621; --red-ink:#C1240B; --amber:#FF8A00;
+    --lava:linear-gradient(90deg,#FF3621,#FF8A00);
+    --paper:#FFFFFF; --paper-warm:#FCFBF7;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{margin:0;background:var(--oat)}
+  body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",Helvetica,Arial,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased}
+  .board{position:relative;width:1440px;height:900px;overflow:hidden;
+    background:
+      radial-gradient(rgba(27,49,57,.045) .6px, transparent .7px) 0 0/16px 16px,
+      linear-gradient(180deg,#F3F1EB 0%,var(--oat) 34%)}
+  .abs{position:absolute}
+
+  /* ---------- masthead ---------- */
+  .masthead{left:40px;top:24px;width:1360px;height:58px;display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid var(--ink)}
+  .brand{display:flex;align-items:center;gap:14px}
+  .mark{width:30px;height:30px;border-radius:7px;background:var(--red);position:relative;box-shadow:0 4px 10px rgba(255,54,33,.30)}
+  .mark:after{content:"";position:absolute;left:8px;top:8px;width:14px;height:14px;border-radius:3px;background:#fff;opacity:.94}
+  .wordmark{font-size:29px;font-weight:800;letter-spacing:-.02em}
+  .brand-div{width:1px;height:26px;background:var(--hair)}
+  .kick{font-size:12px;font-weight:700;letter-spacing:.20em;text-transform:uppercase;color:var(--ink-2)}
+  .mast-right{display:flex;align-items:center;gap:18px}
+  .edition{text-align:right;line-height:1.35}
+  .edition b{font-size:14px;font-weight:800;display:block}
+  .edition span{font-size:12px;color:var(--ink-3)}
+  .stamp-btn{border:2px solid var(--ink);border-radius:5px;padding:7px 14px;font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);background:transparent}
+  .rule2{left:40px;top:89px;width:1360px;height:1px;background:var(--hair)}
+  .folio{left:40px;top:99px;width:1360px;display:flex;justify-content:space-between;font-size:12px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-3)}
+  .folio .path b{color:var(--ink-2)}
+
+  /* ---------- stage column headers + ghosts ---------- */
+  .colhead{top:158px;height:22px;display:flex;align-items:center;gap:10px;font-size:12.5px;font-weight:800;letter-spacing:.17em;text-transform:uppercase;color:var(--ink-2)}
+  .colhead:before{content:"";width:16px;height:3px;background:var(--ink)}
+  .colhead.live{color:var(--red-ink)}
+  .colhead.live:before{background:var(--red)}
+  .ghost{top:112px;font-size:96px;font-weight:900;letter-spacing:-.04em;color:rgba(27,49,57,.05);line-height:1;z-index:0}
+
+  /* ---------- cards ---------- */
+  .card{background:var(--paper);border:1px solid rgba(27,49,57,.08);border-radius:10px;
+    box-shadow:0 1px 2px rgba(27,49,57,.08),0 12px 26px rgba(27,49,57,.10);z-index:2}
+  .stage{top:196px;height:330px;padding:16px}
+  .stage-h{display:flex;align-items:center;justify-content:space-between}
+  .stage-h b{font-size:15px;font-weight:800;letter-spacing:.02em}
+  .chip{display:inline-flex;align-items:center;gap:5px;border:1.5px solid rgba(27,49,57,.45);border-radius:4px;padding:1.5px 7px;font-size:12px;font-weight:800;letter-spacing:.10em;color:var(--ink-2);background:#fff}
+  .chip.red{border-color:var(--red-ink);color:var(--red-ink)}
+  .chip.solid{background:var(--ink);border-color:var(--ink);color:var(--oat)}
+  .mono{font-family:var(--mono)}
+  .sub{font-size:12.5px;color:var(--ink-3);line-height:1.45}
+  .hl{height:1px;background:var(--hair-soft);margin:11px 0}
+
+  /* inbox */
+  .bignum{font-size:64px;font-weight:800;letter-spacing:-.035em;line-height:1;font-variant-numeric:tabular-nums}
+  .bigcap{font-size:13px;font-weight:600;color:var(--ink-2);margin-top:4px}
+  .stack{position:relative;height:106px;margin-top:10px}
+  .minidoc{position:absolute;width:82px;height:102px;background:var(--paper-warm);border:1px solid rgba(27,49,57,.14);border-radius:5px;box-shadow:0 6px 14px rgba(27,49,57,.14)}
+  .minidoc i{position:absolute;left:10px;right:10px;height:3px;background:rgba(27,49,57,.13);border-radius:2px}
+  .minidoc .wm{position:absolute;left:-14px;top:44px;width:110px;transform:rotate(-22deg);font-size:12px;font-weight:800;letter-spacing:.06em;color:rgba(193,36,11,.62);text-align:center;font-style:normal;height:auto;background:none}
+  .wmnote{font-size:12px;color:var(--ink-3);line-height:1.45}
+  .wmnote b{color:var(--red-ink);letter-spacing:.04em}
+
+  /* parse */
+  .liverow{display:flex;align-items:center;gap:8px;margin-top:10px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--red);box-shadow:0 0 0 0 rgba(255,54,33,.5);animation:pulse 1.6s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,54,33,.45)}70%{box-shadow:0 0 0 9px rgba(255,54,33,0)}100%{box-shadow:0 0 0 0 rgba(255,54,33,0)}}
+  .liverow b{font-size:15px;font-weight:800}
+  .liverow span{font-size:12.5px;color:var(--ink-3)}
+  .bar{height:6px;border-radius:3px;background:var(--oat-deep);margin-top:9px;position:relative;overflow:hidden}
+  .bar i{position:absolute;left:0;top:0;bottom:0;width:87%;background:var(--lava);border-radius:3px}
+  .scan{position:relative;height:116px;margin-top:11px;display:flex;justify-content:center}
+  .scandoc{width:94px;height:112px;background:var(--paper-warm);border:1px solid rgba(27,49,57,.15);border-radius:5px;box-shadow:0 8px 16px rgba(27,49,57,.15);position:relative}
+  .scandoc i{position:absolute;left:10px;right:10px;height:3px;background:rgba(27,49,57,.14);border-radius:2px}
+  .tablebox{position:absolute;left:8px;right:8px;top:62px;height:44px;border:2px solid var(--red);border-radius:3px}
+  .tablebox:before{content:"";position:absolute;left:0;right:0;top:50%;height:1.5px;background:rgba(255,54,33,.55)}
+  .tablebox:after{content:"";position:absolute;top:0;bottom:0;left:33%;width:1.5px;background:rgba(255,54,33,.55)}
+  .tagline{position:absolute;right:-2px;top:40px;background:#fff;border:1.5px solid var(--red-ink);color:var(--red-ink);border-radius:4px;padding:1px 6px;font-size:12px;font-weight:800}
+  .statrow{display:flex;justify-content:space-between;font-size:12.5px;margin-top:10px}
+  .statrow b{font-weight:800}
+  .statrow span{color:var(--ink-3)}
+
+  /* label */
+  .brick{border-left:3px solid var(--red);padding:6px 0 6px 12px;margin-top:10px}
+  .brick b{font-size:14px;font-weight:800;display:block}
+  .brick span{font-size:12px;color:var(--ink-3)}
+  .pennote{margin-top:10px;position:relative;padding-left:2px}
+  .pennote p{font-size:13px;font-weight:600;color:var(--red-ink);line-height:1.4}
+  .pennote svg{display:block;margin-top:3px}
+  .fallback{font-size:12.5px;color:var(--ink-3);margin-top:9px}
+  .labelout{margin-top:10px;background:var(--paper-warm);border:1px solid var(--hair-soft);border-radius:7px;padding:8px 11px}
+  .labelout .lo1{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
+  .labelout .lo2{display:flex;justify-content:space-between;align-items:baseline;margin-top:4px}
+  .labelout .lo2 b{font-size:14px;font-weight:800}
+  .labelout .lo2 span{font-family:var(--mono);font-size:13px;font-weight:700}
+  .conf{height:4px;background:var(--oat-deep);border-radius:2px;margin-top:7px;position:relative}
+  .conf i{position:absolute;left:0;top:0;bottom:0;width:97%;background:var(--ink);border-radius:2px}
+
+  /* lanes */
+  .lane{left:868px;width:258px;height:74px;padding:11px 14px;z-index:2}
+  .lane .l1{display:flex;justify-content:space-between;align-items:baseline}
+  .lane .l1 b{font-size:13px;font-weight:800;letter-spacing:.13em;text-transform:uppercase}
+  .lane .l1 .n{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}
+  .lane .l2{font-size:12px;color:var(--ink-3);margin-top:4px;line-height:1.55;white-space:nowrap}
+  .lane .l2 b{color:var(--ink-2);font-weight:700}
+  .lane.audit{border-left:3px solid var(--red)}
+  .lane.audit .l2 .alert{color:var(--red-ink);font-weight:700}
+  .lane.secure{background:var(--ink);border-color:var(--ink);color:var(--oat)}
+  .lane.secure .l1 b,.lane.secure .l1 .n{color:var(--oat)}
+  .lane.secure .l2{color:rgba(238,237,233,.78)}
+  .lane.secure .l2 b{color:var(--oat)}
+  .lane.archive{background:transparent;border:1.5px dashed rgba(27,49,57,.30);box-shadow:none}
+  .lane.archive .l1 b,.lane.archive .l1 .n{color:var(--ink-3)}
+  .lock{display:inline-block;width:9px;height:8px;border:1.5px solid var(--oat);border-radius:2px;position:relative;margin-right:4px;top:1px}
+  .lock:before{content:"";position:absolute;left:1px;top:-5px;width:4px;height:4px;border:1.5px solid var(--oat);border-bottom:none;border-radius:3px 3px 0 0}
+
+  /* payoff */
+  .payoff{left:1166px;top:196px;width:234px;height:330px;padding:14px 16px 60px;border-top:4px solid var(--ink)}
+  .payoff .ph{display:flex;justify-content:space-between;align-items:center}
+  .payoff .ph b{font-size:12.5px;font-weight:800;letter-spacing:.17em;text-transform:uppercase}
+  .payoff .ph span{font-size:12px;color:var(--ink-3);font-family:var(--mono)}
+  .mlabel{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-top:10px}
+  .money{position:relative;display:inline-block;margin-top:2px}
+  .money .amt{font-size:52px;font-weight:800;letter-spacing:-.03em;line-height:1.05;color:var(--red);font-variant-numeric:tabular-nums}
+  .money svg{position:absolute;left:-13px;top:-7px;pointer-events:none}
+  .cost{font-size:34px;font-weight:800;letter-spacing:-.02em;line-height:1.1;font-variant-numeric:tabular-nums}
+  .ratio{font-size:12.5px;font-weight:700;color:var(--red-ink);margin-top:7px;white-space:nowrap}
+  .receipt{font-family:var(--mono);font-size:12px;color:var(--ink-2);line-height:1.6;margin-top:7px;white-space:nowrap}
+  .cta{position:absolute;left:16px;right:16px;bottom:14px;display:flex;align-items:center;justify-content:center;height:40px;border-radius:7px;background:var(--lava);color:#fff;font-size:14px;font-weight:800;letter-spacing:.02em;box-shadow:0 8px 18px rgba(255,54,33,.32)}
+
+  /* transit pill */
+  .pill{left:786px;top:334px;z-index:3;display:flex;align-items:center;gap:7px;background:#fff;border:1px solid rgba(27,49,57,.14);border-radius:14px;padding:4px 11px;box-shadow:0 8px 16px rgba(27,49,57,.16);animation:drift 3.2s ease-in-out infinite}
+  .pill b{font-family:var(--mono);font-size:12px;font-weight:700}
+  .pill span{font-size:12px;color:var(--red-ink);font-weight:700}
+  @keyframes drift{0%,100%{transform:translateX(0)}50%{transform:translateX(10px)}}
+
+  /* journey strip */
+  .journey{left:40px;top:550px;width:1360px;height:176px;padding:16px 24px}
+  .jh{display:flex;align-items:center;gap:14px}
+  .jh .t{font-size:12.5px;font-weight:800;letter-spacing:.17em;text-transform:uppercase}
+  .jh .file{font-family:var(--mono);font-size:12.5px;font-weight:700;background:var(--paper-warm);border:1px solid var(--hair-soft);border-radius:5px;padding:2px 9px}
+  .jh .meta{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--ink-3)}
+  .stops{position:relative;display:flex;gap:18px;margin-top:14px}
+  .stops:before{content:"";position:absolute;left:8px;right:8px;top:50%;border-top:2px dotted rgba(27,49,57,.22);z-index:0}
+  .stop{position:relative;z-index:1;background:var(--paper-warm);border:1px solid rgba(27,49,57,.10);border-radius:8px;padding:10px 12px;height:96px;box-shadow:0 6px 14px rgba(27,49,57,.07)}
+  .stop .sh{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .stop .sh b{font-size:12px;font-weight:800;letter-spacing:.11em;text-transform:uppercase}
+  .stop .sh time{font-family:var(--mono);font-size:12px;color:var(--ink-3)}
+  .stop p{font-size:12.5px;color:var(--ink-2);line-height:1.42;margin-top:6px}
+  .fields{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:7px}
+  .fields i{font-style:normal;font-family:var(--mono);font-size:12px;background:#fff;border:1px solid var(--hair-soft);border-radius:4px;padding:2px 7px;white-space:nowrap}
+  .fields i b{font-weight:700}
+  .stop.finding{border-left:3px solid var(--red);background:#fff}
+  .stop.finding .sh b{color:var(--red-ink)}
+  .stamp{position:absolute;right:10px;top:-12px;transform:rotate(-6deg);border:2.5px solid var(--red-ink);outline:1.5px solid rgba(193,36,11,.4);outline-offset:2.5px;border-radius:4px;padding:2px 9px;font-size:13px;font-weight:900;letter-spacing:.18em;color:var(--red-ink);background:rgba(255,255,255,.92)}
+  .stop .now{display:flex;align-items:center;gap:7px;margin-top:6px}
+  .stop .now b{font-size:12.5px;font-weight:700;color:var(--ink-2)}
+
+  /* run of show rail */
+  .rail{left:40px;top:748px;width:1360px;height:56px;border-top:1px solid var(--hair);display:flex;align-items:center;gap:26px}
+  .rail .rt{font-size:12px;font-weight:800;letter-spacing:.17em;text-transform:uppercase;color:var(--ink-3)}
+  .beat{display:flex;align-items:baseline;gap:8px;font-size:13.5px;font-weight:700;color:var(--ink-2)}
+  .beat .no{font-family:var(--mono);font-size:12px;color:var(--ink-3)}
+  .beat.done{color:var(--ink)}
+  .beat.done:after{content:"✓";color:var(--ink-2);font-size:12.5px;font-weight:800}
+  .beat.now{position:relative;color:var(--red-ink);font-weight:800}
+  .beat.now .no{color:var(--red-ink)}
+  .beat.now svg{position:absolute;left:16px;bottom:-9px}
+  .beat.todo{color:var(--ink-3);font-weight:600}
+  .rail .sep{width:1px;height:16px;background:var(--hair)}
+  .rail .reset{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--ink-3)}
+
+  .honesty{left:40px;top:836px;width:1360px;text-align:center;font-size:12px;color:var(--ink-3);letter-spacing:.02em}
+  .honesty b{color:var(--ink-2);font-weight:700}
+
+  /* wires svg */
+  .wires{left:0;top:0;width:1440px;height:900px;z-index:1;pointer-events:none}
+  .march{stroke-dasharray:5 7;animation:march 1.1s linear infinite}
+  @keyframes march{to{stroke-dashoffset:-12}}
+</style>
+</head>
+<body>
+<div class="board">
+
+  <!-- ghost numerals -->
+  <div class="abs ghost" style="left:44px">01</div>
+  <div class="abs ghost" style="left:280px">02</div>
+  <div class="abs ghost" style="left:560px">03</div>
+  <div class="abs ghost" style="left:872px">04</div>
+  <div class="abs ghost" style="left:1170px">05</div>
+
+  <!-- connector wires -->
+  <svg class="abs wires" viewBox="0 0 1440 900" fill="none">
+    <!-- belt hairline through gaps -->
+    <line x1="236" y1="361" x2="276" y2="361" stroke="rgba(27,49,57,.20)" stroke-width="1.5"/>
+    <line x1="516" y1="361" x2="556" y2="361" stroke="rgba(27,49,57,.20)" stroke-width="1.5"/>
+    <!-- red marching dashes -->
+    <line class="march" x1="236" y1="361" x2="272" y2="361" stroke="#FF3621" stroke-width="2.5"/>
+    <line class="march" x1="516" y1="361" x2="552" y2="361" stroke="#FF3621" stroke-width="2.5"/>
+    <path d="M268 355 L278 361 L268 367 Z" fill="#FF3621"/>
+    <path d="M548 355 L558 361 L548 367 Z" fill="#FF3621"/>
+    <!-- fan from label to four lanes -->
+    <path d="M828 340 C852 340 842 233 868 233" stroke="rgba(27,49,57,.30)" stroke-width="2"/>
+    <path d="M828 352 C852 352 842 318 868 318" stroke="#FF3621" stroke-width="2.5"/>
+    <path d="M828 370 C852 370 842 403 868 403" stroke="rgba(27,49,57,.30)" stroke-width="2"/>
+    <path d="M828 382 C852 382 842 488 868 488" stroke="rgba(27,49,57,.24)" stroke-width="1.5" stroke-dasharray="3 4"/>
+    <!-- audit catch feeds the money board -->
+    <path d="M1126 318 C1150 318 1142 302 1166 302" stroke="#C1240B" stroke-width="1.8" stroke-dasharray="2 5" opacity=".75"/>
+  </svg>
+
+  <!-- masthead -->
+  <header class="abs masthead">
+    <div class="brand">
+      <div class="mark"></div>
+      <div class="wordmark">DocFlow</div>
+      <div class="brand-div"></div>
+      <div class="kick">Document Intelligence</div>
+    </div>
+    <div class="mast-right">
+      <div class="edition">
+        <b>Acme Manufacturing edition</b>
+        <span>Run 38 · Thursday, July 31, 2026 · 9:45 AM</span>
+      </div>
+      <div class="stamp-btn">Presenter mode</div>
+    </div>
+  </header>
+  <div class="abs rule2"></div>
+  <div class="abs folio">
+    <div>The production line · from a UC volume to answers in one pass</div>
+    <div class="path"><b>Inbox → Parse → Label → Four lanes → Payoff</b></div>
+  </div>
+
+  <!-- column headers -->
+  <div class="abs colhead" style="left:40px;width:196px">01 · Inbox</div>
+  <div class="abs colhead" style="left:276px;width:240px">02 · Parse</div>
+  <div class="abs colhead live" style="left:556px;width:272px">03 · Label · live beat</div>
+  <div class="abs colhead" style="left:868px;width:258px">04 · Four lanes</div>
+  <div class="abs colhead" style="left:1166px;width:234px">05 · Payoff</div>
+
+  <!-- 01 INBOX -->
+  <section class="abs card stage" style="left:40px;width:196px">
+    <div class="stage-h"><b>INBOX</b><span class="chip">UC VOLUME</span></div>
+    <div class="bignum" style="margin-top:10px">47</div>
+    <div class="bigcap" style="white-space:nowrap;font-size:12.5px">12 uploaded · 35 generated</div>
+    <div class="stack">
+      <div class="minidoc" style="left:14px;top:10px;transform:rotate(-7deg)"><i style="top:12px"></i><i style="top:20px;right:26px"></i><i style="top:28px"></i></div>
+      <div class="minidoc" style="left:56px;top:6px;transform:rotate(4deg)"><i style="top:12px"></i><i style="top:20px"></i><i style="top:28px;right:30px"></i></div>
+      <div class="minidoc" style="left:34px;top:0"><i style="top:12px"></i><i style="top:20px;right:24px"></i><i style="top:28px"></i><i style="top:36px;right:34px"></i>
+        <em class="wm">SYNTHETIC</em>
+      </div>
+    </div>
+    <div class="hl"></div>
+    <p class="wmnote">Generated pages carry a <b>SYNTHETIC DEMO DATA</b> watermark. No logos.</p>
+  </section>
+
+  <!-- 02 PARSE -->
+  <section class="abs card stage" style="left:276px;width:240px">
+    <div class="stage-h"><b>PARSE</b><span class="chip">GA</span></div>
+    <div class="mono sub" style="margin-top:5px">ai_parse_document → VARIANT</div>
+    <div class="liverow"><span class="dot"></span><b>parsing 6 of 47</b><span>41 done</span></div>
+    <div class="bar"><i></i></div>
+    <div class="scan">
+      <div class="scandoc">
+        <i style="top:12px"></i><i style="top:20px;right:28px"></i><i style="top:28px"></i><i style="top:36px;right:36px"></i><i style="top:44px"></i>
+        <div class="tablebox"></div>
+        <div class="tagline">2 tables</div>
+      </div>
+    </div>
+    <div class="statrow"><b>3.1s avg per doc</b><span>$0.90 / 1k pages</span></div>
+    <p class="sub" style="margin-top:6px">Layout and tables recovered from scans, structure intact.</p>
+  </section>
+
+  <!-- 03 LABEL -->
+  <section class="abs card stage" style="left:556px;width:272px">
+    <div class="stage-h"><b>LABEL</b><span class="chip red">AGENT BRICKS · BETA</span></div>
+    <div class="mono sub" style="margin-top:4px;white-space:nowrap">acme-doc-labeler · endpoint</div>
+    <div class="brick">
+      <b>Information Extraction brick</b>
+      <span>declared in the IE UI, Public Preview · detected live by the app</span>
+    </div>
+    <div class="pennote">
+      <p>Brick swap at 9:43: confidence 0.71 → 0.94, one doc changed lanes.</p>
+      <svg width="238" height="10" viewBox="0 0 238 10"><path d="M3 7 C 45 2 85 9 128 5 C 170 1 212 8 235 4" stroke="#FF3621" stroke-width="3" fill="none" stroke-linecap="round"/></svg>
+    </div>
+    <div class="fallback">Fallback stays warm: <span class="mono">ai_query</span> structured output.</div>
+    <div class="labelout">
+      <div class="lo1">Type + sensitivity → route</div>
+      <div class="lo2"><b>Warranty Claim</b><span>0.97</span></div>
+      <div class="conf"><i></i></div>
+    </div>
+  </section>
+
+  <!-- 04 LANES -->
+  <section class="abs card lane" style="top:196px">
+    <div class="l1"><b>Extract</b><span class="n">18</span></div>
+    <div class="l2"><span class="mono">ai_extract</span> GA → 4 typed Delta tables<br><b>invoices: 14 fields</b> · open in Catalog ↗</div>
+  </section>
+  <section class="abs card lane audit" style="top:281px">
+    <div class="l1"><b>Audit</b><span class="n">9</span></div>
+    <div class="l2">LLM judge via <span class="mono">ai_query</span> · AI Gateway<br><span class="alert">3 waiting review · WC-2214 HIGH</span></div>
+  </section>
+  <section class="abs card lane secure" style="top:366px">
+    <div class="l1"><b>Secure</b><span class="n">11</span></div>
+    <div class="l2"><span class="mono">ai_mask</span> → sealed to locked path<br><b><span class="lock"></span>grants: hr_admins only</b></div>
+  </section>
+  <section class="abs lane archive" style="top:451px">
+    <div class="l1"><b>Archive</b><span class="n">3</span></div>
+    <div class="l2">No action needed · retained<br>Q3 vendor newsletter · marketing</div>
+  </section>
+
+  <!-- 05 PAYOFF -->
+  <aside class="abs card payoff">
+    <div class="ph"><b>Caught vs Cost</b><span>run 38</span></div>
+    <div class="mlabel">Caught in audit</div>
+    <div class="money">
+      <span class="amt">$3,310</span>
+      <svg width="188" height="66" viewBox="0 0 188 66"><path d="M16 38 C10 16 62 5 98 6 C144 7 178 15 173 34 C168 55 118 62 74 60 C34 58 20 52 16 38 M22 34 C24 22 60 12 96 11" stroke="#FF3621" stroke-width="2.6" fill="none" stroke-linecap="round" opacity=".92"/></svg>
+    </div>
+    <div class="mlabel" style="margin-top:6px">Total pipeline cost</div>
+    <div class="cost">$0.61</div>
+    <div class="ratio">$5,426 caught per $1 spent</div>
+    <div class="hl" style="margin:8px 0"></div>
+    <div class="receipt">cold 9:41 · "no tables yet"<br>claims table live 9:44:12</div>
+    <div class="cta">Ask your documents →</div>
+  </aside>
+
+
+  <!-- one document's journey -->
+  <section class="abs card journey">
+    <div class="jh">
+      <span class="t">One document's paper trail</span>
+      <span class="file">WC-2214_UnitSN-44781.pdf</span>
+      <span class="chip">WARRANTY CLAIM · 0.97</span>
+      <span class="meta">journey 11.8s · pipeline cost $0.014 · run 38</span>
+    </div>
+    <div class="stops">
+      <div class="stop" style="width:186px">
+        <div class="sh"><b>1 · Parsed</b><time>9:42:07</time></div>
+        <p>3 pages · 2 tables · layout recovered from a scan</p>
+      </div>
+      <div class="stop" style="width:206px">
+        <div class="sh"><b>2 · Labeled</b><time>9:42:19</time></div>
+        <p>Warranty Claim · 0.97 · route: Extract + Audit</p>
+      </div>
+      <div class="stop" style="width:312px">
+        <div class="sh"><b>3 · Extracted</b><time>9:42:31</time></div>
+        <div class="fields">
+          <i>serial <b>SN-44781</b></i><i>purchased <b>2023-11-02</b></i>
+          <i>failed <b>2026-03-18</b></i><i>claim <b>$2,140</b></i>
+        </div>
+      </div>
+      <div class="stop finding" style="width:344px">
+        <div class="sh"><b>4 · Audit finding</b><time>9:42:58</time></div>
+        <p>Warranty window exceeded. The 24 month term ended 137 days before the failure date. Cross-checked against invoice INV-88213.</p>
+        <div class="stamp">CAUGHT</div>
+      </div>
+      <div class="stop" style="width:194px">
+        <div class="sh"><b>5 · In review</b><time>now</time></div>
+        <div class="now"><span class="dot"></span><b>queued for human approval</b></div>
+        <p style="margin-top:4px">approve or override, logged</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- run of show -->
+  <nav class="abs rail">
+    <span class="rt">Run of show</span>
+    <div class="beat done"><span class="no">1</span>Cold open</div>
+    <div class="sep"></div>
+    <div class="beat done"><span class="no">2</span>Generate corpus</div>
+    <div class="sep"></div>
+    <div class="beat now"><span class="no">3</span>Brick swap, live
+      <svg width="118" height="8" viewBox="0 0 118 8"><path d="M2 5 C 30 1 60 7 90 4 C 102 3 110 4 116 3" stroke="#FF3621" stroke-width="3" fill="none" stroke-linecap="round"/></svg>
+    </div>
+    <div class="sep"></div>
+    <div class="beat todo"><span class="no">4</span>Lanes and review</div>
+    <div class="sep"></div>
+    <div class="beat todo"><span class="no">5</span>Ask the payoff</div>
+    <span class="reset">press R to reset · one key, clean slate</span>
+  </nav>
+
+  <div class="abs honesty">The canvas replays <b>recorded run_metrics events</b> only, nothing simulated · GA and Beta labels reflect live platform status · fictional vendors, canonical fake values</div>
+
+</div>
+</body>
+</html>

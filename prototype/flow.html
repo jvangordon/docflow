@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocFlow · Acme Manufacturing · Flow</title>
+<style>
+  :root{
+    --bg:#0B141B; --panel:#121F2A; --panel2:#16242F; --ink:#EEEDE9;
+    --dim:rgba(238,237,233,.56); --faint:rgba(238,237,233,.30);
+    --line:rgba(238,237,233,.09); --line2:rgba(238,237,233,.16);
+    --red:#FF3621; --lava:linear-gradient(135deg,#FF3621 0%,#FF8A00 100%);
+    --extract:#4CC38A; --audit:#FFB224; --secure:#FF6369; --archive:#8B98A5;
+    --ga:#4CC38A; --beta:#FFB224; --prev:#B7A6FF;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    background:
+      radial-gradient(1100px 500px at 78% -10%, rgba(255,54,33,.10), transparent 60%),
+      radial-gradient(900px 480px at -8% 108%, rgba(255,138,0,.07), transparent 55%),
+      var(--bg);
+    color:var(--ink);
+    font:14px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; overflow:hidden;
+  }
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---------- top bar ---------- */
+  .top{display:flex;align-items:center;gap:16px;height:58px;padding:0 22px;border-bottom:1px solid var(--line);background:rgba(11,20,27,.7)}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:17px;letter-spacing:.2px}
+  .brand .dot{width:12px;height:12px;border-radius:3px;background:var(--lava);box-shadow:0 0 14px rgba(255,54,33,.55)}
+  .brand small{font-weight:600;color:var(--faint);font-size:11px;letter-spacing:.12em;text-transform:uppercase;margin-left:2px}
+  .profile{display:flex;align-items:center;gap:10px;padding:7px 12px;border:1px solid var(--line2);border-radius:10px;background:var(--panel)}
+  .profile b{font-size:13px}
+  .profile .ind{font-size:11px;color:var(--dim);border-left:1px solid var(--line2);padding-left:10px}
+  .profile .swap{font-size:11px;color:var(--faint)}
+  .caps{display:flex;gap:6px;margin-left:auto}
+  .cap{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:5px 10px;background:rgba(18,31,42,.6)}
+  .cap i{width:7px;height:7px;border-radius:50%;display:inline-block}
+  .cap .on{background:var(--ga);box-shadow:0 0 8px rgba(76,195,138,.7)}
+  .cap .live{background:var(--red);box-shadow:0 0 8px rgba(255,54,33,.8);animation:pulse 1.6s infinite}
+  .cap .off{background:var(--faint)}
+  .cap .amber{background:var(--beta);box-shadow:0 0 8px rgba(255,178,36,.6)}
+  .demo-btn{background:var(--lava);color:#fff;border:none;border-radius:10px;font-weight:700;font-size:13px;padding:9px 16px;cursor:pointer;box-shadow:0 4px 18px rgba(255,54,33,.35)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+  /* ---------- canvas ---------- */
+  .stage{position:relative;width:1400px;height:660px;margin:14px auto 0}
+  .belts{position:absolute;inset:0;pointer-events:none}
+  .belts path{fill:none;stroke:rgba(238,237,233,.32);stroke-width:3.5}
+  .belts path.flow{stroke:url(#lavagrad);stroke-width:3.5;stroke-dasharray:5 8;animation:dash 1.2s linear infinite}
+  @keyframes dash{to{stroke-dashoffset:-12}}
+
+  .station{position:absolute;background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line2);border-radius:14px;padding:14px 15px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  .station h3{font-size:12px;font-weight:700;letter-spacing:.02em;display:flex;align-items:center;gap:8px}
+  .station .fn{font-size:11px;color:var(--faint);font-family:"SF Mono",ui-monospace,Menlo,monospace}
+  .badge{font-size:9px;font-weight:800;letter-spacing:.08em;padding:2px 6px;border-radius:5px;border:1px solid}
+  .badge.ga{color:var(--ga);border-color:rgba(76,195,138,.5)}
+  .badge.beta{color:var(--beta);border-color:rgba(255,178,36,.5)}
+  .badge.prev{color:var(--prev);border-color:rgba(183,166,255,.5)}
+  .big{font-size:30px;font-weight:800;letter-spacing:-.02em;margin:6px 0 2px}
+  .sub{font-size:11px;color:var(--dim)}
+  .microbar{height:4px;border-radius:2px;background:rgba(238,237,233,.10);margin-top:10px;overflow:hidden}
+  .microbar span{display:block;height:100%;border-radius:2px;background:var(--lava)}
+
+  /* inbox */
+  #inbox{left:0;top:120px;width:212px;height:208px}
+  .gen{margin-top:12px;width:100%;background:rgba(238,237,233,.06);border:1px solid rgba(238,237,233,.28);color:var(--ink);border-radius:9px;padding:8px 0;font-weight:700;font-size:12px;cursor:pointer}
+  .wmark{margin-top:8px;font-size:9.5px;color:var(--faint);letter-spacing:.06em}
+
+  /* parse */
+  #parse{left:318px;top:104px;width:230px;height:240px}
+  .scan{position:relative;width:74px;height:96px;border-radius:6px;background:rgba(238,237,233,.05);border:1px solid var(--line2);margin:10px auto 4px;overflow:hidden}
+  .scan .l{position:absolute;left:9px;right:9px;height:4px;border-radius:2px;background:rgba(238,237,233,.22)}
+  .scan .tbl{position:absolute;left:9px;right:9px;top:52px;height:26px;border:1.5px solid rgba(255,138,0,.75);border-radius:3px;background:rgba(255,138,0,.10)}
+  .scan .beam{position:absolute;left:0;right:0;height:26px;background:linear-gradient(180deg,transparent,rgba(255,54,33,.35),transparent);animation:beam 2.4s ease-in-out infinite}
+  @keyframes beam{0%,100%{top:-26px}50%{top:96px}}
+  .kv{display:flex;justify-content:space-between;font-size:10.5px;color:var(--dim);margin-top:4px}
+  .kv b{color:var(--ink);font-weight:600}
+
+  /* label */
+  #label{left:646px;top:90px;width:252px;height:286px}
+  .engine{margin-top:10px;border:1px solid rgba(255,54,33,.5);background:rgba(255,54,33,.08);border-radius:10px;padding:9px 10px}
+  .engine .nm{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;white-space:nowrap}
+  .engine .nm i{width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 8px rgba(255,54,33,.9);animation:pulse 1.6s infinite}
+  .engine .ep{font-size:10px;color:var(--dim);font-family:"SF Mono",ui-monospace,Menlo,monospace;margin-top:3px}
+  .fallback{margin-top:8px;border:1px dashed var(--line2);border-radius:10px;padding:6px 10px;font-size:10.5px;color:var(--faint)}
+  .delta{margin-top:8px;font-size:11px;font-weight:700;color:var(--extract)}
+  .lastlab{margin-top:10px}
+  .lastlab .chip{display:inline-flex;align-items:center;gap:6px;background:rgba(255,178,36,.12);border:1px solid rgba(255,178,36,.45);color:#FFD98A;font-size:11px;font-weight:700;border-radius:7px;padding:4px 9px}
+  .conf{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:10.5px;color:var(--dim)}
+  .conf .bar{flex:1;height:4px;border-radius:2px;background:rgba(238,237,233,.10)}
+  .conf .bar span{display:block;height:100%;width:97%;border-radius:2px;background:var(--audit)}
+
+  /* branch hub */
+  .hub{position:absolute;left:952px;top:212px;width:26px;height:26px;border-radius:50%;background:var(--panel2);border:2px solid rgba(255,138,0,.8);box-shadow:0 0 18px rgba(255,138,0,.45)}
+  .hub::after{content:"";position:absolute;inset:6px;border-radius:50%;background:var(--lava)}
+
+  /* lanes */
+  .lane{position:absolute;left:1044px;width:262px;height:118px;border-radius:13px;background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line2);padding:11px 13px 11px 16px;box-shadow:0 10px 26px rgba(0,0,0,.32)}
+  .lane::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3.5px;border-radius:2px;background:var(--lc)}
+  .lane h4{font-size:11.5px;font-weight:800;letter-spacing:.05em;display:flex;align-items:center;gap:7px;color:var(--lc)}
+  .lane .cnt{margin-left:auto;color:var(--ink);font-size:15px;font-weight:800}
+  .lane .eng{font-size:10.5px;color:var(--faint);font-family:"SF Mono",ui-monospace,Menlo,monospace;margin-top:5px}
+  .lane .item{margin-top:7px;font-size:11.5px;color:var(--dim);white-space:nowrap;overflow:hidden}
+  .lane .act{margin-top:7px;font-size:10.5px;font-weight:700;color:var(--ink);opacity:.85}
+  #l-extract{top:6px;--lc:var(--extract)}
+  #l-audit{top:138px;--lc:var(--audit)}
+  #l-secure{top:270px;--lc:#58B8E8}
+  #l-archive{top:402px;--lc:var(--archive);opacity:.78}
+  .qdot{display:inline-block;min-width:16px;text-align:center;background:rgba(255,178,36,.18);border:1px solid rgba(255,178,36,.5);color:#FFD98A;border-radius:6px;font-size:10px;font-weight:800;padding:1px 5px}
+
+  /* payoff teaser */
+  #payoff{position:absolute;left:1044px;top:530px;width:262px;height:118px;border-radius:13px;background:rgba(18,31,42,.55);border:1px solid rgba(255,138,0,.35);padding:12px 14px;overflow:hidden}
+  #payoff h4{font-size:11.5px;font-weight:800;letter-spacing:.05em;background:var(--lava);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .money{display:flex;gap:18px;margin-top:9px}
+  .money span{display:flex;flex-direction:column;font-size:21px;font-weight:800;letter-spacing:-.02em}
+  .money small{font-size:9.5px;font-weight:600;color:var(--faint);letter-spacing:.05em;text-transform:uppercase;margin-top:2px}
+  .money .m1{color:#FFD98A}
+  .money .m2{color:var(--ink)}
+  #payoff .sub{margin-top:8px}
+
+  /* moving doc tokens */
+  .tok{position:absolute;display:flex;align-items:center;gap:5px;background:#1E2E3A;border:1px solid var(--line2);border-radius:7px;padding:3.5px 8px;font-size:10px;font-weight:600;color:var(--ink);box-shadow:0 4px 12px rgba(0,0,0,.4);white-space:nowrap}
+  .tok i{width:6px;height:6px;border-radius:2px;background:var(--tc,#FF8A00)}
+  @keyframes belt1{0%{transform:translateX(0)}100%{transform:translateX(86px)}}
+  @keyframes belt2{0%{transform:translateX(0)}100%{transform:translateX(78px)}}
+  .t1{left:222px;top:206px;--tc:var(--extract);animation:belt1 3.4s linear infinite}
+  .t2{left:558px;top:206px;--tc:#58B8E8;animation:belt2 3.0s linear infinite .6s}
+  .t3{left:906px;top:206px;--tc:var(--audit);animation:belt2 2.6s linear infinite .2s;opacity:.95}
+
+  /* journey drawer */
+  .drawer{position:absolute;left:0;top:392px;width:1010px;height:254px;border-radius:16px;background:linear-gradient(180deg,rgba(22,36,47,.96),rgba(18,31,42,.96));border:1px solid var(--line2);padding:16px 20px;box-shadow:0 16px 40px rgba(0,0,0,.4)}
+  .drawer .hd{display:flex;align-items:center;gap:12px}
+  .drawer .hd .name{font-size:14px;font-weight:800}
+  .drawer .hd .chip{font-size:10.5px;font-weight:700;color:#FFD98A;background:rgba(255,178,36,.12);border:1px solid rgba(255,178,36,.45);border-radius:6px;padding:2.5px 8px}
+  .drawer .hd .via{font-size:10.5px;color:var(--faint)}
+  .drawer .hd .cost{margin-left:auto;font-size:11px;color:var(--dim)}
+  .journey{display:flex;align-items:stretch;gap:0;margin-top:14px}
+  .step{flex:1;position:relative;padding:10px 14px;border:1px solid var(--line);border-radius:11px;background:rgba(11,20,27,.55);margin-right:26px}
+  .step:last-child{margin-right:0}
+  .step::after{content:"";position:absolute;right:-20px;top:50%;width:14px;height:2px;background:rgba(255,138,0,.6)}
+  .step:last-child::after{display:none}
+  .step .st{font-size:9.5px;letter-spacing:.1em;color:var(--faint);text-transform:uppercase;font-weight:700}
+  .step .sv{font-size:12px;font-weight:700;margin-top:4px}
+  .step .sd{font-size:11.5px;color:var(--dim);margin-top:3px;line-height:1.5}
+  .step.done{border-color:rgba(76,195,138,.35)}
+  .step.done .st{color:var(--extract)}
+  .step.warn{border-color:rgba(255,178,36,.4)}
+  .step.warn .st{color:var(--audit)}
+  .fields{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .f{font-size:9.5px;font-family:"SF Mono",ui-monospace,Menlo,monospace;color:var(--dim);border:1px solid var(--line);border-radius:5px;padding:2px 6px}
+  .f b{color:var(--ink);font-weight:600}
+
+  /* run of show rail */
+  .runshow{display:flex;align-items:center;justify-content:center;gap:12px;width:1400px;margin:22px auto 0}
+  .beat{display:flex;align-items:center;gap:9px;border:1px solid var(--line2);border-radius:11px;padding:10px 16px;background:var(--panel);font-size:12.5px;font-weight:700;color:var(--dim)}
+  .beat .k{font-size:10px;color:var(--faint);border:1px solid var(--line2);border-radius:5px;padding:1px 6px;font-weight:700}
+  .beat.done{color:var(--extract);border-color:rgba(76,195,138,.35)}
+  .beat.now{color:var(--ink);border-color:rgba(255,138,0,.75);background:rgba(255,54,33,.10);box-shadow:0 0 22px rgba(255,54,33,.25)}
+  .beat.now .k{color:#FFD98A;border-color:rgba(255,178,36,.5)}
+  .rs-sep{width:16px;height:2px;background:rgba(238,237,233,.2)}
+  .rs-reset{margin-left:14px;font-size:11.5px;color:var(--faint);border:1px dashed var(--line2);border-radius:11px;padding:10px 14px}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand"><span class="dot"></span>DocFlow <small>Document Intelligence</small></div>
+  <div class="profile"><b>Acme Manufacturing</b><span class="ind">Manufacturing</span><span class="swap">⌄ switch profile</span></div>
+  <div class="caps">
+    <span class="cap" style="font-size:12px"><i class="live"></i>Agent Bricks IE · live</span>
+    <span class="cap" style="font-size:12px"><i class="on"></i>5 services ready · 2 to enable</span>
+  </div>
+  <button class="demo-btn">▶ Demo mode</button>
+</div>
+
+<div class="stage">
+  <!-- belts -->
+  <svg class="belts" width="1400" height="660">
+    <defs>
+      <linearGradient id="lavagrad" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#FF3621"/><stop offset="1" stop-color="#FF8A00"/>
+      </linearGradient>
+    </defs>
+    <path d="M212,224 H318"/>            <path class="flow" d="M212,224 H318"/>
+    <path d="M548,224 H646"/>            <path class="flow" d="M548,224 H646"/>
+    <path d="M898,224 H952"/>            <path class="flow" d="M898,224 H952"/>
+    <path d="M978,225 C1016,225 1004,65  1044,65"/>  <path class="flow" d="M978,225 C1016,225 1004,65 1044,65"/>
+    <path d="M978,225 C1016,225 1004,197 1044,197"/> <path class="flow" d="M978,225 C1016,225 1004,197 1044,197"/>
+    <path d="M978,225 C1016,225 1004,329 1044,329"/> <path class="flow" d="M978,225 C1016,225 1004,329 1044,329"/>
+    <path d="M978,225 C1016,225 1004,461 1044,461"/>
+  </svg>
+
+  <!-- stations -->
+  <div class="station" id="inbox">
+    <h3>INBOX <span class="fn">/Volumes/demo/docflow/inbox</span></h3>
+    <div class="big num">47</div>
+    <div class="sub num">12 uploaded · 35 generated</div>
+    <div class="microbar"><span style="width:62%"></span></div>
+    <button class="gen">+ Generate Acme docs</button>
+    <div class="wmark">generated docs carry SYNTHETIC DEMO DATA watermark</div>
+  </div>
+
+  <div class="station" id="parse">
+    <h3>PARSE <span class="badge ga">GA</span></h3>
+    <div class="fn">ai_parse_document → VARIANT</div>
+    <div class="scan"><div class="l" style="top:10px;width:55%"></div><div class="l" style="top:20px"></div><div class="l" style="top:30px;width:70%"></div><div class="tbl"></div><div class="beam"></div></div>
+    <div class="sub num" style="text-align:center">parsing <b>6 of 47</b></div>
+    <div class="kv"><span>layout + tables</span><b class="num">3.1s avg</b></div>
+    <div class="kv"><span>cost</span><b class="num">$0.9 / 1k pages</b></div>
+  </div>
+
+  <div class="station" id="label">
+    <h3>LABEL <span class="badge beta">BETA</span></h3>
+    <div class="fn">labeling agent · type + sensitivity</div>
+    <div class="engine">
+      <div class="nm"><i></i>Agent Bricks · Info Extraction</div>
+      <div class="ep">endpoint: acme-doc-labeler</div>
+    </div>
+    <div class="fallback">fallback ready: ai_query structured output</div>
+    <div class="delta num">▲ re-scored 12 docs · confidence 0.71 → 0.94</div>
+    <div class="lastlab"><span class="chip">Warranty Claim</span></div>
+    <div class="conf"><span>confidence</span><div class="bar"><span></span></div><b class="num" style="color:var(--ink)">0.97</b></div>
+  </div>
+
+  <div class="hub"></div>
+
+  <div class="lane" id="l-extract">
+    <h4>EXTRACT <span class="cnt num">21</span></h4>
+    <div class="eng">ai_extract → Delta · 4 typed tables</div>
+    <div class="item">INV-88213 · 14 fields → invoices</div>
+    <div class="act">Open in Catalog ↗</div>
+  </div>
+  <div class="lane" id="l-audit">
+    <h4>AUDIT <span class="qdot num">3 waiting</span><span class="cnt num">11</span></h4>
+    <div class="eng">judge: claude-opus-5 · AI Gateway</div>
+    <div class="item">WC-2214 · warranty window · HIGH</div>
+    <div class="act">Review queue →</div>
+  </div>
+  <div class="lane" id="l-secure">
+    <h4>SECURE <span class="cnt num">12</span></h4>
+    <div class="eng">ai_mask · sealed → locked path</div>
+    <div class="item">HR_Med_Accomm · 9 entities masked</div>
+    <div class="act">Grants: hr_admins only 🔒</div>
+  </div>
+  <div class="lane" id="l-archive">
+    <h4>ARCHIVE <span class="cnt num">3</span></h4>
+    <div class="eng">no action needed · retained</div>
+    <div class="item">Q3 Vendor Newsletter.pdf · marketing</div>
+  </div>
+
+  <div id="payoff">
+    <h4>CAUGHT vs COST</h4>
+    <div class="money num"><span class="m1">$3,310<small>caught in audit</small></span><span class="m2">$0.61<small>pipeline cost</small></span></div>
+    <div class="sub num">Ask your documents → · 47 docs</div>
+  </div>
+
+  <!-- ambient tokens -->
+  <div class="tok t1"><i></i>INV-88213</div>
+  <div class="tok t2"><i></i>HR_Med_Accomm</div>
+  <div class="tok t3"><i></i>WC-2214</div>
+
+  <!-- journey drawer -->
+  <div class="drawer">
+    <div class="hd">
+      <span class="name">WC-2214_UnitSN-44781.pdf</span>
+      <span class="chip">Warranty Claim · 0.97</span>
+      <span class="via">via acme-doc-labeler</span>
+      <span class="cost num">journey 11.8s · $0.014 · run #38</span>
+    </div>
+    <div class="journey">
+      <div class="step done">
+        <div class="st">1 · Parsed</div>
+        <div class="sv num">3 pages · 2 tables</div>
+        <div class="sd">layout recovered from scan, tables lifted to structure</div>
+      </div>
+      <div class="step done">
+        <div class="st">2 · Labeled</div>
+        <div class="sv">Warranty Claim</div>
+        <div class="sd">sensitivity: standard · route: Extract + Audit</div>
+      </div>
+      <div class="step done">
+        <div class="st">3 · Extracted</div>
+        <div class="sv num">14 fields</div>
+        <div class="fields"><span class="f">serial <b>SN-44781</b></span><span class="f">purchase <b>2023-11-02</b></span><span class="f">failure <b>2026-03-18</b></span><span class="f">claim <b>$2,140</b></span></div>
+      </div>
+      <div class="step warn">
+        <div class="st">4 · Audit · needs review</div>
+        <div class="sv">Warranty window exceeded</div>
+        <div class="sd">24-month term ended 137 days before failure date · cross-checked against INV-88213</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="runshow">
+  <span class="beat done"><span class="k">1</span>Cold open ✓</span><span class="rs-sep"></span>
+  <span class="beat done"><span class="k">2</span>Generate corpus ✓</span><span class="rs-sep"></span>
+  <span class="beat now"><span class="k">3</span>Brick swap · live</span><span class="rs-sep"></span>
+  <span class="beat"><span class="k">4</span>Lanes &amp; review</span><span class="rs-sep"></span>
+  <span class="beat"><span class="k">5</span>Ask · the payoff</span>
+  <span class="rs-reset num">run #38 · reset ⟲</span>
+</div>
+
+</body>
+</html>

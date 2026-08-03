@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocFlow · Ask Your Documents</title>
+<style>
+  :root{
+    --bg:#0B141B; --panel:#121F2A; --panel2:#16242F; --ink:#EEEDE9;
+    --dim:rgba(238,237,233,.56); --faint:rgba(238,237,233,.30);
+    --line:rgba(238,237,233,.09); --line2:rgba(238,237,233,.16);
+    --red:#FF3621; --lava:linear-gradient(135deg,#FF3621 0%,#FF8A00 100%);
+    --extract:#4CC38A; --audit:#FFB224; --genie:#5AC8FA; --ka:#B7A6FF;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:radial-gradient(1100px 500px at 78% -10%, rgba(255,54,33,.10), transparent 60%),radial-gradient(800px 400px at 10% 110%, rgba(90,200,250,.05), transparent 55%),var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh}
+  .num{font-variant-numeric:tabular-nums}
+  .mono{font-family:"SF Mono",ui-monospace,Menlo,monospace}
+
+  .top{display:flex;align-items:center;gap:16px;height:58px;padding:0 22px;border-bottom:1px solid var(--line);background:rgba(11,20,27,.7)}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:17px}
+  .brand .dot{width:12px;height:12px;border-radius:3px;background:var(--lava);box-shadow:0 0 14px rgba(255,54,33,.55)}
+  .crumb{font-size:12.5px;color:var(--dim)}
+  .crumb b{color:var(--ink)}
+  .router-note{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:6px 12px}
+  .router-note i{width:7px;height:7px;border-radius:50%;background:var(--audit);box-shadow:0 0 8px rgba(255,178,36,.6)}
+
+  .wrap{max-width:880px;margin:16px auto 0;padding:0 22px 28px}
+  .hero{text-align:center;margin-bottom:16px}
+  .hero h1{font-size:26px;font-weight:800;letter-spacing:-.02em}
+  .hero h1 em{font-style:normal;background:var(--lava);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p{font-size:12.5px;color:var(--dim);margin-top:6px}
+
+  .turn{margin:18px 0}
+  .q{display:flex;justify-content:flex-end}
+  .q .bubble{max-width:70%;background:var(--panel2);border:1px solid var(--line2);border-radius:14px 14px 4px 14px;padding:11px 15px;font-size:13.5px;font-weight:600}
+
+  .route{display:flex;align-items:center;gap:10px;margin:12px 0 10px;font-size:12px;color:var(--dim)}
+  .route .sup{border:1px solid rgba(255,178,36,.5);color:#FFD98A;border-radius:8px;padding:4px 12px;font-weight:800;font-size:12px}
+  .route .arrow{color:var(--faint)}
+  .route .to{border-radius:8px;padding:4px 12px;font-weight:800;letter-spacing:.04em;font-size:13px}
+  .route .to.genie{color:var(--genie);border:1.5px solid rgba(90,200,250,.6);background:rgba(90,200,250,.08)}
+  .route .to.ka{color:var(--ka);border:1.5px solid rgba(183,166,255,.6);background:rgba(183,166,255,.08)}
+  .a .bubble.genie-b{border-left:3px solid rgba(90,200,250,.7)}
+  .a .bubble.ka-b{border-left:3px solid rgba(183,166,255,.7)}
+  .receipts{margin-top:10px;font-size:11px;color:var(--faint);border-top:1px dashed var(--line);padding-top:8px}
+  .receipts b{color:var(--dim)}
+
+  .a{display:flex}
+  .a .bubble{max-width:86%;background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line2);border-radius:14px 14px 14px 4px;padding:14px 17px;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+  .a .lede{font-size:13.5px;line-height:1.6}
+  .a .lede b{color:#FFD98A}
+
+  .sql{margin-top:11px;border:1px solid rgba(90,200,250,.25);background:rgba(90,200,250,.05);border-radius:9px;padding:9px 12px;font-size:12.5px;color:#9AD9F7;overflow:hidden}
+  .mini{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:10px}
+  .mini th{text-align:left;color:var(--faint);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;padding:4px 6px;border-bottom:1px solid var(--line2)}
+  .mini td{padding:5px 6px;border-bottom:1px solid var(--line)}
+  .mini td:last-child{font-weight:700}
+  .mini tr.hot td{color:#FFB4AE}
+  .foot{display:flex;gap:14px;align-items:center;margin-top:10px;font-size:10.5px;color:var(--faint)}
+  .foot .open{color:var(--genie);font-weight:700;cursor:pointer}
+  .foot .open.ka{color:var(--ka)}
+
+  .cite{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
+  .cite span{font-size:10.5px;border:1px solid rgba(183,166,255,.35);color:#CFC5FF;border-radius:6px;padding:3px 9px;cursor:pointer}
+
+  .askbar{position:sticky;bottom:0;margin-top:26px;display:flex;gap:10px;background:rgba(11,20,27,.9);border:1px solid var(--line2);border-radius:14px;padding:10px 12px;box-shadow:0 -10px 40px rgba(11,20,27,.9)}
+  .askbar input{flex:1;background:transparent;border:none;outline:none;color:var(--ink);font-size:13.5px}
+  .askbar input::placeholder{color:var(--faint)}
+  .askbar button{background:var(--lava);border:none;color:#fff;font-weight:800;border-radius:9px;padding:9px 18px;cursor:pointer}
+  .suggest{display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap;padding-bottom:8px}
+  .suggest span{font-size:11.5px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:5px 12px;cursor:pointer}
+
+  .strip{display:flex;gap:18px;justify-content:center;margin:22px 0 10px;font-size:11.5px;color:var(--faint)}
+  .strip b{color:var(--dim)}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand"><span class="dot"></span>DocFlow</div>
+  <div class="crumb">Acme Manufacturing · <b>Ask your documents</b></div>
+  <div class="router-note"><i></i>Supervisor routing · Genie + Knowledge Assistant · BETA</div>
+</div>
+
+<div class="wrap">
+  <div class="hero">
+    <h1>These answers didn't exist <em>ten minutes ago</em></h1>
+    <p>One question box. The Supervisor picks the right agent: Genie for your extracted tables, Knowledge Assistant for the documents themselves.</p>
+  </div>
+
+  <div class="turn">
+    <div class="q"><div class="bubble">What's our total warranty exposure from Line 3 units this quarter?</div></div>
+    <div class="route num"><span class="sup">Supervisor</span><span class="arrow">→ structured question →</span><span class="to genie">GENIE</span><span>over extract_warranty_claims · 1.9s</span></div>
+    <div class="a"><div class="bubble genie-b">
+      <div class="lede">Open warranty exposure for Line 3 units this quarter is <b>$41,720</b> across 19 claims. 3 claims are outside their warranty window and sit in your audit queue pending review.</div>
+      <div class="sql mono">SELECT claim_status, COUNT(*), SUM(claim_amount) FROM extract_warranty_claims WHERE production_line = 'Line 3' AND quarter = '2026-Q3' GROUP BY claim_status</div>
+      <table class="mini num">
+        <tr><th>status</th><th>claims</th><th>amount</th></tr>
+        <tr><td>within warranty</td><td>16</td><td>$38,410</td></tr>
+        <tr class="hot"><td>outside window · in audit</td><td>3</td><td>$3,310</td></tr>
+      </table>
+      <div class="foot"><span>source: extract_warranty_claims · built from 19 PDFs this session</span><span class="open">Ask this in Genie's own UI ↗</span></div>
+      <div class="receipts num">receipts · asked cold at <b>9:41:03</b> → "no tables exist yet" · first doc parsed <b>9:41:31</b> · table live <b>9:44:12</b> · this answer <b>9:51:40</b></div>
+    </div></div>
+  </div>
+
+  <div class="turn">
+    <div class="q"><div class="bubble">What does the Miller Tooling contract say about late delivery penalties?</div></div>
+    <div class="route num"><span class="sup">Supervisor</span><span class="arrow">→ document question →</span><span class="to ka">KNOWLEDGE ASSISTANT</span><span>over processed contracts · 2.8s</span></div>
+    <div class="a"><div class="bubble ka-b">
+      <div class="lede">The Miller Tooling supply agreement sets a late-delivery penalty of <b>1.5% of order value per week</b>, capped at 10%, waived when delay is caused by documented force majeure. Notice must be given within 5 business days of the missed date.</div>
+      <div class="cite"><span>CT-1088 · §7.2 Delivery, p.4</span><span>CT-1088 · §12.1 Force Majeure, p.9</span><span>PO-3341 · terms rider</span></div>
+      <div class="foot"><span>cited answer · Knowledge Assistant</span><span class="open ka">Open source page ↗</span></div>
+    </div></div>
+  </div>
+
+  <div class="askbar">
+    <input placeholder="Ask anything about Acme's 47 processed documents…">
+    <button>Ask</button>
+  </div>
+  <div class="suggest">
+    <span>Which suppliers show rising defect rates?</span>
+    <span>Sum invoices due in the next 30 days</span>
+    <span>Any safety incidents mentioning Line 3?</span>
+  </div>
+
+  <div class="strip num">
+    <span><b>47</b> docs processed</span><span>·</span><span><b>$0.61</b> total pipeline cost</span><span>·</span><span><b>3.8s</b> avg per doc</span><span>·</span><span>every hop recorded in <b>run_metrics</b></span>
+  </div>
+</div>
+
+</body>
+</html>

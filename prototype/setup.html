@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocFlow · Setup · Demo Designer</title>
+<style>
+  :root{
+    --bg:#0B141B; --panel:#121F2A; --panel2:#16242F; --ink:#EEEDE9;
+    --dim:rgba(238,237,233,.56); --faint:rgba(238,237,233,.30);
+    --line:rgba(238,237,233,.09); --line2:rgba(238,237,233,.16);
+    --red:#FF3621; --lava:linear-gradient(135deg,#FF3621 0%,#FF8A00 100%);
+    --extract:#4CC38A; --audit:#FFB224; --secure:#FF6369; --archive:#8B98A5;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:radial-gradient(1100px 500px at 78% -10%, rgba(255,54,33,.10), transparent 60%),var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh}
+  .num{font-variant-numeric:tabular-nums}
+  .mono{font-family:"SF Mono",ui-monospace,Menlo,monospace}
+
+  .top{display:flex;align-items:center;gap:16px;height:58px;padding:0 22px;border-bottom:1px solid var(--line);background:rgba(11,20,27,.7)}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:17px}
+  .brand .dot{width:12px;height:12px;border-radius:3px;background:var(--lava);box-shadow:0 0 14px rgba(255,54,33,.55)}
+  .steps{margin-left:auto;display:flex;gap:6px;align-items:center;font-size:11px;color:var(--faint)}
+  .step-pill{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:5px 11px}
+  .step-pill.done{color:var(--extract);border-color:rgba(76,195,138,.4)}
+  .step-pill.now{color:var(--ink);border-color:rgba(255,138,0,.6);background:rgba(255,54,33,.08);font-weight:700}
+
+  .wrap{display:grid;grid-template-columns:340px 1fr;gap:20px;max-width:1240px;margin:24px auto;padding:0 22px}
+
+  .in{border:1px solid var(--line2);border-radius:16px;background:linear-gradient(180deg,var(--panel2),var(--panel));padding:20px 22px;height:fit-content}
+  .in h2{font-size:16px;font-weight:800;letter-spacing:-.01em}
+  .in p{font-size:11.5px;color:var(--dim);margin-top:5px}
+  .field{margin-top:16px}
+  .field label{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+  .field .box{border:1px solid var(--line2);border-radius:10px;background:rgba(11,20,27,.6);padding:10px 12px;font-size:13.5px;font-weight:600}
+  .field .box.area{font-weight:400;font-size:12px;color:var(--dim);line-height:1.55;min-height:64px}
+  .model{display:flex;align-items:center;gap:8px;margin-top:16px;font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:10px;padding:9px 12px;white-space:nowrap}
+  .model .lbl{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .model i{width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 8px rgba(255,54,33,.8)}
+  .model b{color:var(--ink)}
+  .regen{margin-top:16px;width:100%;background:rgba(238,237,233,.06);border:1px solid var(--line2);color:var(--ink);font-weight:700;font-size:12.5px;border-radius:11px;padding:11px 0;cursor:pointer}
+  .guard{margin-top:12px;font-size:10.5px;color:var(--faint);line-height:1.55;border-top:1px dashed var(--line);padding-top:10px}
+
+  .out{position:relative}
+  .out .hd{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .out .hd h3{font-size:14px;font-weight:800}
+  .out .hd .ok{font-size:10.5px;color:var(--extract);border:1px solid rgba(76,195,138,.4);border-radius:6px;padding:2px 8px;font-weight:700}
+  .out .hd .t{margin-left:auto;font-size:10.5px;color:var(--faint)}
+
+  .block{border:1px solid var(--line);border-radius:13px;background:rgba(11,20,27,.5);padding:14px 16px;margin-bottom:12px}
+  .block h6{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:10px;display:flex;align-items:center}
+  .block h6 .edit{margin-left:auto;color:var(--dim);font-weight:700;font-size:10px;cursor:pointer;letter-spacing:0;text-transform:none}
+
+  .tax{display:flex;gap:7px;flex-wrap:wrap}
+  .t-chip{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;border-radius:8px;padding:5px 10px;border:1px solid var(--line2)}
+  .t-chip i{width:7px;height:7px;border-radius:2px}
+  .t-chip.ex i{background:var(--extract)} .t-chip.au i{background:var(--audit)} .t-chip.se i{background:var(--secure)} .t-chip.ar i{background:var(--archive)}
+  .t-chip small{color:var(--faint);font-weight:600}
+
+  .matrix{width:100%;border-collapse:collapse;font-size:11px}
+  .matrix th{text-align:left;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);padding:4px 6px;border-bottom:1px solid var(--line2)}
+  .matrix td{padding:5.5px 6px;border-bottom:1px solid var(--line);color:var(--dim)}
+  .matrix td:first-child{color:var(--ink);font-weight:600}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:3px}
+  .on-ex{background:var(--extract)} .on-au{background:var(--audit)} .on-se{background:#58B8E8} .off{background:rgba(238,237,233,.12)}
+  .legend{display:flex;gap:16px;margin-top:10px;font-size:10px;color:var(--faint)}
+  .legend i{margin-right:5px}
+
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .schema .row{display:flex;justify-content:space-between;font-size:11px;padding:4.5px 0;border-bottom:1px solid var(--line)}
+  .schema .row span:first-child{color:var(--dim)}
+  .schema .row span:last-child{color:#9AD9F7}
+
+  .corpus li{list-style:none;font-size:11.5px;color:var(--dim);padding:4.5px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between}
+  .corpus li b{color:var(--ink);font-weight:600}
+  .wm{margin-top:10px;display:flex;align-items:center;gap:10px;border:1px solid rgba(255,178,36,.35);background:rgba(255,178,36,.06);border-radius:10px;padding:9px 12px;font-size:11px;color:#FFD98A}
+  .thumb{position:relative;width:66px;height:86px;border-radius:5px;background:#F4F1EA;flex:none;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+  .thumb .l{position:absolute;left:8px;right:8px;height:3px;border-radius:2px;background:#C9C2B4}
+  .thumb .wmk{position:absolute;left:-24px;top:36px;width:114px;transform:rotate(-24deg);font-size:8px;font-weight:800;letter-spacing:.05em;color:rgba(255,54,33,.75);text-align:center;background:rgba(255,54,33,.10);padding:2px 0}
+  .accept{display:flex;gap:10px;margin-top:4px}
+  .accept .go{flex:1;background:var(--lava);border:none;color:#fff;font-weight:800;font-size:13.5px;border-radius:11px;padding:13px 0;cursor:pointer;box-shadow:0 6px 22px rgba(255,54,33,.35)}
+  .accept .alt{border:1px solid var(--line2);background:transparent;color:var(--dim);font-weight:700;border-radius:11px;padding:0 18px;cursor:pointer}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand"><span class="dot"></span>DocFlow <span style="font-size:11px;color:var(--faint);font-weight:600;margin-left:4px">first-run setup</span></div>
+  <div class="steps">
+    <span class="step-pill done">✓ Environment</span>
+    <span class="step-pill done">✓ Catalog</span>
+    <span class="step-pill now">3 · Demo designer</span>
+    <span class="step-pill">4 · Documents</span>
+    <span class="step-pill">5 · Capabilities</span>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="in">
+    <h2>Make it theirs</h2>
+    <p>Tell the designer agent who you're demoing to. It builds the whole demo in their language: document types, schemas, routing, questions.</p>
+    <div class="field"><label>Company</label><div class="box">Acme Manufacturing</div></div>
+    <div class="field"><label>Industry</label><div class="box">Manufacturing · industrial equipment</div></div>
+    <div class="field"><label>Context · optional</label><div class="box area">HVAC component maker. Cares about warranty claims cost, supplier quality docs, and safety compliance. ERP is SAP.</div></div>
+    <div class="model"><i></i><span class="lbl">designer model</span><b>databricks-claude-opus-5</b><span style="margin-left:auto">⌄</span></div>
+    <button class="regen">⟳ Regenerate profile · keeps your edits</button>
+    <div class="guard">Designer guardrails: fictional people and vendors, canonical fake PII, no narratives implying {Company}'s real record. Every page watermarked.</div>
+  </div>
+
+  <div class="out">
+    <div class="hd">
+      <h3>Profile · Acme Manufacturing v2</h3>
+      <span class="ok">ready</span>
+      <span class="t num">generated in 24s · saved to demo_profiles</span>
+    </div>
+
+    <div class="block">
+      <h6>Document taxonomy · 8 types <span class="edit">edit</span></h6>
+      <div class="tax">
+        <span class="t-chip ex"><i></i>Supplier Invoice <small>·14 fields</small></span>
+        <span class="t-chip ex"><i></i>Purchase Order <small>·11</small></span>
+        <span class="t-chip au"><i></i>Warranty Claim <small>·14</small></span>
+        <span class="t-chip au"><i></i>Quality Inspection <small>·17</small></span>
+        <span class="t-chip se"><i></i>Safety Incident <small>·12</small></span>
+        <span class="t-chip se"><i></i>HR Document <small>·PII</small></span>
+        <span class="t-chip ex"><i></i>Shipping Manifest <small>·9</small></span>
+        <span class="t-chip ar"><i></i>Marketing · junk</span>
+      </div>
+    </div>
+
+    <div class="block">
+      <h6>Routing matrix <span class="edit">edit</span></h6>
+      <table class="matrix">
+        <tr><th>type</th><th>extract</th><th>audit</th><th>secure</th><th>judge rubric</th></tr>
+        <tr><td>Warranty Claim</td><td><span class="dot on-ex"></span>yes</td><td><span class="dot on-au"></span>yes</td><td><span class="dot off"></span></td><td>window math · serial format · invoice cross-check</td></tr>
+        <tr><td>Quality Inspection</td><td><span class="dot on-ex"></span>yes</td><td><span class="dot on-au"></span>yes</td><td><span class="dot off"></span></td><td>control limits · lot traceability</td></tr>
+        <tr><td>Safety Incident</td><td><span class="dot on-ex"></span>redacted</td><td><span class="dot off"></span></td><td><span class="dot on-se"></span>yes</td><td>—</td></tr>
+        <tr><td>Supplier Invoice</td><td><span class="dot on-ex"></span>yes</td><td><span class="dot off"></span></td><td><span class="dot off"></span></td><td>—</td></tr>
+        <tr><td>Marketing</td><td><span class="dot off"></span></td><td><span class="dot off"></span></td><td><span class="dot off"></span></td><td>— · archive</td></tr>
+      </table>
+      <div class="legend"><span><i class="dot on-ex"></i>extract lane</span><span><i class="dot on-au"></i>audit lane</span><span><i class="dot on-se"></i>secure lane</span><span>filled square = document type flows there</span></div>
+    </div>
+
+    <div class="split">
+      <div class="block schema">
+        <h6>Extraction schema · Warranty Claim <span class="edit">edit</span></h6>
+        <div class="row"><span>unit_serial</span><span>STRING · SN-#####</span></div>
+        <div class="row"><span>purchase_date</span><span>DATE</span></div>
+        <div class="row"><span>failure_date</span><span>DATE</span></div>
+        <div class="row"><span>warranty_term_months</span><span>INT</span></div>
+        <div class="row"><span>claim_amount</span><span>DECIMAL(10,2)</span></div>
+        <div class="row"><span>production_line</span><span>STRING</span></div>
+        <div class="row"><span>failure_mode</span><span>STRING</span></div>
+        <div class="row"><span>dealer_id</span><span>STRING</span></div>
+        <div class="row"><span>claim_status</span><span>STRING · enum</span></div>
+      </div>
+      <div class="block corpus">
+        <h6>Synthetic corpus plan · 24 docs</h6>
+        <li><span>Supplier invoices · Miller Tooling, Vexler Steel</span><b>6</b></li>
+        <li><span>Warranty claims · incl. 2 expired-window traps</span><b>5</b></li>
+        <li><span>Quality inspections · Line 3 drift story</span><b>4</b></li>
+        <li><span>Safety incidents · with planted PII</span><b>3</b></li>
+        <li><span>POs, manifests, junk mail</span><b>6</b></li>
+        <div class="wm">
+          <div class="thumb"><div class="l" style="top:9px;width:60%"></div><div class="l" style="top:17px"></div><div class="l" style="top:25px;width:75%"></div><div class="l" style="top:33px"></div><div class="wmk">SYNTHETIC DEMO DATA</div></div>
+          <span>Every generated page carries a visible SYNTHETIC DEMO DATA watermark. Company name only, no logos.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="accept">
+      <button class="go">Accept profile → choose documents</button>
+      <button class="alt">Save as draft</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

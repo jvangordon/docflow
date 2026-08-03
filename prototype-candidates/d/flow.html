@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DocFlow · Plant View · Acme Manufacturing</title>
+<style>
+  :root{
+    --bg:#0E1B22; --navy:#1B3139; --panel:#14242E; --panel2:#0F1D26;
+    --oat:#EEEDE9; --muted:rgba(238,237,233,.64); --dim:rgba(238,237,233,.42);
+    --lava:#FF3621; --lava2:#FF8748; --green:#35C77B; --amber:#FFB03A;
+    --blue:#58A6FF; --grey:#8A9BA5; --steel:#3A4E59; --line:rgba(238,237,233,.09);
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:1440px;height:900px;overflow:hidden}
+  body{
+    background:
+      radial-gradient(1100px 600px at 62% 30%, rgba(27,49,57,.55), transparent 70%),
+      var(--bg);
+    color:var(--oat);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Helvetica,Arial,sans-serif;
+    font-size:13px; line-height:1.35;
+  }
+  .mono{font-family:var(--mono)}
+
+  /* ---------- masthead ---------- */
+  .masthead{height:56px;display:flex;align-items:center;gap:14px;padding:0 24px;border-bottom:1px solid var(--line)}
+  .brick{width:22px;height:22px;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:2px}
+  .brick i{background:linear-gradient(135deg,var(--lava),var(--lava2));border-radius:2px}
+  .brick i:nth-child(4){opacity:.45}
+  .wordmark{font-size:16px;font-weight:700;letter-spacing:.06em}
+  .wordsub{font-size:12px;letter-spacing:.28em;color:var(--dim);font-weight:600;margin-left:2px}
+  .profile{display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:6px 12px;margin-left:14px}
+  .profile b{font-size:13px;font-weight:650}
+  .profile span{font-size:12px;color:var(--dim)}
+  .spacer{flex:1}
+  .cap{display:flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:9px;padding:6px 11px;font-size:12px;color:var(--muted)}
+  .dot{width:7px;height:7px;border-radius:50%}
+  .chip{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.08em;border-radius:5px;padding:1px 7px;vertical-align:1px}
+  .chip.ga{color:var(--green);border:1px solid rgba(53,199,123,.55)}
+  .chip.beta{color:var(--amber);border:1px solid rgba(255,176,58,.55)}
+  .chip.pp{color:var(--dim);border:1px solid rgba(238,237,233,.3)}
+  .primary{background:linear-gradient(135deg,var(--lava),#FF6A3D);color:#fff;font-weight:700;font-size:13.5px;
+    border:none;border-radius:9px;padding:9px 18px;box-shadow:0 4px 22px rgba(255,54,33,.35);letter-spacing:.02em}
+
+  /* ---------- canvas ---------- */
+  .canvas{position:relative;height:566px;
+    background:
+      repeating-linear-gradient(0deg, rgba(238,237,233,.028) 0 1px, transparent 1px 44px),
+      repeating-linear-gradient(90deg, rgba(238,237,233,.028) 0 1px, transparent 1px 44px);
+  }
+  .canvas svg{position:absolute;inset:0}
+  .abs{position:absolute}
+  .headline{left:60px;top:24px;width:680px}
+  .headline h1{font-size:25px;font-weight:750;letter-spacing:-.01em}
+  .headline p{font-size:13.5px;color:var(--muted);margin-top:5px;max-width:648px}
+  .stage{font-size:14px;font-weight:800;letter-spacing:.3em;color:var(--dim);text-align:center}
+  .readout{font-size:19px;font-weight:700;letter-spacing:.12em;color:var(--oat)}
+  .readout b{color:var(--lava2)}
+  .sub{font-size:13px;color:var(--muted);margin-top:4px}
+  .plate{font-size:12px;color:var(--dim);margin-top:7px}
+  .lane-name{font-size:14px;font-weight:800;letter-spacing:.26em}
+  .lane-count{font-size:28px;font-weight:700;color:var(--oat)}
+  .lane-det{font-size:13px;color:var(--muted);margin-top:3px}
+  .lane-link{font-size:13px;font-weight:650;margin-top:6px;display:inline-block}
+  .alarm{display:inline-block;font-size:12px;font-weight:700;color:#FF6C5A;border:1px solid rgba(255,54,33,.55);
+    background:rgba(255,54,33,.08);border-radius:6px;padding:2px 8px;margin-left:10px;vertical-align:3px}
+  .stamp{border:1.6px solid rgba(238,237,233,.4);border-radius:6px;padding:7px 10px;transform:rotate(-1.6deg);width:236px}
+  .stamp b{display:block;font-size:12.5px;font-weight:800;letter-spacing:.22em;color:rgba(238,237,233,.75)}
+  .stamp span{display:block;font-size:12px;color:var(--dim);margin-top:2px}
+
+  /* ---------- trace + yield ---------- */
+  .lower{display:flex;gap:16px;padding:8px 40px 0}
+  .trace{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 16px}
+  .trace-head{display:flex;align-items:center;gap:12px}
+  .klabel{font-size:12px;font-weight:800;letter-spacing:.22em;color:var(--lava2)}
+  .fname{font-size:15px;font-weight:700}
+  .tchip{font-size:12px;font-weight:650;color:var(--amber);border:1px solid rgba(255,176,58,.5);border-radius:6px;padding:2px 8px}
+  .receipt{font-size:12px;color:var(--dim)}
+  .steps{display:flex;gap:0;margin-top:9px;align-items:stretch}
+  .step{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+  .step h4{font-size:12px;font-weight:800;letter-spacing:.14em;margin-bottom:5px}
+  .step p{font-size:13px;color:var(--muted)}
+  .arrow{align-self:center;color:var(--dim);padding:0 7px;font-size:14px}
+  .kchips{display:flex;flex-wrap:wrap;gap:5px}
+  .kchip{font-size:12px;background:#0B161D;border:1px solid var(--line);border-radius:5px;padding:2px 7px;color:var(--oat)}
+  .kchip b{color:var(--dim);font-weight:600;margin-right:4px}
+  .step.flag{border-color:rgba(255,54,33,.45);background:rgba(255,54,33,.05)}
+  .ghost{font-size:12px;font-weight:650;color:var(--muted);border:1px solid rgba(238,237,233,.22);border-radius:7px;padding:3px 10px;background:transparent;margin-right:6px}
+  .yield{width:344px;background:linear-gradient(160deg,#1B3139,#122129);border:1px solid rgba(255,135,72,.4);border-radius:14px;padding:14px 18px;box-shadow:0 0 34px rgba(255,54,33,.10) inset}
+  .ymoney{display:flex;gap:26px;margin-top:8px}
+  .ymoney .big{font-size:38px;font-weight:750;letter-spacing:-.02em}
+  .ymoney .cap2{font-size:12px;letter-spacing:.14em;color:var(--dim);font-weight:700;margin-top:1px}
+  .yfoot{margin-top:9px;font-size:12.5px;color:var(--muted)}
+  .yfoot a{color:var(--lava2);font-weight:700}
+
+  /* ---------- rail ---------- */
+  .rail{display:flex;align-items:center;gap:10px;padding:0 40px;height:54px}
+  .rail .klabel{color:var(--dim)}
+  .beat{font-size:13px;color:var(--muted);border:1px solid rgba(238,237,233,.16);border-radius:16px;padding:6px 13px;white-space:nowrap}
+  .beat.done{color:var(--dim)}
+  .beat.done em{color:var(--green);font-style:normal;margin-left:5px}
+  .beat.active{color:#FFD9CF;border-color:rgba(255,54,33,.75);background:rgba(255,54,33,.10);box-shadow:0 0 18px rgba(255,54,33,.28);font-weight:700}
+  .railright{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12px;color:var(--dim)}
+
+  a{text-decoration:none}
+  .g{color:var(--green)} .a{color:var(--amber)} .b{color:var(--blue)} .gr{color:var(--grey)}
+
+  .flow{stroke-dasharray:7 15;animation:fl 1.1s linear infinite}
+  @keyframes fl{to{stroke-dashoffset:-22}}
+  .drop{animation:dp 1.6s ease-in infinite}
+  @keyframes dp{0%{transform:translateY(-26px);opacity:0}30%{opacity:1}100%{transform:translateY(6px);opacity:0}}
+</style>
+</head>
+<body>
+
+<div class="masthead">
+  <div class="brick"><i></i><i></i><i></i><i></i></div>
+  <span class="wordmark">DOCFLOW</span><span class="wordsub">PLANT VIEW</span>
+  <div class="profile"><b>Acme Manufacturing</b><span>manufacturing profile · switch</span></div>
+  <div class="spacer"></div>
+  <div class="cap"><span class="dot" style="background:var(--lava)"></span>Agent Bricks IE <span class="chip beta">BETA</span> live</div>
+  <div class="cap"><span class="dot" style="background:var(--green)"></span>core functions <span class="chip ga">GA</span></div>
+  <button class="primary">&#9654;&nbsp; Demo mode</button>
+</div>
+
+<div class="canvas">
+  <svg width="1440" height="592" viewBox="0 0 1440 592" fill="none">
+    <defs>
+      <linearGradient id="lava" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#FF3621"/><stop offset="1" stop-color="#FF8748"/>
+      </linearGradient>
+      <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+        <feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+
+    <!-- ================= SILO (intake) ================= -->
+    <!-- hopper -->
+    <path d="M94 120 L154 120 L182 152 L66 152 Z" fill="#14242E" stroke="#3A4E59" stroke-width="2"/>
+    <!-- dropping pellets -->
+    <g class="drop"><rect x="117" y="86" width="13" height="16" rx="3" fill="#EEEDE9" opacity=".85"/></g>
+    <rect x="138" y="98" width="12" height="15" rx="3" fill="#EEEDE9" opacity=".5"/>
+    <!-- silo body -->
+    <rect x="64" y="162" width="120" height="228" fill="#17303B" stroke="#3A4E59" stroke-width="2"/>
+    <ellipse cx="124" cy="162" rx="60" ry="13" fill="#1E3743" stroke="#3A4E59" stroke-width="2"/>
+    <ellipse cx="124" cy="390" rx="60" ry="13" fill="#17303B" stroke="#3A4E59" stroke-width="2"/>
+    <!-- level -->
+    <rect x="66" y="244" width="116" height="144" fill="rgba(238,237,233,.09)"/>
+    <ellipse cx="124" cy="244" rx="58" ry="10" fill="rgba(238,237,233,.16)"/>
+    <!-- legs -->
+    <line x1="84" y1="401" x2="84" y2="418" stroke="#3A4E59" stroke-width="3"/>
+    <line x1="164" y1="401" x2="164" y2="418" stroke="#3A4E59" stroke-width="3"/>
+
+    <!-- ================= main pipe: silo -> vessel ================= -->
+    <line x1="184" y1="265" x2="310" y2="265" stroke="#3A4E59" stroke-width="12" stroke-linecap="round"/>
+    <line x1="184" y1="265" x2="310" y2="265" stroke="#0E1B22" stroke-width="7" stroke-linecap="round"/>
+    <line x1="184" y1="265" x2="310" y2="265" stroke="url(#lava)" stroke-width="3.5" class="flow"/>
+    <line x1="192" y1="256" x2="192" y2="274" stroke="#3A4E59" stroke-width="3"/>
+    <line x1="302" y1="256" x2="302" y2="274" stroke="#3A4E59" stroke-width="3"/>
+    <rect x="228" y="257" width="13" height="16" rx="3" fill="#EEEDE9" opacity=".9"/>
+
+    <!-- ================= PARSE vessel ================= -->
+    <rect x="310" y="215" width="260" height="100" rx="50" fill="#17303B" stroke="#3A4E59" stroke-width="2"/>
+    <!-- crude page (left) -->
+    <rect x="352" y="238" width="42" height="54" rx="4" fill="#0F1D26" stroke="rgba(238,237,233,.25)"/>
+    <path d="M358 250 q8 -5 14 0 t14 0 M358 261 q7 5 13 0 t14 0 M358 272 q8 -4 14 0 t13 0 M358 283 q7 4 13 0" stroke="rgba(238,237,233,.35)" stroke-width="1.6" fill="none"/>
+    <!-- scan beam -->
+    <line x1="438" y1="224" x2="438" y2="306" stroke="url(#lava)" stroke-width="3" filter="url(#glow)"/>
+    <path d="M431 218 L445 218 L438 228 Z" fill="#FF8748"/>
+    <!-- structured table (right) -->
+    <g stroke="rgba(53,199,123,.55)" stroke-width="1.4">
+      <rect x="474" y="238" width="60" height="54" rx="4" fill="rgba(53,199,123,.07)"/>
+      <line x1="474" y1="252" x2="534" y2="252"/><line x1="474" y1="266" x2="534" y2="266"/><line x1="474" y1="280" x2="534" y2="280"/>
+      <line x1="494" y1="238" x2="494" y2="292"/><line x1="514" y1="238" x2="514" y2="292"/>
+    </g>
+
+    <!-- ================= pipe: vessel -> valve ================= -->
+    <line x1="570" y1="265" x2="689" y2="265" stroke="#3A4E59" stroke-width="12" stroke-linecap="round"/>
+    <line x1="570" y1="265" x2="689" y2="265" stroke="#0E1B22" stroke-width="7" stroke-linecap="round"/>
+    <line x1="570" y1="265" x2="689" y2="265" stroke="url(#lava)" stroke-width="3.5" class="flow"/>
+    <line x1="578" y1="256" x2="578" y2="274" stroke="#3A4E59" stroke-width="3"/>
+    <line x1="681" y1="256" x2="681" y2="274" stroke="#3A4E59" stroke-width="3"/>
+    <!-- traveling doc + chip -->
+    <rect x="608" y="257" width="13" height="16" rx="3" fill="#EEEDE9" opacity=".9"/>
+    <rect x="577" y="226" width="86" height="21" rx="6" fill="#0F1D26" stroke="rgba(238,237,233,.25)"/>
+    <text x="620" y="241" text-anchor="middle" font-family="ui-monospace,Menlo,monospace" font-size="12" fill="#EEEDE9">INV-90312</text>
+
+    <!-- ================= LABEL valve ================= -->
+    <circle cx="735" cy="265" r="46" fill="#17303B" stroke="#3A4E59" stroke-width="2.5"/>
+    <circle cx="735" cy="265" r="46" stroke="rgba(255,54,33,.5)" stroke-width="1.5" filter="url(#glow)"/>
+    <!-- valve internals: bowtie -->
+    <path d="M735 265 L710 251 L710 279 Z" fill="none" stroke="url(#lava)" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M735 265 L760 251 L760 279 Z" fill="none" stroke="url(#lava)" stroke-width="2.5" stroke-linejoin="round"/>
+    <circle cx="735" cy="265" r="6" fill="#FF3621"/>
+    <!-- actuator: brick stack -->
+    <line x1="735" y1="219" x2="735" y2="204" stroke="#3A4E59" stroke-width="4"/>
+    <rect x="720" y="186" width="30" height="18" rx="3" fill="#1E3743" stroke="#3A4E59" stroke-width="1.5"/>
+    <rect x="726" y="191" width="8" height="8" rx="1.5" fill="#FF3621"/>
+    <rect x="736" y="191" width="8" height="8" rx="1.5" fill="#FF8748"/>
+
+    <!-- QC instrument bubble -->
+    <circle cx="818" cy="225" r="26" fill="#0F1D26" stroke="rgba(255,176,58,.6)" stroke-width="1.6"/>
+    <text x="818" y="222" text-anchor="middle" font-size="12" font-weight="700" fill="rgba(238,237,233,.5)" letter-spacing="1">QC</text>
+    <text x="818" y="236" text-anchor="middle" font-family="ui-monospace,Menlo,monospace" font-size="13" font-weight="700" fill="#FFB03A">0.97</text>
+    <line x1="818" y1="251" x2="818" y2="259" stroke="rgba(255,176,58,.45)" stroke-width="1.4"/>
+
+    <!-- ================= manifold: valve -> header -> branches ================= -->
+    <line x1="781" y1="265" x2="850" y2="265" stroke="#3A4E59" stroke-width="12" stroke-linecap="round"/>
+    <line x1="781" y1="265" x2="850" y2="265" stroke="#0E1B22" stroke-width="7" stroke-linecap="round"/>
+    <line x1="781" y1="265" x2="850" y2="265" stroke="url(#lava)" stroke-width="3.5" class="flow"/>
+    <!-- header -->
+    <line x1="856" y1="81" x2="856" y2="477" stroke="#3A4E59" stroke-width="13" stroke-linecap="round"/>
+    <line x1="856" y1="81" x2="856" y2="477" stroke="#0E1B22" stroke-width="8" stroke-linecap="round"/>
+    <line x1="856" y1="81" x2="856" y2="477" stroke="url(#lava)" stroke-width="3.5" class="flow" opacity=".8"/>
+    <!-- branches -->
+    <g>
+      <line x1="856" y1="81" x2="1020" y2="81" stroke="#3A4E59" stroke-width="11" stroke-linecap="round"/>
+      <line x1="856" y1="81" x2="1020" y2="81" stroke="#0E1B22" stroke-width="6.5" stroke-linecap="round"/>
+      <line x1="856" y1="81" x2="1020" y2="81" stroke="#35C77B" stroke-width="3" class="flow"/>
+      <line x1="856" y1="213" x2="1020" y2="213" stroke="#3A4E59" stroke-width="11" stroke-linecap="round"/>
+      <line x1="856" y1="213" x2="1020" y2="213" stroke="#0E1B22" stroke-width="6.5" stroke-linecap="round"/>
+      <line x1="856" y1="213" x2="1020" y2="213" stroke="#FFB03A" stroke-width="3" class="flow"/>
+      <line x1="856" y1="345" x2="1020" y2="345" stroke="#3A4E59" stroke-width="11" stroke-linecap="round"/>
+      <line x1="856" y1="345" x2="1020" y2="345" stroke="#0E1B22" stroke-width="6.5" stroke-linecap="round"/>
+      <line x1="856" y1="345" x2="1020" y2="345" stroke="#58A6FF" stroke-width="3" class="flow"/>
+      <line x1="856" y1="477" x2="1020" y2="477" stroke="#3A4E59" stroke-width="11" stroke-linecap="round"/>
+      <line x1="856" y1="477" x2="1020" y2="477" stroke="#0E1B22" stroke-width="6.5" stroke-linecap="round"/>
+      <line x1="856" y1="477" x2="1020" y2="477" stroke="#8A9BA5" stroke-width="2.5" class="flow" opacity=".6"/>
+    </g>
+
+    <!-- traced doc on audit branch -->
+    <rect x="938" y="205" width="13" height="16" rx="3" fill="#EEEDE9" filter="url(#glow)"/>
+    <rect x="905" y="172" width="80" height="21" rx="6" fill="#0F1D26" stroke="rgba(255,176,58,.75)" filter="url(#glow)"/>
+    <text x="945" y="187" text-anchor="middle" font-family="ui-monospace,Menlo,monospace" font-size="12" font-weight="700" fill="#FFB03A">WC-2214</text>
+    <!-- secure branch chip -->
+    <rect x="890" y="304" width="118" height="21" rx="6" fill="#0F1D26" stroke="rgba(88,166,255,.5)"/>
+    <text x="949" y="319" text-anchor="middle" font-family="ui-monospace,Menlo,monospace" font-size="12" fill="#9CC8FF">HR_Med_Accomm</text>
+
+    <!-- ================= TANKS ================= -->
+    <!-- EXTRACT tank c81 -->
+    <g>
+      <rect x="1020" y="41" width="92" height="80" fill="#17303B" stroke="#3A4E59" stroke-width="2"/>
+      <ellipse cx="1066" cy="41" rx="46" ry="10" fill="#1E3743" stroke="#3A4E59" stroke-width="2"/>
+      <ellipse cx="1066" cy="121" rx="46" ry="10" fill="#17303B" stroke="#3A4E59" stroke-width="2"/>
+      <rect x="1022" y="85" width="88" height="34" fill="rgba(53,199,123,.28)"/>
+      <ellipse cx="1066" cy="85" rx="44" ry="8" fill="rgba(53,199,123,.5)"/>
+      <text x="1066" y="146" text-anchor="middle" font-family="ui-monospace,Menlo,monospace" font-size="12" fill="rgba(238,237,233,.4)">TK-11</text>
+    </g>
+    <!-- AUDIT tank c213 -->
+    <g>
+      <rect x="1020" y="173" width="92" height="80" fill="#17303B" stroke="#3A4E59" stroke-width="2"/>
+      <ellipse cx="1066" cy="173" rx="46" ry="10" fill="#1E3743" stroke="#3A4E59" stroke-width="2"/>
+      <ellipse cx="1066" cy="253" rx="46" ry="10" fill="#17303B" stroke="#3A4E59" stroke-width="2"/>
+      <rect x="1022" y="232" width="88" height="19" fill="rgba(255,176,58,.28)"/>
+      <ellipse cx="1066" cy="232" rx="44" ry="7" fill="rgba(255,176,58,.5)"/>
+      <text x="1066" y="278" text-anchor="middle" font-family="ui-monospace,Menlo,monospace" font-size="12" fill="rgba(238,237,233,.4)">TK-12</text>
+    </g>
+    <!-- SECURE tank c345 (with lid + lock) -->
+    <g>
+      <rect x="1020" y="305" width="92" height="80" fill="#17303B" stroke="#3A4E59" stroke-width="2"/>
+      <ellipse cx="1066" cy="305" rx="46" ry="10" fill="#1E3743" stroke="#3A4E59" stroke-width="2"/>
+      <ellipse cx="1066" cy="385" rx="46" ry="10" fill="#17303B" stroke="#3A4E59" stroke-width="2"/>
+      <rect x="1022" y="362" width="88" height="21" fill="rgba(88,166,255,.28)"/>
+      <ellipse cx="1066" cy="362" rx="44" ry="7" fill="rgba(88,166,255,.5)"/>
+      <rect x="1056" y="328" width="20" height="15" rx="3" fill="#0F1D26" stroke="#58A6FF" stroke-width="1.6"/>
+      <path d="M1060 328 v-5 a6 6 0 0 1 12 0 v5" stroke="#58A6FF" stroke-width="1.6" fill="none"/>
+      <text x="1066" y="410" text-anchor="middle" font-family="ui-monospace,Menlo,monospace" font-size="12" fill="rgba(238,237,233,.4)">TK-13</text>
+    </g>
+    <!-- ARCHIVE tank c477 -->
+    <g opacity=".8">
+      <rect x="1020" y="437" width="92" height="80" fill="#17303B" stroke="#3A4E59" stroke-width="2"/>
+      <ellipse cx="1066" cy="437" rx="46" ry="10" fill="#1E3743" stroke="#3A4E59" stroke-width="2"/>
+      <ellipse cx="1066" cy="517" rx="46" ry="10" fill="#17303B" stroke="#3A4E59" stroke-width="2"/>
+      <rect x="1022" y="508" width="88" height="7" fill="rgba(138,155,165,.3)"/>
+      <ellipse cx="1066" cy="508" rx="44" ry="6" fill="rgba(138,155,165,.5)"/>
+      <text x="1066" y="542" text-anchor="middle" font-family="ui-monospace,Menlo,monospace" font-size="12" fill="rgba(238,237,233,.4)">TK-14</text>
+    </g>
+  </svg>
+
+  <!-- ============ HTML overlays ============ -->
+  <div class="abs headline">
+    <h1>Raw documents in. Governed data out.</h1>
+    <p>The Acme profile draws this run as a plant schematic. Every unit traced like a production lot.</p>
+  </div>
+
+  <div class="abs stage" style="left:330px;top:184px;width:220px">PARSE</div>
+  <div class="abs stage" style="left:610px;top:158px;width:250px">LABEL + ROUTE</div>
+
+  <!-- silo texts -->
+  <div class="abs" style="left:96px;top:250px;width:56px;text-align:center">
+    <div class="mono" style="font-size:30px;font-weight:700">47</div>
+    <div style="font-size:12px;letter-spacing:.2em;color:var(--dim);font-weight:700">RAW<br>UNITS</div>
+  </div>
+  <div class="abs" style="left:40px;top:426px;width:260px">
+    <div style="font-size:13px;font-weight:700;letter-spacing:.06em">INTAKE · SILO-00</div>
+    <div class="mono" style="font-size:12px;color:var(--dim);margin-top:2px">/Volumes/docflow/inbox</div>
+    <div style="font-size:13px;color:var(--muted);margin-top:2px">12 uploaded · 35 generated</div>
+    <div class="stamp" style="margin-top:8px">
+      <b>SYNTHETIC DEMO STOCK</b>
+      <span>every generated page carries a visible watermark</span>
+    </div>
+  </div>
+
+  <!-- parse texts -->
+  <div class="abs" style="left:312px;top:330px;width:280px">
+    <div class="readout mono">PARSING <b>6</b> OF 47</div>
+    <div class="sub">3.1s avg per unit · $0.90 per 1k pages</div>
+    <div class="plate mono">PRS-01 · ai_parse_document <span class="chip ga">GA</span></div>
+    <div style="font-size:12.5px;color:var(--dim);margin-top:5px">layout and tables recovered from scans</div>
+  </div>
+
+  <!-- valve texts -->
+  <div class="abs" style="left:618px;top:334px;width:250px">
+    <div class="mono" style="font-size:12px;color:var(--dim)">LBL-02 · labeling agent</div>
+    <div style="font-size:14.5px;font-weight:750;margin-top:3px">Agent Bricks Info Extraction <span class="chip beta">BETA</span></div>
+    <div class="mono" style="font-size:12px;color:var(--dim);margin-top:4px">endpoint acme-doc-labeler</div>
+    <div style="font-size:12.5px;color:var(--green);margin-top:6px">re-scored 12 units · 0.71 to 0.94 &#9650;</div>
+    <div style="font-size:12px;color:var(--dim);margin-top:4px">fallback ai_classify <span class="chip ga">GA</span></div>
+    <div style="font-size:12px;color:var(--dim);margin-top:4px">brick built in the IE UI <span class="chip pp">PREVIEW</span></div>
+  </div>
+
+  <!-- lane rows -->
+  <div class="abs" style="left:1136px;top:38px;width:268px">
+    <div style="display:flex;align-items:baseline"><span class="lane-name g">EXTRACT</span><span class="spacer"></span><span class="lane-count mono">21</span></div>
+    <div class="lane-det">ai_extract to typed Delta <span class="chip ga">GA</span> · 4 tables</div>
+    <div class="lane-det">invoices table live · 14 fields</div>
+    <a class="lane-link g" href="#">Open in Catalog &#8599;</a>
+  </div>
+  <div class="abs" style="left:1136px;top:170px;width:268px">
+    <div style="display:flex;align-items:baseline"><span class="lane-name a">AUDIT</span><span class="alarm">WC-2214 · HIGH</span><span class="spacer"></span><span class="lane-count mono">11</span></div>
+    <div class="lane-det">judge claude-opus-5 · via AI Gateway</div>
+    <div class="lane-det">3 waiting in human review</div>
+    <a class="lane-link a" href="#">Review queue &#8599;</a>
+  </div>
+  <div class="abs" style="left:1136px;top:302px;width:268px">
+    <div style="display:flex;align-items:baseline"><span class="lane-name b">SECURE</span><span class="spacer"></span><span class="lane-count mono">12</span></div>
+    <div class="lane-det">ai_mask <span class="chip ga">GA</span> · sealed to locked volume</div>
+    <div class="lane-det">9 entities masked · grants hr_admins only</div>
+    <a class="lane-link b" href="#">Locked zone &#8599;</a>
+  </div>
+  <div class="abs" style="left:1136px;top:436px;width:268px">
+    <div style="display:flex;align-items:baseline"><span class="lane-name gr">ARCHIVE</span><span class="spacer"></span><span class="lane-count mono">3</span></div>
+    <div class="lane-det">no action needed · retained with lineage</div>
+    <div class="lane-det">Q3 vendor newsletter · marketing</div>
+  </div>
+</div>
+
+<!-- ============ trace + yield ============ -->
+<div class="lower">
+  <div class="trace">
+    <div class="trace-head">
+      <span class="klabel">BATCH TRACE</span>
+      <span class="fname mono">WC-2214_UnitSN-44781.pdf</span>
+      <span class="tchip">warranty claim · 0.97</span>
+      <span class="spacer"></span>
+      <span class="receipt mono">intake 09:42:11 &#8594; flagged 09:42:26 · 14.8s · $0.014 · run 38</span>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <h4 class="g">1 · PARSED</h4>
+        <p>3 pages · 2 tables recovered from a scanned fax copy</p>
+      </div>
+      <div class="arrow">&#8594;</div>
+      <div class="step">
+        <h4 style="color:var(--oat)">2 · LABELED</h4>
+        <p>warranty claim · standard sensitivity · routed to extract + audit</p>
+      </div>
+      <div class="arrow">&#8594;</div>
+      <div class="step">
+        <h4 class="g">3 · EXTRACTED</h4>
+        <div class="kchips mono">
+          <span class="kchip"><b>serial</b>SN-44781</span>
+          <span class="kchip"><b>bought</b>2023-11-02</span>
+          <span class="kchip"><b>failed</b>2026-03-19</span>
+          <span class="kchip"><b>claim</b>$2,140</span>
+        </div>
+      </div>
+      <div class="arrow">&#8594;</div>
+      <div class="step flag" style="flex:1.35">
+        <h4 style="color:#FF6C5A">4 · FLAGGED · HIGH</h4>
+        <p>Coverage ended 2025-11-02, failure 137 days past term. Cross-checked against INV-88213.</p>
+        <div style="margin-top:6px"><button class="ghost">Approve finding</button><button class="ghost">Override</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="yield">
+    <span class="klabel">YIELD THIS RUN</span>
+    <div class="ymoney">
+      <div><div class="big">$3,310</div><div class="cap2">CAUGHT IN AUDIT</div></div>
+      <div><div class="big" style="color:rgba(238,237,233,.75)">$0.61</div><div class="cap2">RUN COST</div></div>
+    </div>
+    <div class="yfoot">5,426 to 1, value caught per pipeline dollar</div>
+    <div class="yfoot" style="margin-top:3px"><a href="#">Ask the plant · beat 5 &#8599;</a></div>
+    <div class="mono" style="font-size:12px;color:var(--dim);margin-top:12px;padding-top:9px;border-top:1px solid var(--line)">replayed from run_metrics · nothing on this board is simulated</div>
+  </div>
+</div>
+
+<!-- ============ run-of-show rail ============ -->
+<div class="rail">
+  <span class="klabel">RUN OF SHOW</span>
+  <span class="beat done">1 · Cold open <em>&#10003;</em></span>
+  <span class="beat done">2 · Corpus <em>&#10003;</em></span>
+  <span class="beat active">3 · Brick swap · live</span>
+  <span class="beat">4 · Lanes and review</span>
+  <span class="beat">5 · Ask the plant</span>
+  <div class="railright">
+    <span class="mono">run 38</span>
+    <span>press R to reset · keys 1 to 5 jump beats</span>
+  </div>
+</div>
+
+</body>
+</html>

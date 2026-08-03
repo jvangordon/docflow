@@ -1,0 +1,79 @@
+# DocFlow: Agent Bricks document intelligence demo, packaged as a Databricks App.
+# One command installs it: databricks bundle deploy -t dev
+# Retarget catalog, warehouse, or model endpoints with --var, no code edits:
+#   databricks bundle deploy -t dev --var="catalog=main" --var="warehouse_id=<id>"
+
+bundle:
+  name: docflow
+
+variables:
+  catalog:
+    description: Unity Catalog catalog the demo writes to. You need CREATE SCHEMA on it.
+    default: workspace
+  schema:
+    description: Schema the app creates on bootstrap (CREATE SCHEMA IF NOT EXISTS) and fills with demo tables.
+    default: docflow
+  volume:
+    description: UC volume inside the schema used as the document inbox (created on bootstrap).
+    default: docs
+  warehouse_id:
+    description: Id of a serverless SQL warehouse. AI Functions do not run on Pro or Classic warehouses.
+    default: ""
+  chat_endpoint:
+    description: Serving endpoint for extraction, labeling fallback, and NL2SQL answers.
+    default: databricks-claude-sonnet-4-6
+  judge_endpoint:
+    description: Serving endpoint for the audit-lane judge.
+    default: databricks-claude-haiku-4-5
+
+# No git repo here yet, so nothing is auto-ignored. Keep local junk out of the upload.
+sync:
+  exclude:
+    - .venv
+    - prototype
+    - prototype-candidates
+    - app/__pycache__
+    - app/.databricks
+
+
+resources:
+  apps:
+    docflow:
+      name: docflow
+      description: "DocFlow: documents in, governed tables and cited answers out, live."
+      source_code_path: ./app
+      # config overrides app.yaml per field. Command mirrors app/app.yaml exactly;
+      # env is the bundle's job, so a customer retargets with variables, not code edits.
+      config:
+        command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+        env:
+          - name: DOCFLOW_CATALOG
+            value: ${var.catalog}
+          - name: DOCFLOW_SCHEMA
+            value: ${var.schema}
+          - name: DOCFLOW_VOLUME
+            value: ${var.volume}
+          - name: DOCFLOW_CHAT_ENDPOINT
+            value: ${var.chat_endpoint}
+          - name: DOCFLOW_JUDGE_ENDPOINT
+            value: ${var.judge_endpoint}
+      resources:
+        # No warehouse binding on purpose: a fresh workspace has none, and the
+        # app creates its own from the readiness panel. Bind one later if you
+        # want the app pinned to a specific warehouse.
+        - name: chat-endpoint
+          description: Model endpoint for extraction and ask-page answers.
+          serving_endpoint:
+            name: ${var.chat_endpoint}
+            permission: CAN_QUERY
+        - name: judge-endpoint
+          description: Model endpoint for audit-lane judge calls.
+          serving_endpoint:
+            name: ${var.judge_endpoint}
+            permission: CAN_QUERY
+
+targets:
+  # Default target. Uses your default CLI profile's workspace; pass -p <profile> to pick another.
+  dev:
+    mode: development
+    default: true

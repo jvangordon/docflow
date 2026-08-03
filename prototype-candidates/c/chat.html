@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DocFlow · Document Theater · Ask</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { background:#06090D; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; color:#EEEDE9; }
+  .mono { font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; }
+
+  .stage { position:relative; width:1440px; height:900px; overflow:hidden;
+    background: radial-gradient(1100px 760px at 720px 320px, #15222C 0%, #101B23 45%, #0A121A 75%, #06090D 100%); }
+  .vignette { position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(1200px 860px at 720px 420px, rgba(0,0,0,0) 55%, rgba(2,4,6,.55) 100%); }
+  .beam { position:absolute; left:0; top:0; width:1440px; height:900px; pointer-events:none;
+    background:linear-gradient(180deg, rgba(255,138,0,.10) 0%, rgba(255,54,33,.04) 50%, rgba(255,54,33,0) 85%);
+    clip-path:polygon(20% 0, 34% 0, 46% 100%, 8% 100%); }
+  .beam.b2 { clip-path:polygon(66% 0, 80% 0, 92% 100%, 54% 100%); }
+
+  .dots { position:absolute; width:3px; height:3px; border-radius:50%; background:rgba(238,237,233,.4); }
+  .dots.l { left:26px; top:180px;
+    box-shadow:6px 30px 0 0 rgba(255,138,0,.4), 14px 90px 0 0 rgba(238,237,233,.25), 2px 150px 0 0 rgba(238,237,233,.3),
+      18px 210px 0 0 rgba(78,163,255,.4), 8px 280px 0 0 rgba(238,237,233,.22), 16px 350px 0 0 rgba(255,54,33,.35),
+      4px 420px 0 0 rgba(238,237,233,.28), 12px 490px 0 0 rgba(238,237,233,.2), 20px 560px 0 0 rgba(255,138,0,.3); }
+  .dots.r { left:1422px; top:200px;
+    box-shadow:6px 20px 0 0 rgba(238,237,233,.25), 0px 90px 0 0 rgba(255,138,0,.4), 8px 160px 0 0 rgba(238,237,233,.3),
+      2px 240px 0 0 rgba(78,163,255,.35), 9px 320px 0 0 rgba(238,237,233,.22), 1px 400px 0 0 rgba(255,54,33,.3),
+      7px 470px 0 0 rgba(238,237,233,.25), 4px 540px 0 0 rgba(238,237,233,.2); }
+
+  /* header */
+  .top { position:absolute; left:0; top:0; width:1440px; height:58px; display:flex; align-items:center;
+    padding:0 26px; gap:22px; background:rgba(6,10,14,.55); border-bottom:1px solid rgba(238,237,233,.08); z-index:40; }
+  .brand { display:flex; align-items:center; gap:11px; }
+  .mark { width:26px; height:26px; border-radius:7px; background:linear-gradient(135deg,#FF3621,#FF8A00); box-shadow:0 0 18px rgba(255,54,33,.55); }
+  .brand .nm { font-size:17px; font-weight:800; letter-spacing:.02em; }
+  .brand .sub { font-size:12px; color:rgba(238,237,233,.6); margin-top:1px; }
+  .actTag { flex:1; text-align:center; font-size:12.5px; letter-spacing:.22em; color:#FF8A00; font-weight:800; text-transform:uppercase; }
+  .boardMini { display:flex; align-items:baseline; gap:14px; font-size:13px; color:rgba(238,237,233,.6); }
+  .boardMini b { font-size:17px; font-weight:800; background:linear-gradient(135deg,#FF3621,#FF8A00); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .boardMini b.oat { background:none; color:#EEEDE9; }
+
+  .badge { display:inline-block; font-size:11.5px; font-weight:700; letter-spacing:.08em; padding:2px 7px; border-radius:5px; vertical-align:1px; }
+  .ga { color:#3DDC97; border:1px solid rgba(61,220,151,.4); background:rgba(61,220,151,.06); }
+  .beta { color:#FF8A00; border:1px solid rgba(255,138,0,.45); background:rgba(255,138,0,.07); }
+
+  /* receipts marquee */
+  .receipts { position:absolute; left:0; top:58px; width:1440px; height:86px; display:flex; align-items:center; gap:26px;
+    padding:0 30px; border-bottom:1px solid rgba(238,237,233,.07); background:rgba(10,16,22,.4); z-index:30; }
+  .claim { width:330px; }
+  .claim .big { font-size:17.5px; font-weight:800; line-height:1.25; }
+  .claim .big em { font-style:normal; background:linear-gradient(135deg,#FF3621,#FF8A00); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .claim .s { font-size:12px; color:rgba(238,237,233,.5); margin-top:3px; }
+  .stops { flex:1; display:flex; align-items:center; gap:0; }
+  .stop { flex:1; position:relative; padding-left:16px; }
+  .stop::before { content:""; position:absolute; left:0; top:6px; width:9px; height:9px; border-radius:50%; background:#FF8A00; box-shadow:0 0 10px rgba(255,138,0,.8); }
+  .stop.cold::before { background:rgba(238,237,233,.4); box-shadow:none; }
+  .stop .tm { font-size:15px; font-weight:800; font-family:ui-monospace,"SF Mono",Menlo,monospace; }
+  .stop .lb { font-size:12px; color:rgba(238,237,233,.62); margin-top:2px; line-height:1.35; }
+  .arrow { width:44px; height:2px; margin:0 8px 18px 2px; background:linear-gradient(90deg, rgba(255,54,33,.7), rgba(255,138,0,.7)); position:relative; }
+  .arrow::after { content:""; position:absolute; right:-1px; top:-3px; border-left:7px solid #FF8A00; border-top:4px solid transparent; border-bottom:4px solid transparent; }
+
+  /* turns */
+  .turns { position:absolute; left:30px; top:158px; width:1380px; z-index:20; display:flex; flex-direction:column; gap:16px; }
+  .turn { display:flex; gap:18px; }
+
+  /* left: question + routing */
+  .qr { width:452px; flex:none; }
+  .qb { background:rgba(238,237,233,.08); border:1px solid rgba(238,237,233,.14); border-radius:14px 14px 14px 4px; padding:10px 14px; }
+  .qb .qq { font-size:15px; font-weight:700; line-height:1.35; }
+  .qb .qt { font-size:11.5px; color:rgba(238,237,233,.5); margin-top:4px; font-family:ui-monospace,"SF Mono",Menlo,monospace; }
+
+  .routing { margin-top:10px; border:1px solid rgba(255,120,10,.35); border-radius:14px; padding:12px 14px 10px;
+    background:linear-gradient(180deg, rgba(255,54,33,.07), rgba(16,27,35,.6)); position:relative; }
+  .routing .rh { font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:#FF8A00; font-weight:800; }
+  .supNode { margin:8px auto 0; width:230px; text-align:center; border:1.5px solid rgba(255,120,10,.7); border-radius:10px; padding:7px 6px 6px;
+    background:rgba(255,54,33,.1); box-shadow:0 0 22px rgba(255,80,20,.25); }
+  .supNode .sn { font-size:14.5px; font-weight:800; letter-spacing:.12em; }
+  .supNode .sb { font-size:11px; color:rgba(238,237,233,.65); margin-top:2px; letter-spacing:.04em; }
+  .branches { display:flex; justify-content:space-between; margin-top:0; }
+  .branch { width:196px; text-align:center; }
+  .stem { height:26px; position:relative; }
+  .stem svg { position:absolute; left:0; top:0; }
+  .agent { border-radius:9px; padding:7px 6px; font-size:12.5px; font-weight:800; letter-spacing:.05em; border:1px solid rgba(238,237,233,.16); color:rgba(238,237,233,.45); background:rgba(238,237,233,.03); }
+  .agent small { display:block; font-weight:600; font-size:11px; letter-spacing:.03em; margin-top:2px; color:rgba(238,237,233,.4); }
+  .agent.lit { border-color:rgba(255,120,10,.7); color:#FFB27A; background:linear-gradient(135deg, rgba(255,54,33,.14), rgba(255,138,0,.1)); box-shadow:0 0 18px rgba(255,90,20,.3); }
+  .agent.lit small { color:rgba(255,178,122,.85); }
+  .why { margin-top:9px; font-size:12.5px; color:rgba(238,237,233,.75); line-height:1.45; border-top:1px solid rgba(238,237,233,.08); padding-top:7px; }
+  .why b { color:#EEEDE9; font-weight:700; }
+  .why .mono { color:#FFB27A; }
+
+  /* right: answer */
+  .ans { flex:1; background:linear-gradient(180deg, rgba(27,49,57,.82), rgba(16,27,35,.9)); border:1px solid rgba(238,237,233,.12);
+    border-radius:4px 14px 14px 14px; padding:13px 16px; box-shadow:0 16px 36px rgba(0,0,0,.4); }
+  .ansHd { display:flex; align-items:center; gap:9px; }
+  .aIcon { width:22px; height:22px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:10.5px; font-weight:800; }
+  .aIcon.g { background:rgba(255,138,0,.15); border:1px solid rgba(255,138,0,.45); color:#FFB27A; }
+  .aIcon.k { background:rgba(78,163,255,.13); border:1px solid rgba(78,163,255,.4); color:#9CCBFF; }
+  .ansHd .an { font-size:13.5px; font-weight:800; letter-spacing:.06em; }
+  .ansHd .meta { margin-left:auto; font-size:12px; color:rgba(238,237,233,.5); }
+  .lead { font-size:14px; line-height:1.5; margin-top:8px; color:rgba(238,237,233,.92); }
+  .lead b { color:#FFB27A; }
+
+  .cols { display:flex; gap:14px; margin-top:9px; }
+  table.tt { border-collapse:collapse; width:470px; }
+  table.tt th { text-align:left; font-size:11.5px; letter-spacing:.1em; text-transform:uppercase; color:rgba(238,237,233,.5);
+    border-bottom:1px solid rgba(238,237,233,.18); padding:4px 8px 5px 0; font-weight:700; }
+  table.tt td { font-size:13px; padding:5px 8px 5px 0; border-bottom:1px solid rgba(238,237,233,.07); }
+  table.tt td.r, table.tt th.r { text-align:right; }
+  table.tt tr.tot td { border-top:1.5px solid rgba(255,138,0,.5); border-bottom:none; font-weight:800; color:#FFB27A; }
+  .barCell { display:flex; align-items:center; gap:8px; justify-content:flex-end; }
+  .exBar { height:7px; border-radius:4px; background:linear-gradient(90deg,#FF3621,#FF8A00); display:inline-block; }
+
+  .sql { flex:1; background:rgba(5,9,12,.8); border:1px solid rgba(238,237,233,.1); border-radius:9px; padding:9px 11px;
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:12px; line-height:1.55; color:rgba(238,237,233,.8); }
+  .sql .kw { color:#FF8A00; font-weight:700; } .sql .id { color:#9CCBFF; }
+  .sqlLbl { font-size:11px; letter-spacing:.16em; color:rgba(238,237,233,.45); font-weight:800; margin-bottom:4px; font-family:-apple-system,"Segoe UI",sans-serif; }
+
+  .chips { display:flex; gap:8px; margin-top:10px; align-items:center; flex-wrap:wrap; }
+  .chip { font-size:12px; color:rgba(238,237,233,.75); border:1px solid rgba(238,237,233,.2); border-radius:999px; padding:4px 11px; background:rgba(238,237,233,.04); }
+  .chip.link { color:#FFB27A; border-color:rgba(255,138,0,.45); }
+  .chip.cite { color:#9CCBFF; border-color:rgba(78,163,255,.4); font-family:ui-monospace,"SF Mono",Menlo,monospace; font-size:11.5px; }
+  .chip .wm { color:#FF8A00; font-weight:700; }
+
+  .quote { border-left:3px solid #4EA3FF; padding:2px 0 2px 12px; margin-top:9px; font-size:13px; line-height:1.55; color:rgba(238,237,233,.85); font-style:italic; }
+  .quote b { font-style:normal; color:#9CCBFF; }
+  .tie { margin-top:10px; font-size:13px; line-height:1.45; color:rgba(238,237,233,.85); border-top:1px solid rgba(238,237,233,.08); padding-top:8px; }
+  .tie b { color:#FFB27A; }
+
+  /* input */
+  .askBar { position:absolute; left:0; bottom:0; width:1440px; height:96px; background:rgba(5,8,11,.82);
+    border-top:1px solid rgba(238,237,233,.09); display:flex; align-items:center; gap:14px; padding:0 30px; z-index:40; }
+  .askLbl { width:210px; font-size:12.5px; color:rgba(238,237,233,.6); line-height:1.5; }
+  .askLbl b { color:#EEEDE9; }
+  .input { flex:1; height:54px; border-radius:14px; border:1px solid rgba(255,120,10,.4); background:rgba(238,237,233,.05);
+    display:flex; align-items:center; padding:0 18px; font-size:15px; color:rgba(238,237,233,.55);
+    box-shadow:0 0 0 4px rgba(255,80,20,.07), inset 0 1px 0 rgba(255,255,255,.04); }
+  .caret { width:2px; height:20px; background:#FF8A00; margin-right:10px; animation:blink 1.2s step-end infinite; }
+  @keyframes blink { 50% { opacity:0 } }
+  .ask { height:54px; padding:0 30px; border:none; border-radius:14px; font-size:15px; font-weight:800; letter-spacing:.05em; color:#FFF6F2;
+    background:linear-gradient(135deg,#FF3621,#FF8A00); box-shadow:0 6px 24px rgba(255,60,20,.45); cursor:pointer; }
+  .fleetNote { width:190px; text-align:right; font-size:11.5px; color:rgba(238,237,233,.45); line-height:1.5; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="beam"></div><div class="beam b2"></div>
+  <div class="dots l"></div><div class="dots r"></div>
+  <div class="vignette"></div>
+
+  <!-- header -->
+  <div class="top">
+    <div class="brand">
+      <div class="mark"></div>
+      <div>
+        <div class="nm">DOCFLOW <span style="font-weight:600;color:rgba(238,237,233,.55)">· Ask the Documents</span></div>
+        <div class="sub">Acme Manufacturing · Document Intelligence</div>
+      </div>
+    </div>
+    <div class="actTag">Act 3 · The Prestige</div>
+    <div class="boardMini"><span>caught <b>$3,310</b></span><span>cost <b class="oat">$0.61</b></span></div>
+  </div>
+
+  <!-- receipts -->
+  <div class="receipts">
+    <div class="claim">
+      <div class="big">These answers <em>did not exist</em> ten minutes ago.</div>
+      <div class="s">wall clock from run_metrics · no tricks</div>
+    </div>
+    <div class="stops">
+      <div class="stop cold">
+        <div class="tm">9:41:07</div>
+        <div class="lb">asked cold · zero tables, honest refusal</div>
+      </div>
+      <div class="arrow"></div>
+      <div class="stop">
+        <div class="tm">9:44:12</div>
+        <div class="lb">extract tables live · 47 docs through the lanes</div>
+      </div>
+      <div class="arrow"></div>
+      <div class="stop">
+        <div class="tm">9:51:33</div>
+        <div class="lb">same question returns · answered below, with receipts</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TURN 1 · Genie -->
+  <div class="turns">
+    <div class="turn">
+      <div class="qr">
+        <div class="qb">
+          <div class="qq">Which suppliers are driving warranty exposure this quarter?</div>
+          <div class="qt">JVG · 9:51:33</div>
+        </div>
+        <div class="routing">
+          <div class="rh">Supervisor routes it</div>
+          <div class="supNode">
+            <div class="sn">SUPERVISOR</div>
+            <div class="sb"><span class="badge ga">GA</span> <span class="badge beta">API BETA</span></div>
+          </div>
+          <div class="branches">
+            <div class="branch">
+              <div class="stem"><svg width="196" height="26"><path d="M196 0 C 150 8, 120 16, 98 26" stroke="rgba(255,138,0,.8)" stroke-width="2" fill="none"/></svg></div>
+              <div class="agent lit">GENIE AGENTS<small>structured · SQL over Delta</small></div>
+            </div>
+            <div class="branch">
+              <div class="stem"><svg width="196" height="26"><path d="M0 0 C 46 8, 76 16, 98 26" stroke="rgba(238,237,233,.25)" stroke-width="1.5" fill="none"/></svg></div>
+              <div class="agent">KNOWLEDGE ASSISTANT<small>unstructured · cited answers</small></div>
+            </div>
+          </div>
+          <div class="why"><b>Why:</b> needs an aggregation over <span class="mono">extract_warranty_claims</span>, a table born at 9:44. Structured question, structured tool.</div>
+        </div>
+      </div>
+
+      <div class="ans">
+        <div class="ansHd">
+          <span class="aIcon g">G</span>
+          <span class="an">GENIE AGENTS <span class="badge ga">GA</span></span>
+          <span class="meta">answered 9:51:41 · 3.2s · $0.004</span>
+        </div>
+        <div class="lead"><b>Cascadia Hydraulics leads Q3 exposure at $2,660</b> across 3 claims, with Northwind Bearings close behind. 11 claims total, $8,940 exposed.</div>
+        <div class="cols">
+          <table class="tt">
+            <tr><th>Supplier</th><th class="r">Claims</th><th class="r">Exposure</th></tr>
+            <tr><td>Cascadia Hydraulics</td><td class="r">3</td><td class="r barCell"><span class="exBar" style="width:96px"></span>$2,660</td></tr>
+            <tr><td>Northwind Bearings</td><td class="r">4</td><td class="r barCell"><span class="exBar" style="width:88px;opacity:.85"></span>$2,440</td></tr>
+            <tr><td>Ferrostar Alloys</td><td class="r">2</td><td class="r barCell"><span class="exBar" style="width:69px;opacity:.7"></span>$1,920</td></tr>
+            <tr><td>Bluepeak Plastics</td><td class="r">2</td><td class="r barCell"><span class="exBar" style="width:45px;opacity:.55"></span>$1,240</td></tr>
+            <tr class="tot"><td>Q3 total</td><td class="r">11</td><td class="r">$8,940</td></tr>
+          </table>
+          <div class="sql">
+            <div class="sqlLbl">SQL · SHOWN, NOT HIDDEN</div>
+            <span class="kw">SELECT</span> supplier, <span class="kw">COUNT</span>(*) claims,<br>
+            &nbsp;&nbsp;<span class="kw">SUM</span>(claim_total) exposure<br>
+            <span class="kw">FROM</span> <span class="id">acme.docflow.extract_warranty_claims</span><br>
+            <span class="kw">WHERE</span> qtr = '2026-Q3'<br>
+            <span class="kw">GROUP BY</span> supplier <span class="kw">ORDER BY</span> exposure <span class="kw">DESC</span>
+          </div>
+        </div>
+        <div class="chips">
+          <span class="chip link">Verify in Genie, the product surface ↗</span>
+          <span class="chip">lineage · 11 source PDFs</span>
+          <span class="chip">table created 9:44:12</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- TURN 2 · Knowledge Assistant -->
+    <div class="turn">
+      <div class="qr">
+        <div class="qb">
+          <div class="qq">What does the Cascadia supply agreement say about defect liability?</div>
+          <div class="qt">JVG · 9:52:08</div>
+        </div>
+        <div class="routing">
+          <div class="rh">Supervisor routes it</div>
+          <div class="supNode">
+            <div class="sn">SUPERVISOR</div>
+            <div class="sb"><span class="badge ga">GA</span> <span class="badge beta">API BETA</span></div>
+          </div>
+          <div class="branches">
+            <div class="branch">
+              <div class="stem"><svg width="196" height="26"><path d="M196 0 C 150 8, 120 16, 98 26" stroke="rgba(238,237,233,.25)" stroke-width="1.5" fill="none"/></svg></div>
+              <div class="agent">GENIE AGENTS<small>structured · SQL over Delta</small></div>
+            </div>
+            <div class="branch">
+              <div class="stem"><svg width="196" height="26"><path d="M0 0 C 46 8, 76 16, 98 26" stroke="rgba(255,138,0,.8)" stroke-width="2" fill="none"/></svg></div>
+              <div class="agent lit">KNOWLEDGE ASSISTANT<small>unstructured · cited answers</small></div>
+            </div>
+          </div>
+          <div class="why"><b>Why:</b> a clause lookup inside contract prose. No table holds this, the <b>documents themselves</b> do. Cited passages required.</div>
+        </div>
+      </div>
+
+      <div class="ans">
+        <div class="ansHd">
+          <span class="aIcon k">KA</span>
+          <span class="an" style="color:#D9E9FF">KNOWLEDGE ASSISTANT <span class="badge ga">GA</span></span>
+          <span class="meta">answered 9:52:15 · 4.1s · $0.006</span>
+        </div>
+        <div class="lead">Cascadia Hydraulics is liable for defects in materials and workmanship for <b>24 months from delivery</b>. Acme may recover replacement cost plus reasonable labor. Claims must be filed within 60 days of discovery.</div>
+        <div class="quote">"Supplier shall bear the cost of replacement and reasonable labor for any Component failing within the Warranty Period." <b>· §9.2</b></div>
+        <div class="chips">
+          <span class="chip cite">cascadia_supply_agreement.pdf · p.7 · §9.2</span>
+          <span class="chip cite">cascadia_supply_agreement.pdf · p.8 · §9.4</span>
+          <span class="chip">sources are <span class="wm">SYNTHETIC</span> watermarked corpus docs</span>
+        </div>
+        <div class="tie">Cross-checked by the audit lane: claim <b>WC-2214 ($1,840)</b> cites Cascadia lot CH-5518 and falls inside this clause. The judge already flagged it recoverable from the supplier.</div>
+        <div class="chips">
+          <span class="chip link">Open in Knowledge Assistant, the product surface ↗</span>
+          <span class="chip">grounded in 2 pages · indexed 9:45:02</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ask bar -->
+  <div class="askBar">
+    <div class="askLbl"><b>One box.</b> Supervisor picks the right agent for every question.</div>
+    <div class="input"><span class="caret"></span>Ask Acme Manufacturing's documents anything</div>
+    <button class="ask">ASK</button>
+    <div class="fleetNote">47 docs · 8 extract tables<br>132 chunks indexed</div>
+  </div>
+</div>
+</body>
+</html>
