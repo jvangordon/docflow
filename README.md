@@ -18,8 +18,8 @@ Both paths end in the same place. Pick whichever suits the workspace you are in.
 
 Best in a customer workspace, or on any machine without the Databricks CLI.
 
-1. In the workspace sidebar: **Workspace**, **Create**, **Git folder**, paste this repo's
-   URL, **Create**. A public repo clones with no credentials.
+1. In the workspace sidebar: **Workspace**, **Create**, **Git folder**, paste
+   `https://github.com/jvangordon/docflow`, **Create**. It needs no credentials.
 2. Open `setup_databricks.py` inside the clone and press **Run all**.
 
 The notebook runs as **you**, which is the point. It creates the app, deploys the code
@@ -31,7 +31,7 @@ To update later: press **Pull** in the Git folder, then run the notebook again.
 ### B. One command, if you have the CLI
 
 ```bash
-python3 install.py
+git clone https://github.com/jvangordon/docflow && cd docflow && python3 install.py
 ```
 
 Same three things, and it prints the app URL when it finishes. `--profile` picks a

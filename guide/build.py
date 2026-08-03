@@ -179,10 +179,12 @@ html_out = f"""<div class="wrap">
 workspace, or on any machine without the Databricks CLI.</p>
 <ol class="gitsteps">
   <li>In the Databricks workspace: <b>Workspace</b>, <b>Create</b>, <b>Git folder</b>, paste the
-      repo URL, <b>Create</b>. A public repo needs no credentials.</li>
+      URL below, <b>Create</b>. It needs no credentials.</li>
   <li>Open <span class="mono">setup_databricks.py</span> inside the clone and press
       <b>Run all</b>.</li>
-</ol>
+</ol>'''
++ cmd("repo url, paste into the git folder dialog", "https://github.com/jvangordon/docflow")
++ '''
 <p class="sub">The notebook runs as you, which is what makes this work: it creates the app,
 deploys the code straight out of the Git folder, then grants the app the two rights it needs
 to set the workspace up for itself. It finishes by printing a link to the app.</p>
