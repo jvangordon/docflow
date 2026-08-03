@@ -217,8 +217,9 @@ it at once.</p>'''
 <div class="press"><span class="b">Set up this workspace</span><span class="t">Creates everything the demo needs
 <small>About 45 seconds. Each piece reports for itself underneath, so if one fails you know which.</small></span></div>
 <div class="look"><b>What it just made</b><p>A 2X-Small serverless warehouse that stops itself
-after 10 idle minutes, a schema for the tables and Genie space, and a volume with folders for
-documents. When it finishes the card turns green and says the workspace is ready.</p></div>
+after 10 idle minutes, a schema for the tables and Genie space, and two volumes: <b>docs</b>,
+which the run makes browsable to everyone in the workspace, and <b>secure</b>, which nobody but
+the app can open. When it finishes the card turns green and says the workspace is ready.</p></div>
 <p class="sub">Curious what it checked? Open <b>All 10 checks</b> for the full list.
 Rows that need compute say "verified at go" instead of pretending to pass, and the two
 agent rows sit under "Built for you at go" with nothing for you to do.</p>'''
@@ -282,7 +283,11 @@ guaranteed answerable from the data this run produced.</p>'''
          "Titled for the industry you chose, running on the governed tables the run created.")
 + '''
 <p><b>Claims</b> and <b>Suppliers</b> are the two operations screens. <b>Built</b> lists
-everything the run created with per section timings.</p>''')}
+everything the run created with per section timings.</p>
+<div class="look"><b>The compliance beat</b><p>Open Catalog Explorer and browse the
+<b>docs</b> volume — every generated PDF is right there for the room to open. Then try the
+<b>secure</b> volume: permission denied. That denial is the governance story proving itself,
+live, with no slide.</p></div>''')}
 
 <section class="step"><div class="stephead"><div class="num">✓</div>
 <h2>Stand it down</h2><div class="mins">10 sec</div></div>

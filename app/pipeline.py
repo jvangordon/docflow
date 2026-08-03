@@ -27,14 +27,16 @@ JUDGE_ENDPOINT = os.environ.get("DOCFLOW_JUDGE_ENDPOINT", "databricks-claude-hai
 
 FQ = f"{CATALOG}.{SCHEMA}"
 VOL_ROOT = f"/Volumes/{CATALOG}/{SCHEMA}/{VOLUME}"
+SEC_ROOT = f"/Volumes/{CATALOG}/{SCHEMA}/secure"
 
 
 def set_target(catalog: str, schema: str, volume: str = "docs") -> None:
     """Point the pipeline at a different catalog.schema at runtime (config-driven)."""
-    global CATALOG, SCHEMA, VOLUME, FQ, VOL_ROOT, ASK_TABLES, DDL
+    global CATALOG, SCHEMA, VOLUME, FQ, VOL_ROOT, SEC_ROOT, ASK_TABLES, DDL
     CATALOG, SCHEMA, VOLUME = catalog, schema, volume
     FQ = f"{CATALOG}.{SCHEMA}"
     VOL_ROOT = f"/Volumes/{CATALOG}/{SCHEMA}/{VOLUME}"
+    SEC_ROOT = f"/Volumes/{CATALOG}/{SCHEMA}/secure"
     ASK_TABLES = {f"{FQ}.{t}" for t in (
         "extract_warranty_claims", "extract_supplier_invoices",
         "audit_findings", "documents", "events")}
@@ -371,7 +373,7 @@ def bootstrap() -> dict:
             out["statements"] += 1
         except Exception as e:  # keep going; report
             out["errors"].append(str(e)[:200])
-    for sub in ("inbox", "processed", "secure", "archive"):
+    for sub in ("inbox", "processed", "archive"):
         try:
             wc().files.create_directory(f"{VOL_ROOT}/{sub}")
         except Exception:
@@ -698,8 +700,8 @@ def stage_secure() -> None:
                    WHERE l.routing:doc_type IN ('hr_document','safety_incident')""", timeout="50s")
     for doc_id, redacted in rows:
         data = (redacted or "").encode()
-        wc().files.upload(f"{VOL_ROOT}/secure/{doc_id}.redacted.txt", io.BytesIO(data), overwrite=True)
-        _ev(doc_id, "secured", "ai_mask redaction sealed to secure/")
+        wc().files.upload(f"{SEC_ROOT}/{doc_id}.redacted.txt", io.BytesIO(data), overwrite=True)
+        _ev(doc_id, "secured", "ai_mask redaction sealed to the secure volume")
 
 
 def run_pipeline() -> None:

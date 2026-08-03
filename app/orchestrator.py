@@ -98,12 +98,29 @@ def ensure_infra(cfg: dict) -> None:
         pipeline.sql(f"CREATE SCHEMA IF NOT EXISTS {cat}.{sch}")
     if not exists(f"SHOW VOLUMES IN {cat}.{sch} LIKE 'docs'"):
         pipeline.sql(f"CREATE VOLUME IF NOT EXISTS {cat}.{sch}.docs")
-    for sub in ("inbox", "processed", "secure", "archive", "generated"):
+    if not exists(f"SHOW VOLUMES IN {cat}.{sch} LIKE 'secure'"):
+        pipeline.sql(f"CREATE VOLUME IF NOT EXISTS {cat}.{sch}.secure")
+    for sub in ("inbox", "processed", "archive", "generated"):
         try:
             w.files.create_directory(f"/Volumes/{cat}/{sch}/docs/{sub}")
         except Exception:
             pass
     pipeline.set_target(cat, sch, "docs")
+    # The app's identity owns everything it just made, so without these grants
+    # the humans in the room cannot open a single document in Catalog Explorer.
+    # The secure volume deliberately gets nothing: opening it should fail, and
+    # that denial is the compliance beat of the demo.
+    try:
+        for g in (f"GRANT USE SCHEMA ON SCHEMA {cat}.{sch} TO `account users`",
+                  f"GRANT SELECT ON SCHEMA {cat}.{sch} TO `account users`",
+                  f"GRANT READ VOLUME ON VOLUME {cat}.{sch}.docs TO `account users`"):
+            pipeline.sql(g)
+        _log("Browse access", "ok",
+             "workspace users can open the schema, tables and documents · "
+             "the secure volume alone stays locked")
+    except Exception as e:
+        _log("Browse access", "warn",
+             f"documents stay app-only in Catalog Explorer · {str(e)[:120]}")
     boot = pipeline.bootstrap()
     _log("Schema, volume, tables", "ok" if not boot.get("errors") else "warn",
          f"{cat}.{sch} · {boot['statements']} statements")
