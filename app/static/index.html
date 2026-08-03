@@ -398,11 +398,15 @@ function renderStart(){
             <div class="hint">Point at a volume of the customer's PDFs and the run reads them in
               place, generating only what is missing.</div>
             <label style="margin:16px 0 7px">Model</label>
-            <input class="ctl mono" id="f-model" list="modellist" style="font-size:13px"
-              value="${esc(c.chat_endpoint||"databricks-claude-sonnet-4-6")}">
-            <datalist id="modellist">${(scan.models||[]).map(m=>`<option value="${esc(m)}">`).join("")}</datalist>
-            <div class="hint">Any model this workspace serves. If this name does not answer, go
-              finds one that does and says so in the log.</div>
+            <select class="ctl mono" id="f-model" style="font-size:13px">
+              ${(m=>{const cur=c.chat_endpoint||"databricks-claude-sonnet-4-6";
+                const list=m.includes(cur)?m:[cur,...m];
+                return list.map(x=>`<option value="${esc(x)}" ${x===cur?"selected":""}>${esc(x)}${
+                  x===scan.model_resolved?" · answers":x===cur&&!m.includes(cur)?" · configured, not seen here":""}</option>`).join("");
+              })(scan.models||[])}
+            </select>
+            <div class="hint">Every model found in this workspace — serving endpoints and AI
+              Gateway. If the pick stops answering, go finds one that does and says so in the log.</div>
           </div>
         </details>
       </div>

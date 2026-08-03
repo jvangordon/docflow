@@ -304,7 +304,7 @@ def api_scan():
     except Exception:
         pass
     try:
-        out["models"] = pipeline.model_candidates()[:20]
+        out["models"] = pipeline.models_available()
         out["model_resolved"] = pipeline._MODEL["name"]
     except Exception:
         pass

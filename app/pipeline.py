@@ -131,6 +131,39 @@ def model_candidates() -> list[str]:
     return out
 
 
+def models_available() -> list[str]:
+    """Model names actually discovered in this workspace, quality-ranked.
+    Feeds the Start page picker, so no blind spellings belong here."""
+    out: list[str] = []
+
+    def push(n):
+        if n and n not in out:
+            out.append(n)
+
+    try:
+        for e in wc().serving_endpoints.list():
+            n = e.name or ""
+            if n.startswith("databricks-") and not any(
+                    k in n for k in ("embed", "gte-", "bge-", "image")):
+                push(n)
+    except Exception:
+        pass
+    try:
+        for cat, sch in (("system", "ai"), ("workspace", "default")):
+            for m in wc().registered_models.list(catalog_name=cat, schema_name=sch):
+                if m.name and not any(k in m.name for k in ("embed", "gte", "bge")):
+                    push(f"{cat}.{sch}.{m.name}")
+    except Exception:
+        pass
+
+    def rank(n):
+        for i, fam in enumerate(_FAMILIES):
+            if fam in n:
+                return i
+        return len(_FAMILIES)
+    return sorted(out, key=lambda n: (rank(n), n))[:30]
+
+
 def chat_model() -> str:
     """The model every ai_query in the app calls. Resolved beats configured."""
     return _MODEL["name"] or CHAT_ENDPOINT
