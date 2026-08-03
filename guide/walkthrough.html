@@ -3,23 +3,32 @@
   <div class="kick"><i></i>DocFlow · visual walkthrough</div>
   <h1>Cold workspace to<br>documents <em>processing</em>.</h1>
   <p class="lede">Your workspace is empty right now: no app, no warehouse, no schema, no agents.
-  Follow these eight steps and you will be watching documents move through Agent Bricks in
+  Follow these six steps and you will be watching documents move through Agent Bricks in
   about fifteen minutes.</p>
   <div class="facts">
-    <span><b>6</b> steps</span><span><b>1</b> command to copy</span>
+    <span><b>6</b> steps</span><span><b>0 or 1</b> commands</span>
     <span><b>2</b> buttons to press</span><span>run takes <b>~2 min</b></span>
   </div>
 </div>
 
 <section class="step"><div class="stephead"><div class="num">1</div><h2>Install it</h2><div class="mins">4 to 6 min</div></div><div class="body">
-<p>One command. It creates the app, uploads the code, starts it, then gives the app's own
-identity the two rights it needs to set the workspace up for you.</p><div class="cmd"><div class="bar"><span>paste into terminal</span><button>Copy</button></div><pre>cd ~/projects/agentbricks-doc-demo &amp;&amp; python3 install.py</pre></div>
-<p class="sub">It prints your app URL when it finishes. Run it again any time to update the app.</p>
-<div class="look"><b>No Databricks CLI on this machine?</b><p>Then use the workspace instead:
-push this folder to a Git repo, open your Databricks workspace, choose Create then Git folder
-and paste the repo URL. Then go to Compute, Apps, Create app, and point it at the
-<span class="mono">app</span> folder inside the clone. A workspace admin grants the app
-"Allow cluster creation" plus USE CATALOG and CREATE SCHEMA, and you are at step 2.</p></div></div></section>
+<p><b>Pick whichever suits the workspace you are in.</b> Both end in the same place.</p>
+
+<p style="margin-top:20px"><b>A · From Git, no command line at all.</b> Best in a customer
+workspace, or on any machine without the Databricks CLI.</p>
+<ol class="gitsteps">
+  <li>In the Databricks workspace: <b>Workspace</b>, <b>Create</b>, <b>Git folder</b>, paste the
+      repo URL, <b>Create</b>. A public repo needs no credentials.</li>
+  <li>Open <span class="mono">setup_databricks.py</span> inside the clone and press
+      <b>Run all</b>.</li>
+</ol>
+<p class="sub">The notebook runs as you, which is what makes this work: it creates the app,
+deploys the code straight out of the Git folder, then grants the app the two rights it needs
+to set the workspace up for itself. It finishes by printing a link to the app.</p>
+<p class="sub">To update later: press <b>Pull</b> in the Git folder, then run the notebook again.</p>
+
+<p style="margin-top:24px"><b>B · One command, if you have the CLI.</b></p><div class="cmd"><div class="bar"><span>paste into terminal</span><button>Copy</button></div><pre>cd ~/projects/agentbricks-doc-demo &amp;&amp; python3 install.py</pre></div>
+<p class="sub">Does exactly the same three things, and prints the app URL when it finishes.</p></div></section>
 
 <section class="step"><div class="stephead"><div class="num">2</div><h2>Open it</h2><div class="mins">1 min</div></div><div class="body">
 <p>Open your app URL. You land on <b>Start</b>. The left side is the setup form, the right
@@ -176,6 +185,8 @@ td{padding:10px 12px;border-bottom:1px solid var(--hair);color:var(--ink2)}
 tr:last-child td{border-bottom:0}
 td.t{font-family:var(--mono);color:var(--faint);white-space:nowrap}
 
+.gitsteps{margin:12px 0 14px 20px;padding:0;color:var(--ink2);font-size:15px;line-height:1.9}
+.gitsteps li{margin-bottom:4px}
 .end{margin-top:64px;padding-top:28px;border-top:1px solid var(--hair2);color:var(--faint);font-size:14px}
 @media (max-width:720px){.body{margin-left:0}.stephead .mins{display:none}}
 </style>
