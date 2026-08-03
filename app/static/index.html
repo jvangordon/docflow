@@ -672,8 +672,9 @@ async function renderFlow(){
   const lanes={ie:[],ka:[],ie_ka:[],secure:[],archive:[]};
   docs.forEach(d=>{ if(lanes[d.lane]) lanes[d.lane].push(d); });
   const inFlight = docs.filter(d=>!d.lane).length;
-  const running = g.phase==="running" || st.phase && !["done","error","idle"].includes(st.phase);
-  $("#flowover").textContent = `Run ${st.run_id||""} · ${g.phase==="running"?"live":g.phase||""}`;
+  const running = g.phase==="running" || st.phase && !["done","error","idle","staged"].includes(st.phase);
+  const phaseWord = g.phase==="running"?"live":g.phase==="prepared"?"staged":g.phase||"";
+  $("#flowover").textContent = `Run ${st.run_id||""} · ${phaseWord}`;
   const pb=$("#procbar");
   if(pb){
     if(g.phase==="prepared"){
@@ -690,48 +691,47 @@ async function renderFlow(){
       }; }
     } else if(pb.innerHTML && g.phase!=="prepared"){ pb.innerHTML=""; }
   }
-  const termY={ie:7, ka:26, ie_ka:45, secure:64, archive:81};
-  const laneMeta={
-    ie:["Information Extraction","fields → Delta tables",`${lanes.ie.length} landed`,"ie",""],
-    ka:["Knowledge Assistant","Agent Bricks · cited answers",`${lanes.ka.length+lanes.ie_ka.length} askable · incl. Both`,"ka",""],
-    ie_ka:["Both · IE + KA","one document, two capabilities",`${lanes.ie_ka.length} docs`,"ie","hotT"],
-    secure:["Secure filing only","redacted · restricted grants",`${lanes.secure.length} sealed`,"sec",""],
-    archive:["No action","retained · lineage kept",`${lanes.archive.length}`,"mut","archT"]};
-  $("#river").innerHTML = `
-    <svg viewBox="0 0 1120 560" class="river">
-      <defs>
-        <linearGradient id="gIE" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5C6670"/><stop offset="1" stop-color="#4ADE97"/></linearGradient>
-        <linearGradient id="gKA" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5C6670"/><stop offset="1" stop-color="#B49BF6"/></linearGradient>
-        <linearGradient id="gSEC" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5C6670"/><stop offset="1" stop-color="#5CA8E8"/></linearGradient>
-        <linearGradient id="gIN" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FF3B20"/><stop offset="1" stop-color="#FF7A45"/></linearGradient>
-      </defs>
-      <path d="M118,268 C 190,268 210,268 282,268" class="rp ${running?"on":""}" stroke="url(#gIN)" stroke-width="2.25"/>
-      <path d="M418,252 C 560,240 640,86  838,86"  class="rp ${lanes.ie.length||running?"on":""}" stroke="url(#gIE)"/>
-      <path d="M418,262 C 580,258 660,192 838,192" class="rp ${lanes.ka.length||running?"on":""}" stroke="url(#gKA)"/>
-      <path d="M418,272 C 560,286 640,296 836,296" class="rp ${lanes.ie_ka.length||running?"on":""}" stroke="url(#gIE)"/>
-      <path d="M418,276 C 566,292 646,302 836,302" class="rp ${lanes.ie_ka.length||running?"on":""}" stroke="url(#gKA)"/>
-      <path d="M418,284 C 560,306 640,402 838,402" class="rp ${lanes.secure.length||running?"on":""}" stroke="url(#gSEC)"/>
-      <path d="M418,290 C 540,318 620,492 838,492" class="rp" stroke="var(--ghost)"/>
-    </svg>
-    <div class="node" style="left:2.2%;top:38%">
-      <div class="pilewrap"><div class="sheet"></div><div class="sheet"></div>
-        <div class="sheet"><span class="cnt num">${docs.length||"·"}</span><span class="cl">docs</span></div></div>
-      <div class="nlbl">INBOX<span>ai_parse_document</span></div></div>
-    <div class="node" style="left:26.5%;top:34%">
-      <div class="ring"><div class="ring2"></div><span class="num">${inFlight||docs.length||"·"}</span></div>
-      <div class="nlbl">CLASSIFY + ROUTE<span>one decision record per doc</span></div></div>
-    ${Object.entries(laneMeta).map(([k,m])=>`
-      <div class="term ${m[4]}" style="left:75%;top:${termY[k]}%">
-        <b>${m[0]}</b><span>${m[1]}</span>
-        <div class="tmeta"><span class="tag ${m[3]}" style="font-size:9px"><i class="d"></i>${m[2]}</span></div>
-      </div>`).join("")}`;
+  // Structure renders once; polls only touch text and classes. Rebuilding the
+  // SVG every poll restarts its animations, which is why nothing ever visibly
+  // moved before.
+  if(!document.getElementById("riversvg")) buildRiver();
+  const set=(id,t)=>{const el=document.getElementById(id); if(el&&el.textContent!==String(t)) el.textContent=t;};
+  const onoff=(id,on)=>{const el=document.getElementById(id); if(el) el.classList.toggle("on",!!on);};
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const dot=(id,show)=>{const el=document.getElementById(id); if(el) el.style.display=(show&&!reduce)?"":"none";};
+  set("c-inbox", docs.length||"·");
+  set("c-hub", inFlight||docs.length||"·");
+  // Exclusive counts on every card: the five badges sum to the inbox, always.
+  set("b-ie", `${lanes.ie.length} landed`);
+  set("b-ka", `${lanes.ka.length} direct`);
+  set("b-both", `${lanes.ie_ka.length} docs`);
+  set("b-sec", `${lanes.secure.length} sealed`);
+  set("b-arch", `${lanes.archive.length}`);
+  onoff("p-in", running);
+  onoff("p-ie", lanes.ie.length||running);
+  onoff("p-ka", lanes.ka.length||running);
+  onoff("p-b1", lanes.ie_ka.length||running);
+  onoff("p-b2", lanes.ie_ka.length||running);
+  onoff("p-sec", lanes.secure.length||running);
+  ["d-in","d-ie","d-ka","d-b1","d-b2","d-sec"].forEach(d=>dot(d, running));
   const money = st.money||{};
+  const routed = lanes.ie.length+lanes.ka.length+lanes.ie_ka.length+lanes.secure.length+lanes.archive.length;
+  const eq = `${lanes.ie.length}+${lanes.ka.length}+${lanes.ie_ka.length}+${lanes.secure.length}+${lanes.archive.length} = ${routed}`;
+  const hm = ts => ts?new Date(ts*1000).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",second:"2-digit"}):"—";
+  const when = g.phase==="done"
+    ? `<span>started <b>${hm(g.started)}</b></span><span>finished <b>${hm(g.finished)}</b></span>`
+      + (g.sections&&g.sections["Total, go to ready"]?`<span>total <b>${g.sections["Total, go to ready"]}s</b></span>`:"")
+    : g.phase==="running"
+    ? `<span>started <b>${hm(g.started)}</b></span><span>elapsed <b>${st.elapsed_s||Math.max(0,Math.round(Date.now()/1000-(g.started||Date.now()/1000)))}s</b></span>`
+    : g.phase==="prepared" ? `<span>staged <b>${hm(g.started?g.started+ (g.steps&&g.steps.length?g.steps[g.steps.length-1].t:0):0)}</b> · waiting for your cue</span>` : "";
   $("#tick").innerHTML = docs.length
-    ? `<span>documents <b>${docs.length}</b></span>
+    ? `<span>inbox <b class="num">${docs.length}</b></span>
+       <span>routed <b class="num">${eq}</b>${inFlight?` <b style="color:var(--faint)">· ${inFlight} in flight</b>`:""}</span>
        <span>caught <b style="color:var(--lava2)">${moneyFmt(money.caught_usd)}</b></span>
        <span>est. cost <b>${money.cost_usd!=null?("$"+money.cost_usd):"—"}</b></span>
-       <span>elapsed <b>${st.elapsed_s||0}s</b></span>
-       <span>phase <b>${esc(st.phase||g.phase||"idle")}</b></span>`
+       ${when}`
+    : g.phase==="prepared"
+    ? `<span>24 documents staged · nothing has moved yet · press <b>Process documents</b> above</span>`
     : `<span>Waiting for a run. Press go on the Start page and the river comes alive.</span>`;
   const hero = docs.find(d=>d.why) ;
   if(hero){ $("#insp").style.display="block";
@@ -751,6 +751,55 @@ async function renderFlow(){
       <div class="kv"><div class="k">agent agrees</div><div class="v">${hero.policy_agrees===false?"no · shown":"yes"}</div></div>
     </div>
     <div class="pull"><span class="plbl">why it went where it went</span>${esc(hero.why||"")}</div>`; }
+}
+function buildRiver(){
+  const termY={ie:7, ka:26, ie_ka:45, secure:64, archive:81};
+  const meta={
+    ie:["Information Extraction","ai_extract → Delta tables · managed agent auto-detected","b-ie","ie",""],
+    ka:["Knowledge Assistant","the one Agent Bricks type with a create API · covers Both too","b-ka","ka",""],
+    ie_ka:["Both · IE + KA","one document, two capabilities","b-both","ie","hotT"],
+    secure:["Secure filing only","redacted · its own locked volume","b-sec","sec",""],
+    archive:["No action","retained · lineage kept","b-arch","mut","archT"]};
+  // Dots ride the same paths the strokes animate along. SMIL restarts if this
+  // markup is rebuilt, hence build-once.
+  const dot=(id,path,fill,dur,begin)=>`
+    <circle id="${id}" r="4.5" fill="${fill}" style="display:none">
+      <animateMotion dur="${dur}s" repeatCount="indefinite" begin="${begin}s"><mpath href="#${path}"/></animateMotion>
+    </circle>`;
+  $("#river").innerHTML = `
+    <svg viewBox="0 0 1120 560" class="river" id="riversvg">
+      <defs>
+        <linearGradient id="gIE" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5C6670"/><stop offset="1" stop-color="#4ADE97"/></linearGradient>
+        <linearGradient id="gKA" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5C6670"/><stop offset="1" stop-color="#B49BF6"/></linearGradient>
+        <linearGradient id="gSEC" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5C6670"/><stop offset="1" stop-color="#5CA8E8"/></linearGradient>
+        <linearGradient id="gIN" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FF3B20"/><stop offset="1" stop-color="#FF7A45"/></linearGradient>
+      </defs>
+      <path id="p-in"  d="M118,268 C 190,268 210,268 282,268" class="rp" stroke="url(#gIN)" stroke-width="2.25"/>
+      <path id="p-ie"  d="M418,252 C 560,240 640,86  838,86"  class="rp" stroke="url(#gIE)"/>
+      <path id="p-ka"  d="M418,262 C 580,258 660,192 838,192" class="rp" stroke="url(#gKA)"/>
+      <path id="p-b1"  d="M418,272 C 560,286 640,296 836,296" class="rp" stroke="url(#gIE)"/>
+      <path id="p-b2"  d="M418,276 C 566,292 646,302 836,302" class="rp" stroke="url(#gKA)"/>
+      <path id="p-sec" d="M418,284 C 560,306 640,402 838,402" class="rp" stroke="url(#gSEC)"/>
+      <path id="p-arch" d="M418,290 C 540,318 620,492 838,492" class="rp" stroke="var(--ghost)"/>
+      ${dot("d-in","p-in","url(#gIN)",1.9,0)}
+      ${dot("d-ie","p-ie","#4ADE97",2.6,0.2)}
+      ${dot("d-ka","p-ka","#B49BF6",2.9,1.1)}
+      ${dot("d-b1","p-b1","#4ADE97",2.4,0.6)}
+      ${dot("d-b2","p-b2","#B49BF6",2.4,1.8)}
+      ${dot("d-sec","p-sec","#5CA8E8",3.1,1.4)}
+    </svg>
+    <div class="node" style="left:2.2%;top:38%">
+      <div class="pilewrap"><div class="sheet"></div><div class="sheet"></div>
+        <div class="sheet"><span class="cnt num" id="c-inbox">·</span><span class="cl">docs</span></div></div>
+      <div class="nlbl">INBOX<span>ai_parse_document</span></div></div>
+    <div class="node" style="left:26.5%;top:34%">
+      <div class="ring"><div class="ring2"></div><span class="num" id="c-hub">·</span></div>
+      <div class="nlbl">CLASSIFY + ROUTE<span>structured ai_query · no UI agent needed</span></div></div>
+    ${Object.entries(meta).map(([k,m])=>`
+      <div class="term ${m[4]}" style="left:75%;top:${termY[k]}%">
+        <b>${m[0]}</b><span>${m[1]}</span>
+        <div class="tmeta"><span class="tag ${m[3]}" style="font-size:9px"><i class="d"></i><span id="${m[2]}">·</span></span></div>
+      </div>`).join("")}`;
 }
 const moneyFmt = v => v!=null?("$"+Number(v).toLocaleString(undefined,{maximumFractionDigits:0})):"—";
 // Cents matter when a customer cross-checks a page against Genie's own total.

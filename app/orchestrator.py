@@ -467,33 +467,63 @@ def start(cfg: dict, stage: str = "all") -> bool:
 def ka_state() -> dict:
     w = _w()
     # An app identity may not see assistants it didn't create in list results,
-    # even with an ACL. The serving endpoint is the reliable signal: ka-* visible
-    # and queryable means the assistant is live.
+    # A ka-* endpoint being Ready proves serving works, not that the assistant
+    # can answer: an assistant with no attached source serves an endpoint that
+    # errors with 'qgen requires at least one retrieval tool'. Ready therefore
+    # requires a source whenever the assistant record is visible to us.
+    ep = None
     try:
         for e in w.serving_endpoints.list():
             if e.name and e.name.startswith("ka-"):
-                return {"state": "ACTIVE", "endpoint": e.name,
-                        "sources": ["UPDATED"], "ready": True, "via": "endpoint"}
+                ep = e.name
+                break
     except Exception:
         pass
     try:
         for x in w.knowledge_assistants.list_knowledge_assistants():
             if (x.display_name or "") == KA_DISPLAY:
                 out = {"state": str(x.state).split(".")[-1] if x.state else "",
-                       "endpoint": x.endpoint_name, "name": x.name}
+                       "endpoint": x.endpoint_name or ep, "name": x.name}
                 try:
                     srcs = list(w.knowledge_assistants.list_knowledge_sources(x.name))
                     out["sources"] = [str(s.state).split(".")[-1] if s.state else ""
                                       for s in srcs]
                 except Exception:
                     out["sources"] = []
-                # Ready when at least one source finished indexing and an endpoint exists.
-                out["ready"] = bool(out.get("endpoint")) and any(
-                    s in ("UPDATED", "READY", "ACTIVE", "ONLINE") for s in out["sources"])
+                out["ready"] = bool(out.get("endpoint")) and bool(out["sources"])
+                out["indexed"] = any(s in ("UPDATED", "READY", "ACTIVE", "ONLINE")
+                                     for s in out["sources"])
                 return out
-    except Exception as e:
-        return {"state": "unknown", "ready": False, "error": str(e)[:120]}
+    except Exception:
+        pass
+    if ep:
+        # Endpoint visible but the assistant record is not (adopted from a
+        # different owner). Optimistic, and ask() degrades honestly on error.
+        return {"state": "ACTIVE", "endpoint": ep, "sources": [],
+                "ready": True, "via": "endpoint"}
     return {"state": "absent", "ready": False}
+
+
+def _attach_source_async() -> None:
+    """One quiet attempt to give the assistant its volume, off-thread."""
+    def _run():
+        try:
+            from databricks.sdk.service import knowledgeassistants as K
+            w = _w()
+            for x in w.knowledge_assistants.list_knowledge_assistants():
+                if (x.display_name or "") == KA_DISPLAY:
+                    try:
+                        if list(w.knowledge_assistants.list_knowledge_sources(x.name)):
+                            return
+                    except Exception:
+                        pass
+                    w.knowledge_assistants.create_knowledge_source(x.name, K.KnowledgeSource(
+                        display_name="demo-documents", description="Demo document volume",
+                        source_type="files", files=K.FilesSpec(path=f"{pipeline.VOL_ROOT}/inbox")))
+                    return
+        except Exception:
+            pass
+    threading.Thread(target=_run, daemon=True).start()
 
 
 def route_question(question: str) -> str:
@@ -565,10 +595,15 @@ def ask_genie(question: str) -> dict:
 def ask_assistant(question: str) -> dict:
     st = ka_state()
     if not st.get("ready"):
+        if st.get("endpoint") and not st.get("sources"):
+            _attach_source_async()   # self-heal: the attach never landed
+            msg = ("The assistant exists but is not connected to the documents yet. "
+                   "Connecting it now — ask this exact question again in a few minutes.")
+        else:
+            msg = ("The Knowledge Assistant for this run is still being prepared. "
+                   "Ask this one again in a few minutes.")
         return {"engine": "assistant", "pending": True, "state": st.get("state"),
-                "sources": st.get("sources", []),
-                "text": "The Knowledge Assistant for this run is still being prepared. "
-                        "Ask this one again in a few minutes."}
+                "sources": st.get("sources", []), "text": msg}
     w = _w()
     t0 = time.time()
     try:
@@ -586,7 +621,16 @@ def ask_assistant(question: str) -> dict:
         return {"engine": "assistant", "seconds": round(time.time() - t0, 1),
                 "text": text, "endpoint": st["endpoint"]}
     except Exception as e:
-        return {"engine": "assistant", "error": str(e)[:250], "endpoint": st.get("endpoint")}
+        msg = str(e)
+        if "retrieval tool" in msg or "KBQA" in msg:
+            # The endpoint serves but the assistant has no source: attach one
+            # quietly and answer like the pending case instead of erroring.
+            _attach_source_async()
+            return {"engine": "assistant", "pending": True,
+                    "text": "The assistant is not connected to its documents yet. "
+                            "Connecting it now — ask this exact question again in a "
+                            "few minutes."}
+        return {"engine": "assistant", "error": msg[:250], "endpoint": st.get("endpoint")}
 
 
 def ask(question: str) -> dict:
