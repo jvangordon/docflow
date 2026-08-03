@@ -303,16 +303,19 @@ function formComplete(){
 }
 function gateMsg(){
   const rd=S.ready||{}, blockers=rd.blockers||[];
-  const running = !!(S.golog && S.golog.phase==="running");
-  if(running) return "The run is working. The right column is live.";
+  const phase = S.golog && S.golog.phase;
+  if(phase==="running") return "Working. The right column is live.";
+  if(phase==="prepared") return "Everything is staged and nothing has moved. Open Flow so the room is watching, then press.";
   if(blockers.length) return `Step 1 first — ${blockers.length} check${blockers.length>1?"s":""} still red.`;
   if(!formComplete()) return "Step 2 needs a customer name and an industry.";
-  return "Ready. Anything not yet verified is proven in go's first seconds, and a rerun never duplicates.";
+  return "Go stages everything — documents, agents — then stops and waits for your cue to process.";
 }
 function goAllowed(){
   const rd=S.ready||{};
-  const running = !!(S.golog && S.golog.phase==="running");
-  return formComplete() && !(rd.blockers||[]).length && !running;
+  const phase = S.golog && S.golog.phase;
+  if(phase==="running") return false;
+  if(phase==="prepared") return true;      // the button is now Process documents
+  return formComplete() && !(rd.blockers||[]).length;
 }
 function renderStart(){
   const c=S.cfg||{}, scan=S.scan||{}, rd=S.ready||{checks:[]};
@@ -413,11 +416,13 @@ function renderStart(){
 
       <div class="movehead ${S.golog&&S.golog.phase==="done"?"done":""}">
         <span class="mnum">3</span><h3>Press go</h3>
-        <span class="mstat">${S.golog&&S.golog.phase==="done"&&ranSecs?`ran in ${ranSecs}s`:"~2 min"}</span>
+        <span class="mstat">${S.golog&&S.golog.phase==="done"&&ranSecs?`ran in ${ranSecs}s`
+          :S.golog&&S.golog.phase==="prepared"?"staged · your cue":"~2 min"}</span>
       </div>
       <div class="gobar">
-        <button class="btn hot" id="gobtn" ${goAllowed()?"":"disabled"}>${
-          S.golog&&S.golog.phase==="running"?"Running":"Go"}</button>
+        <button class="btn hot" id="gobtn" ${goAllowed()||S.golog&&S.golog.phase==="prepared"?"":"disabled"}>${
+          S.golog&&S.golog.phase==="running"?"Running"
+          :S.golog&&S.golog.phase==="prepared"?"Process documents":"Go"}</button>
         <span class="msg" id="gomsg">${esc(gateMsg())}</span>
       </div>
     </div>
@@ -427,8 +432,8 @@ function renderStart(){
       ${started ? `
       <div style="display:flex;align-items:baseline;gap:14px;margin:14px 0 14px">
         <span style="font:500 11.5px var(--mono);color:var(--dim)" id="runsum">${
-          S.golog.phase==="running"?"working":S.golog.phase==="done"
-            ?`ready in ${S.golog.sections["Total, go to ready"]||"—"}s`:"stopped"}</span>
+          S.golog.phase==="running"?"working":S.golog.phase==="prepared"?"staged · nothing processed yet"
+            :S.golog.phase==="done"?`ready in ${S.golog.sections["Total, go to ready"]||"—"}s`:"stopped"}</span>
       </div>
       <div class="spine" id="golog">${renderGolog()}</div>` : `
       <div class="spine" style="margin-top:16px">
@@ -439,9 +444,10 @@ function renderStart(){
           <div class="bs">A text classifier reads every page. A Knowledge Assistant is created
             and pointed at the documents. Extraction runs on Document Intelligence, upgraded to
             a managed agent when one exists. A Genie space lands on the extracted tables.</div></div>
-        <div class="beat"><div class="bt">Routes every document, on screen</div>
-          <div class="bs">Watch each page classified and sent down its lane on the Flow page —
-            extraction, assistant, both, or secure filing that no AI reads.</div></div>
+        <div class="beat"><div class="bt">Then waits for your cue</div>
+          <div class="bs">Nothing processes until you press Process documents — from here or
+            from the Flow page, with the room watching each page classified and sent down its
+            lane: extraction, assistant, both, or secure filing that no AI reads.</div></div>
         <div class="beat"><div class="bt">Ends on pages their team could use</div>
           <div class="bs">A claims desk and a supplier desk built from the extracted fields, and
             Ask, where every answer cites the page it came from.</div></div>
@@ -580,8 +586,9 @@ function bindStart(){
     renderStart();
   });
   $("#gobtn").onclick=async()=>{
-    await saveCfg();
-    try{ await post("/api/go"); }catch(e){ $("#gomsg").textContent=e.message; return; }
+    const stage = S.golog && S.golog.phase==="prepared" ? "process" : "prepare";
+    if(stage==="prepare") await saveCfg();
+    try{ await post("/api/go", {stage}); }catch(e){ $("#gomsg").textContent=e.message; return; }
     pollGo();
   };
 }
@@ -595,9 +602,10 @@ function pollGo(){
       } else if(el){ el.innerHTML=renderGolog(); }
       const gb=$("#gobtn"); if(gb){ gb.disabled = S.golog && S.golog.phase==="running";
         gb.textContent = S.golog&&S.golog.phase==="running"?"Running":"Go"; } }
-    if(S.golog && (S.golog.phase==="done"||S.golog.phase==="error")){
+    if(S.golog && (S.golog.phase==="done"||S.golog.phase==="error"||S.golog.phase==="prepared")){
       stopPollers();
-      // Re-render fully so the header stops saying "working" and Go re-enables.
+      // Re-render fully so the header stops saying "working" and the button
+      // becomes whatever the phase calls for.
       if(S.page==="start"){
         S.ready = await j("/api/readiness").catch(()=>S.ready);
         renderStart();
@@ -650,6 +658,7 @@ function loadFlow(){
   <h1>Documents moving through the bricks</h1>
   <p class="dek">Each document is parsed, classified with a written reason, and routed to the capability it needs. The board updates as stages complete.</p>
   <div class="rule"></div>
+  <div id="procbar"></div>
   <div class="hero">
     <div class="riverwrap" id="river"></div>
     <div class="tickline num" id="tick"></div>
@@ -665,6 +674,22 @@ async function renderFlow(){
   const inFlight = docs.filter(d=>!d.lane).length;
   const running = g.phase==="running" || st.phase && !["done","error","idle"].includes(st.phase);
   $("#flowover").textContent = `Run ${st.run_id||""} · ${g.phase==="running"?"live":g.phase||""}`;
+  const pb=$("#procbar");
+  if(pb){
+    if(g.phase==="prepared"){
+      if(!pb.innerHTML) pb.innerHTML = `
+        <div class="gobar" style="margin-bottom:18px">
+          <button class="btn hot" id="procbtn">Process documents</button>
+          <span class="msg">Everything is staged. Press, and watch each document take its lane.</span>
+        </div>`;
+      const b2=$("#procbtn");
+      if(b2 && !b2._wired){ b2._wired=true; b2.onclick=async()=>{
+        b2.disabled=true; b2.innerHTML=`<span class="spin"></span> Processing`;
+        try{ await post("/api/go", {stage:"process"}); }
+        catch(e){ b2.disabled=false; b2.textContent="Process documents"; }
+      }; }
+    } else if(pb.innerHTML && g.phase!=="prepared"){ pb.innerHTML=""; }
+  }
   const termY={ie:7, ka:26, ie_ka:45, secure:64, archive:81};
   const laneMeta={
     ie:["Information Extraction","fields → Delta tables",`${lanes.ie.length} landed`,"ie",""],

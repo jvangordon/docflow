@@ -311,8 +311,19 @@ def api_scan():
     return out
 
 
+class GoBody(BaseModel):
+    # prepare: stage everything, stop before documents move (the default —
+    # a presenter starts the flow on their own cue)
+    # process: run the staged documents through the lanes
+    # all: both at once, for tests and headless runs
+    stage: str = "prepare"
+
+
 @app.post("/api/go")
-def api_go():
+def api_go(body: GoBody | None = None):
+    stage = (body.stage if body else "prepare")
+    if stage not in ("prepare", "process", "all"):
+        return JSONResponse({"error": f"unknown stage '{stage}'"}, status_code=400)
     cfg = appconfig.load_config()
     missing = [k for k in ("company", "industry", "catalog", "schema") if not cfg.get(k)]
     if missing:
@@ -329,9 +340,11 @@ def api_go():
                  "blockers": rd["blockers"]}, status_code=409)
     except Exception:
         pass                       # readiness itself failing must not strand go
-    if not orchestrator.start(cfg):
-        return JSONResponse({"error": "a run is already in progress"}, status_code=409)
-    return {"started": True}
+    if not orchestrator.start(cfg, stage):
+        return JSONResponse(
+            {"error": "a run is already in progress" if orchestrator.GO["phase"] == "running"
+             else "nothing is staged yet: press go first"}, status_code=409)
+    return {"started": True, "stage": stage}
 
 
 @app.get("/api/golog")

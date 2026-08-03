@@ -342,6 +342,15 @@ def readiness(deep: bool = False) -> dict:
         "Go creates it and points it at the document volume. Nothing to do here.",
         auto=True)
 
+    add("bricks_ui", "Agent Bricks pages open in the UI", False,
+        "The run creates and uses its agents over the API either way. Opening "
+        "them in the Agents UI mid-demo is preview-gated per workspace, and "
+        "the API cannot see that flag, so check it by eye once.",
+        link=f"{host}/ml/agents", link_label="Open Agents",
+        human="If an agent row there says 'Brick type not enabled', flip the "
+              "Agent Bricks previews on, or skip the show-the-UI beat.",
+        optional=True)
+
     ie = [n for n in custom if any(k in n.lower() for k in ("extract", "kie", "classif"))]
     add("agent_bricks_ie", "Information Extraction agent", bool(ie),
         f"detected: {ie[0]} · the run uses it" if ie else

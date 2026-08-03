@@ -102,10 +102,11 @@ try:
     rec("second press refused", results.count(True) == 1, f"accepted={results.count(True)}")
     # let it settle rather than leaving a half run behind
     for _ in range(120):
-        if orchestrator.GO["phase"] in ("done", "error", "idle"):
+        if orchestrator.GO["phase"] in ("done", "error", "idle", "prepared"):
             break
         time.sleep(2)
-    rec("run reached a terminal state", orchestrator.GO["phase"] in ("done", "error", "idle"),
+    rec("run reached a terminal state",
+        orchestrator.GO["phase"] in ("done", "error", "idle", "prepared"),
         orchestrator.GO["phase"])
 except Exception as e:
     rec("double press handled", False, str(e)[:90])

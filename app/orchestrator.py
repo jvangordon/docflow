@@ -375,24 +375,48 @@ def run_documents() -> None:
     _section("Process the documents", time.time() - t0)
 
 
-def go(cfg: dict) -> None:
+def go(cfg: dict, stage: str = "all") -> None:
+    """Two stages so a presenter controls the moment documents start moving.
+
+    prepare: workspace, model, research, documents, agents. Ends 'prepared'
+             with everything staged and nothing processed.
+    process: the documents flow through the lanes. Pressed from the Flow page
+             so the room watches it live, and re-pressable to run it again.
+    all:     both, for tests and headless runs.
+    """
     with _glock:
         if GO["phase"] == "running":
             return
-        GO.update({"phase": "running", "steps": [], "sections": {},
-                   "started": time.time(), "finished": 0.0, "error": ""})
-    # Clear the previous run's board immediately. Otherwise the first 35 seconds
+        if stage == "process":
+            # Keep the prepare log, theme and assets: this is act two of the
+            # same run, not a new one.
+            GO.update({"phase": "running", "error": ""})
+        else:
+            GO.update({"phase": "running", "steps": [], "sections": {},
+                       "started": time.time(), "finished": 0.0, "error": "",
+                       "theme": {}, "assets": {}})
+    # Clear the previous run's board immediately. Otherwise the first seconds
     # of a new run show the last run's finished results under a "live" header.
     with pipeline._lock:
         pipeline.STATE.docs = {}
-        pipeline.STATE.phase = "starting"
+        pipeline.STATE.phase = "staged" if stage == "prepare" else "starting"
         pipeline.STATE.money = {"caught_usd": 0.0, "cost_usd": 0.0}
     try:
-        ensure_infra(cfg)
-        resolve_model()              # fail in second ten, not minute six
-        research_company(cfg)
-        build_corpus(cfg)
-        ensure_ka()                  # indexing continues in background
+        if stage in ("all", "prepare"):
+            ensure_infra(cfg)
+            resolve_model()          # fail in second ten, not minute six
+            research_company(cfg)
+            build_corpus(cfg)
+            ensure_ka()              # indexing continues in background
+        if stage == "prepare":
+            docs = GO["assets"].get("documents", {})
+            n = int(docs.get("generated", 0)) + int(docs.get("customer", 0))
+            with _glock:
+                GO["phase"] = "prepared"
+            _log("Staged", "ok",
+                 f"{n} documents waiting in the inbox · agents deployed · "
+                 f"press Process documents on the Flow page and watch")
+            return
         run_documents()
         ensure_genie()               # after tables exist
         report_ka()                  # honest status, never a wait
@@ -412,11 +436,13 @@ def go(cfg: dict) -> None:
         _log("Stopped", "err", str(e)[:200])
 
 
-def start(cfg: dict) -> bool:
+def start(cfg: dict, stage: str = "all") -> bool:
     with _glock:
         if GO["phase"] == "running":
             return False
-    threading.Thread(target=go, args=(cfg,), daemon=True).start()
+        if stage == "process" and GO["phase"] not in ("prepared", "done", "error"):
+            return False             # nothing staged yet: go prepares first
+    threading.Thread(target=go, args=(cfg, stage), daemon=True).start()
     return True
 
 

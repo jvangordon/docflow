@@ -151,6 +151,7 @@ CHECKS = [
     ("opt", "Document Intelligence functions", "verified at go", "none"),
     ("opt", "Knowledge Assistant", "built at go", "none"),
     ("opt", "Information Extraction agent", "built at go", "none"),
+    ("opt", "Agent Bricks pages in the UI", "check by eye", "none"),
     ("good", "Billed usage visible", "passing", "good"),
 ]
 
@@ -168,7 +169,7 @@ html_out = f"""<div class="wrap">
   about fifteen minutes.</p>
   <div class="facts">
     <span><b>6</b> steps</span><span><b>0 or 1</b> commands</span>
-    <span><b>2</b> buttons to press</span><span>run takes <b>~2 min</b></span>
+    <span><b>3</b> buttons to press</span><span>run takes <b>~2 min</b></span>
   </div>
 </div>
 
@@ -218,7 +219,7 @@ it at once.</p>'''
 <div class="look"><b>What it just made</b><p>A 2X-Small serverless warehouse that stops itself
 after 10 idle minutes, a schema for the tables and Genie space, and a volume with folders for
 documents. When it finishes the card turns green and says the workspace is ready.</p></div>
-<p class="sub">Curious what it checked? Open <b>All 9 checks</b> for the full list.
+<p class="sub">Curious what it checked? Open <b>All 10 checks</b> for the full list.
 Rows that need compute say "verified at go" instead of pretending to pass, and the two
 agent rows sit under "Built for you at go" with nothing for you to do.</p>'''
 + f'<div class="checklist">{rows}</div>')}
@@ -246,10 +247,14 @@ your entries. <b>Go enables the moment both fields are filled.</b></p>'''
 + figure("gobar-closeup.png", "The Go bar, ready.",
          "While anything is missing, Go stays grey and the sentence beside it names what is blocking.", zoom=True))}
 
-{step("5", "Press Go", "~2 min", '''
-<p>The run log takes over the right side and streams with real timings.</p>'''
-+ figure("runlog.png", "The run log, live.",
+{step("5", "Press Go, then give the cue", "~2 min", '''
+<p>Go stages everything and stops: workspace, model, documents written, agents deployed —
+and nothing processed. The log ends on <b>Staged</b>, waiting for you.</p>'''
++ figure("runlog.png", "The run log streams with real timings.",
          "Every step reports its own elapsed time. This is the part to narrate.")
++ '''<p>Now open <b>Flow</b>, get the room looking at the empty lanes, and press.</p>'''
++ figure("procbar.png", "The cue, on the Flow page.",
+         "Documents only start moving when you press this, so the audience sees every page take its lane from the first one.", zoom=True)
 + '''
 <table>
 <tr><th>At</th><th>What happens</th></tr>
@@ -258,10 +263,11 @@ your entries. <b>Go enables the moment both fields are filled.</b></p>'''
 <tr><td class="t">~20s</td><td>Company research, on that same model</td></tr>
 <tr><td class="t">~40s</td><td>Documents generated, watermarked, into their own folder</td></tr>
 <tr><td class="t">~45s</td><td>Knowledge Assistant created · indexing continues in the background and never blocks the run</td></tr>
-<tr><td class="t">~50 to 150s</td><td>Documents processed: parse, classify, route, extract, audit, secure</td></tr>
-<tr><td class="t">~150s</td><td>Genie space over the extracted tables, an honest assistant status, then Ready</td></tr>
+<tr><td class="t">~52s</td><td><b>Staged.</b> Everything waits for your cue</td></tr>
+<tr><td class="t">you press</td><td><b>Process documents</b> — parse, classify, route, extract, audit, secure, live on the lanes</td></tr>
+<tr><td class="t">~2 min later</td><td>Genie space over the extracted tables, an honest assistant status, then Ready</td></tr>
 </table>
-<p>Switch to <b>Flow</b> while it runs. This is the screen to show a customer.</p>'''
+<p>This is the screen to show a customer.</p>'''
 + figure("flow.png", "Documents moving through the bricks.",
          "Click any document to see its routing record, including the sentence explaining why it went where it did."))}
 

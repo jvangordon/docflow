@@ -132,8 +132,8 @@ def run(label, *, fail=None, names=None, cats=None, sysstate="ENABLE_COMPLETED",
         problems.append(f"check '{expect_red}' vanished from the list")
     elif got["ok"]:
         problems.append(f"'{expect_red}' stayed green under its own failure")
-    if len(by) != 9:
-        problems.append(f"emitted {len(by)} checks, expected 9 (a failure hid its neighbours)")
+    if len(by) != 10:
+        problems.append(f"emitted {len(by)} checks, expected 10 (a failure hid its neighbours)")
     if expect_fix and got and got.get("fix_endpoint") != expect_fix:
         problems.append(f"remedy was {got.get('fix_endpoint')}, expected {expect_fix}")
     if got and not got["ok"] and not got.get("auto") and not (
