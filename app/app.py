@@ -239,6 +239,12 @@ def api_fix_probe():
                 "Start a serverless warehouse, then re-check.")
 
 
+@app.post("/api/fix/all")
+def api_fix_all():
+    """Run every available repair in dependency order, once."""
+    return appconfig.fix_everything()
+
+
 @app.get("/api/metrics")
 def api_metrics():
     try:

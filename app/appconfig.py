@@ -478,6 +478,64 @@ def fix_billing() -> dict:
                                 "until then, which never blocks a demo."}
 
 
+def fix_everything() -> dict:
+    """Repair the workspace in one press.
+
+    Order matters: a warehouse has to exist before the catalog and volume can be
+    created, because those run SQL. Each step reports for itself, and one
+    failure never stops the ones that do not depend on it.
+    """
+    done: list[dict] = []
+
+    def run(key, label, fn, needs=None):
+        if needs and not any(d["key"] == needs and d["ok"] for d in done):
+            done.append({"key": key, "label": label, "ok": False, "skipped": True,
+                         "detail": f"skipped, needs {needs} first"})
+            return
+        try:
+            out = fn()
+            ok = out.get("ok", True) is not False
+            done.append({"key": key, "label": label, "ok": ok,
+                         "detail": (out.get("error") or _summarise(out))[:160]})
+        except Exception as e:
+            done.append({"key": key, "label": label, "ok": False,
+                         "detail": _clean(str(e), 150)})
+
+    checks = {c["key"]: c for c in readiness()["checks"]}
+
+    if not checks.get("warehouse", {}).get("ok"):
+        run("warehouse", "Serverless warehouse", create_serverless_warehouse)
+    else:
+        done.append({"key": "warehouse", "label": "Serverless warehouse", "ok": True,
+                     "detail": "already available"})
+
+    if not checks.get("catalog", {}).get("ok"):
+        run("catalog", "Catalog and schema", fix_catalog, needs="warehouse")
+    else:
+        done.append({"key": "catalog", "label": "Catalog and schema", "ok": True,
+                     "detail": "already available"})
+
+    if not checks.get("volume", {}).get("ok"):
+        run("volume", "Document volume", lambda: pipeline.bootstrap(), needs="warehouse")
+    else:
+        done.append({"key": "volume", "label": "Document volume", "ok": True,
+                     "detail": "already available"})
+
+    rd = readiness(deep=True)
+    return {"ok": not rd["blockers"], "steps": done, "readiness": rd,
+            "blockers": rd["blockers"]}
+
+
+def _summarise(out: dict) -> str:
+    if isinstance(out.get("created"), list):
+        return "created " + ", ".join(out["created"])
+    if out.get("warehouse_id"):
+        return f"created {out.get('name', 'warehouse')}, stops after 10 idle minutes"
+    if out.get("statements"):
+        return f"{out['statements']} statements applied"
+    return "done"
+
+
 def fix_probe() -> dict:
     """Start the warehouse, then run the deep checks that need SQL.
 

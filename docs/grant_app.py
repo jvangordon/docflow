@@ -54,30 +54,23 @@ def main() -> int:
             print("             a workspace admin can tick 'Allow cluster creation' on")
             print("             this service principal under Settings, Identity and access.")
 
-    # 2. catalog grants, so the app can create its schema and volume
-    whs = [x for x in w.warehouses.list()
-           if getattr(x, "enable_serverless_compute", False) and x.id]
-    if not whs:
-        print("grants     : skipped, no SQL warehouse exists yet to run GRANT on.")
-        print("             Press 'Create one' in the app, then run this script again")
-        print("             so the catalog fix button can work too.")
-        return 0
-
-    wh = whs[0]
-    if str(getattr(wh.state, "value", wh.state)) != "RUNNING":
-        print(f"grants     : starting {wh.name} to run the GRANT statements")
-        w.warehouses.start(wh.id).result()
-
-    stmts = [
-        f"GRANT USE CATALOG ON CATALOG {CATALOG} TO `{sp_app_id}`",
-        f"GRANT CREATE SCHEMA ON CATALOG {CATALOG} TO `{sp_app_id}`",
-    ]
-    for s in stmts:
-        r = w.statement_execution.execute_statement(
-            warehouse_id=wh.id, statement=s, wait_timeout="50s")
-        state = r.status.state.value if r.status and r.status.state else "?"
-        err = (r.status.error.message[:110] if r.status and r.status.error else "")
-        print(f"grant      : {state:9s} {s.split(' ON ')[0][6:]:<24} {err}")
+    # 2. catalog grants, through the Unity Catalog API rather than SQL, so this
+    #    works on a cold workspace where no warehouse exists yet
+    from databricks.sdk.service.catalog import PermissionsChange, Privilege
+    try:
+        # securable_type is a plain string here; the enum serialises wrong.
+        w.grants.update(
+            securable_type="catalog", full_name=CATALOG,
+            changes=[PermissionsChange(
+                principal=sp_app_id,
+                add=[Privilege.USE_CATALOG, Privilege.CREATE_SCHEMA])])
+        print(f"grants     : USE CATALOG + CREATE SCHEMA on {CATALOG}")
+    except Exception as e:
+        print(f"grants     : FAILED, {str(e)[:170]}")
+        print(f"             a metastore admin can run this in any SQL editor:")
+        print(f"               GRANT USE CATALOG, CREATE SCHEMA ON CATALOG {CATALOG} "
+              f"TO `{sp_app_id}`")
+        return 1
 
     print("\nDone. Open the app and press the fix buttons in the readiness panel.")
     return 0

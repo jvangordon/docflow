@@ -142,13 +142,13 @@ def figure(name, cap_b, cap_t, zoom=False):
 
 CHECKS = [
     ("good", "App identity resolves", "passing", "good"),
-    ("bad", "Serverless SQL warehouse", "Create one", "btn"),
-    ("bad", "Catalog workspace.docflow", "Create schema", "btn"),
-    ("bad", "Document volume writable", "Create volume", "btn"),
+    ("bad", "Serverless SQL warehouse", "app creates it", "btn"),
+    ("bad", "Catalog workspace.docflow", "app creates it", "btn"),
+    ("bad", "Document volume writable", "app creates it", "btn"),
     ("good", "Foundation models reachable", "passing", "good"),
-    ("opt", "Knowledge Assistant", "Create now", "btn"),
+    ("opt", "Knowledge Assistant", "made on Go", "btn"),
     ("opt", "Information Extraction agent", "steps only", "none"),
-    ("bad", "Document Intelligence functions", "waits for warehouse", "none"),
+    ("bad", "Document Intelligence functions", "self-tests after", "none"),
     ("opt", "Billed usage available", "informational", "none"),
 ]
 
@@ -165,62 +165,48 @@ html_out = f"""<div class="wrap">
   Follow these eight steps and you will be watching documents move through Agent Bricks in
   about fifteen minutes.</p>
   <div class="facts">
-    <span><b>8</b> steps</span><span><b>3</b> commands to copy</span>
-    <span><b>4</b> buttons to press</span><span>run takes <b>~2 min</b></span>
+    <span><b>6</b> steps</span><span><b>1</b> command to copy</span>
+    <span><b>2</b> buttons to press</span><span>run takes <b>~2 min</b></span>
   </div>
 </div>
 
-{step("1", "Create the app", "3 to 5 min", '''
-<p>This makes the app and its own identity in Databricks. It takes a few minutes because
-Databricks provisions compute for it.</p>''' + cmd("paste into terminal",
-"cd ~/projects/agentbricks-doc-demo && databricks apps create docflow") + '''
-<p class="sub">When it finishes it prints a URL ending in databricksapps.com. That is your app.</p>''')}
+{step("1", "Install it", "4 to 6 min", '''
+<p>One command. It creates the app, uploads the code, starts it, then gives the app's own
+identity the two rights it needs to set the workspace up for you.</p>''' + cmd("paste into terminal",
+"cd ~/projects/agentbricks-doc-demo && python3 install.py") + '''
+<p class="sub">It prints your app URL when it finishes. Run it again any time to update the app.</p>
+<div class="look"><b>No Databricks CLI on this machine?</b><p>Then use the workspace instead:
+push this folder to a Git repo, open your Databricks workspace, choose Create then Git folder
+and paste the repo URL. Then go to Compute, Apps, Create app, and point it at the
+<span class="mono">app</span> folder inside the clone. A workspace admin grants the app
+"Allow cluster creation" plus USE CATALOG and CREATE SCHEMA, and you are at step 2.</p></div>''')}
 
-{step("2", "Upload the code and start it", "1 to 2 min", '''
-<p>One line: it syncs the source into your workspace and deploys it.</p>''' + cmd("paste into terminal",
-"cd ~/projects/agentbricks-doc-demo && databricks sync app /Workspace/Users/jvangordon@gmail.com/docflow-app --full && databricks apps deploy docflow --source-code-path /Workspace/Users/jvangordon@gmail.com/docflow-app") + '''
-<p class="sub">Wait for <span class="mono">state: SUCCEEDED</span>.</p>''')}
-
-{step("3", "Give the app permission to fix things", "30 sec", '''
-<p>A brand new app has an identity with rights to nothing. Two grants let it repair the
-workspace by itself instead of sending you to the console.</p>''' + cmd("paste into terminal",
-"cd ~/projects/agentbricks-doc-demo && ./.venv/bin/python docs/grant_app.py") + '''
-<div class="look"><b>What this actually does</b><p>Gives the app the "Allow cluster creation"
-entitlement so the warehouse button works, and USE CATALOG plus CREATE SCHEMA so the catalog
-button works. It prints exactly what it granted. Skip it and the app still runs and still
-tells the truth, it just cannot self repair.</p></div>''')}
-
-{step("4", "Open the app and read the panel", "1 min", '''
+{step("2", "Open it", "1 min", '''
 <p>Open your app URL. You land on <b>Start</b>. The left side is the setup form, the right
 side is the readiness panel, and it should be unhappy. That is the point.</p>'''
 + figure("cold-start.png", "The whole Start page, cold.",
          "Form empty on the left, four checks failing on the right, Go greyed out at the bottom.")
 + f'<div class="checklist">{rows}</div>' + '''
-<div class="look"><b>Two things worth noticing before you touch anything</b>
-<p>Go is disabled and the sentence beside it tells you why. And the Document Intelligence
-check offers no button at all, just a greyed note saying it comes after the warehouse,
-because there is no compute to test on yet. The app will not hand you a control that
-cannot work.</p></div>''')}
+<div class="look"><b>What you are looking at</b>
+<p>Left side, the only two things you have to answer. Right side, one card telling you what
+this workspace is missing and offering to fix it. Go is greyed out until both sides are
+happy, and the sentence beside it always says exactly what is holding it up.</p></div>''')}
 
-{step("5", "Press the fixes, top down", "2 min", '''
-<p>Order matters and the panel enforces it. Each button reports what happened underneath itself.</p>'''
-+ figure("checks-closeup.png", "Close up of the failing checks.",
-         "Each red check carries an amber button on the right. Numbered steps appear when there is no API to do it for you.", zoom=True)
+{step("3", "Press one button", "1 min", '''
+<p>The app tells you what the workspace is missing in plain language, and offers to fix all of
+it at once.</p>'''
++ figure("checks-closeup.png", "One card, one button.",
+         "No list of things to work through. It creates the warehouse, the schema and the document volume in order, because each needs the one before it.", zoom=True)
 + '''
-<div class="press"><span class="b">Create one</span><span class="t">Serverless SQL warehouse
-<small>Creates a 2X-Small that stops itself after 10 idle minutes. About a minute.</small></span></div>
-<div class="press"><span class="b">Create schema</span><span class="t">Catalog workspace.docflow
-<small>Creates the schema the run writes into.</small></span></div>
-<div class="press"><span class="b">Create volume</span><span class="t">Document volume
-<small>Creates the volume and its inbox, processed, secure, archive and generated folders.</small></span></div>
-<div class="press"><span class="b">Create now</span><span class="t">Knowledge Assistant, optional
-<small>You can skip this. Go creates it anyway. Pressing it early just starts the document index sooner.</small></span></div>
-<div class="look"><b>Watch this happen</b><p>When the warehouse turns green, the Document
-Intelligence check below it stops waiting and validates itself, because there is finally
-something to test on. You did not press anything for that one.</p></div>
-<p>Press <b>Re-check</b> when you are done. You want <b>6 of 6 required</b>.</p>''')}
+<div class="press"><span class="b">Set up this workspace</span><span class="t">Creates everything the demo needs
+<small>About 45 seconds. Each piece reports for itself underneath, so if one fails you know which.</small></span></div>
+<div class="look"><b>What it just made</b><p>A 2X-Small serverless warehouse that stops itself
+after 10 idle minutes, a schema for the tables and Genie space, and a volume with folders for
+documents. When it finishes the card turns green and says the workspace is ready.</p></div>
+<p class="sub">Curious what it checked? Open <b>See all 9 checks</b> for the full list, including
+the two optional ones the app cannot create for you.</p>''')}
 
-{step("6", "Fill in the four answers", "1 min", '''
+{step("4", "Two answers", "30 sec", '''
 <p>Left side. These drive everything the run generates.</p>'''
 + figure("form-closeup.png", "The setup form.",
          "Customer name and industry are the two that change the demo most.", zoom=True)
@@ -240,7 +226,7 @@ it costs nothing to try.</p></div>
 + figure("gobar-closeup.png", "The Go bar before you are ready.",
          "While anything is missing, Go stays grey and the sentence beside it names what is blocking.", zoom=True))}
 
-{step("7", "Press Go and watch it work", "~2 min", '''
+{step("5", "Press Go", "~2 min", '''
 <p>The run log takes over the right side and streams with real timings.</p>'''
 + figure("runlog.png", "The run log, live.",
          "Every step reports its own elapsed time. This is the part to narrate.")
@@ -258,7 +244,7 @@ it costs nothing to try.</p></div>
 + figure("flow.png", "Documents moving through the bricks.",
          "Click any document to see its routing record, including the sentence explaining why it went where it did."))}
 
-{step("8", "The payoff", "3 min", '''
+{step("6", "The payoff", "3 min", '''
 <p>Three screens carry the story once the run is done.</p>'''
 + figure("ask.png", "Ask, with the work shown.",
          "Numbers go to Genie and come back with the SQL it ran. Wording goes to the Knowledge Assistant and comes back citing a document and page.")

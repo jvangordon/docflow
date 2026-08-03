@@ -124,6 +124,28 @@ select.ctl{appearance:none}
 .legend{display:flex;gap:16px;flex-wrap:wrap;margin:10px 0 4px;
   font:500 10.5px var(--mono);color:var(--faint)}
 .legend b{color:var(--dim);font-weight:700;margin-right:4px}
+/* One obvious action beats a panel of buttons. Detail stays one click away. */
+.setupcard{border:1px solid var(--hair2);border-radius:13px;padding:20px 22px;margin:12px 0 8px;
+  background:linear-gradient(135deg,rgba(255,59,32,.06),transparent 62%),var(--bg2)}
+.setupcard.ready{background:linear-gradient(135deg,rgba(74,222,151,.06),transparent 62%),var(--bg2);
+  border-color:rgba(74,222,151,.3)}
+.sc-t{font-size:17px;font-weight:700;letter-spacing:-.015em}
+.sc-s{font-size:13.5px;color:var(--dim);margin:6px 0 15px;max-width:52ch}
+.setupcard.ready .sc-s{margin-bottom:0}
+.setupcard .fixout{margin-left:0}
+.detail-toggle{margin-top:14px}
+.detail-toggle summary{cursor:pointer;font:600 11px var(--mono);letter-spacing:.13em;
+  text-transform:uppercase;color:var(--faint);list-style:none}
+.detail-toggle summary::after{content:" ▾"}
+.detail-toggle[open] summary::after{content:" ▴"}
+.sc-step{display:flex;gap:9px;align-items:baseline;font:500 12.5px var(--mono);
+  color:var(--dim);padding:3px 0}
+.sc-step b{font-weight:700}
+.sc-step.ok b{color:var(--ie)} .sc-step.bad b{color:var(--warn)}
+.adv summary{cursor:pointer;font:600 9.5px var(--mono);letter-spacing:.14em;
+  text-transform:uppercase;color:var(--faint);list-style:none;padding:6px 0}
+.adv summary::after{content:" ▾"}
+.adv[open] summary::after{content:" ▴"}
 .gobar{display:flex;align-items:center;gap:16px;margin-top:24px;padding:14px 16px;
   border:1px solid var(--hair2);border-radius:12px;background:var(--surf)}
 .gobar .msg{font-size:13px;color:var(--dim)}
@@ -275,7 +297,7 @@ function renderStart(){
   if(!catOptions.includes("workspace.docflow")) catOptions.unshift("workspace.docflow");
   const cur = `${c.catalog||"workspace"}.${c.schema||"docflow"}`;
   const vols = scan.volumes||[];
-  const doneN = ["company","industry"].filter(k=>c[k]).length + (c.catalog?1:0) + 1;
+  const doneN = ["company","industry"].filter(k=>c[k]).length;
   // Go is gated on BOTH the form and the required checks, which is the promise
   // the Start page makes. Optional checks never block.
   const running = !!(S.golog && S.golog.phase==="running");
@@ -283,19 +305,19 @@ function renderStart(){
   const goOK = formComplete() && !blockers.length && !running;
   const golabel = running ? "Running" : "Go";
   const gomsg = running ? "The run is working. The log is on the right."
-    : !formComplete() ? "Fill in the four fields above to enable go."
+    : !formComplete() ? "Add the customer and industry above to enable go."
     : blockers.length ? `Blocked by ${blockers.length} required check${blockers.length>1?"s":""}: ${blockers.join(", ")}.`
     : "Setup can be re-run safely and removed with one click after the demo.";
   stage.innerHTML = `
   <div class="over">Portable installer · this workspace</div>
-  <h1>Four answers, one button.</h1>
+  <h1>Two answers, one button.</h1>
   <p class="dek">DocFlow prepares this workspace for a live document demo. It scans what exists, creates what is missing, and runs documents through Databricks agents while you watch.</p>
   <div class="rule"></div>
   <div class="split">
     <div>
       <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:4px">
         <span class="over">Set up the demo</span>
-        <span style="font:500 11.5px var(--mono);color:var(--dim)">${doneN} of 4</span>
+        <span style="font:500 11.5px var(--mono);color:var(--dim)">${doneN} of 2</span>
         <span style="margin-left:auto;font:500 11px var(--mono);color:var(--faint)">
           scanned · ${cats.length} catalogs · ${vols.length} volumes</span>
       </div>
@@ -307,20 +329,26 @@ function renderStart(){
         <div class="chips">${["Manufacturing","Insurance","Healthcare","Financial services","Retail"]
           .map(x=>`<span class="tag pick ${c.industry===x?"on":""}" data-ind="${x}">${x}</span>`).join("")}</div>
         <div class="hint">Drives the demo vocabulary, the questions, and both operations pages.</div></div>
-      <div class="f ${c.catalog?"done":""}"><label><i class="fnum">3</i>Catalog · schema<em>required</em></label>
-        <select class="ctl mono" id="f-target">
-          ${catOptions.map(o=>`<option ${o===cur?"selected":""}>${esc(o)}</option>`).join("")}
-          <option value="__new">workspace.docflow — create if missing</option>
-        </select>
-        <div class="hint">Extracted tables, the Genie space, and run state land here. Missing pieces are created on go.</div></div>
-      <div class="f done"><label><i class="fnum">4</i>Documents<em>ready</em></label>
-        <select class="ctl mono" id="f-cvol">
-          <option value="">No customer documents · generate everything</option>
-          ${vols.map(v=>`<option ${c.customer_volume===v?"selected":""}>${esc(v)}</option>`).join("")}
-        </select>
-        <div class="hint">Pick a volume if the customer has PDFs; the run copies them in read-only. Generated documents always get their own folder and a SYNTHETIC watermark.</div></div>
-      <div class="f" style="border-bottom:0"><label>Setup model · Databricks AI Gateway</label>
-        <input class="ctl mono" id="f-model" style="font-size:13px" value="${esc(c.chat_endpoint||"databricks-claude-sonnet-4-6")}">
+      <div class="f" style="border-bottom:0">
+        <details class="adv">
+          <summary>Where it writes, and which documents · defaults are fine</summary>
+          <div style="margin-top:12px">
+            <label style="margin-bottom:7px">Catalog and schema</label>
+            <select class="ctl mono" id="f-target">
+              ${catOptions.map(o=>`<option ${o===cur?"selected":""}>${esc(o)}</option>`).join("")}
+              <option value="__new">workspace.docflow — create if missing</option>
+            </select>
+            <div class="hint">Tables, the Genie space and run state land here.</div>
+            <label style="margin:16px 0 7px">Customer documents</label>
+            <select class="ctl mono" id="f-cvol">
+              <option value="">No customer documents · generate everything</option>
+              ${vols.map(v=>`<option ${c.customer_volume===v?"selected":""}>${esc(v)}</option>`).join("")}
+            </select>
+            <div class="hint">Point at a volume of the customer's PDFs and the run reads them in place, generating only what is missing.</div>
+            <label style="margin:16px 0 7px">Setup model</label>
+            <input class="ctl mono" id="f-model" style="font-size:13px" value="${esc(c.chat_endpoint||"databricks-claude-sonnet-4-6")}">
+          </div>
+        </details>
       </div>
       <div class="gobar">
         <button class="btn hot" id="gobtn" ${goOK?"":"disabled"}>${golabel}</button>
@@ -343,13 +371,31 @@ function renderStart(){
         <div id="rdlist" style="margin-top:12px">${renderChecks(rd)}</div>
       </details>` : `
       <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:6px">
-        <span class="over">Readiness</span>
+        <span class="over">Workspace</span>
         <span style="font:500 11.5px var(--mono);color:var(--dim)" id="rdsum"></span>
         <button class="btn" style="margin-left:auto;padding:5px 13px;font-size:11.5px" id="recheck">Re-check</button>
       </div>
-      <div class="legend"><span><b>✓</b>passing</span><span><b>!</b>blocks go</span>
-        <span><b>?</b>not tested yet</span><span><b>○</b>optional, not present</span></div>
-      <div id="rdlist">${renderChecks(rd)}</div>`}
+      ${(rd.blockers||[]).length ? `
+        <div class="setupcard">
+          <div class="sc-t">This workspace needs ${(rd.blockers||[]).length} thing${(rd.blockers||[]).length>1?"s":""} before it can run a demo.</div>
+          <div class="sc-s">A warehouse, a schema, and a place to keep documents. The app can create all of it.</div>
+          <button class="btn hot" id="fixall">Set up this workspace</button>
+          <div class="fixout ${S.fixout.all?S.fixout.all.cls:""}" id="out-all">${
+            S.fixout.all?esc(S.fixout.all.text):""}</div>
+          ${S.fixout.all&&S.fixout.all.steps?S.fixout.all.steps.map(s=>
+            `<div class="sc-step ${s.ok?"ok":"bad"}"><b>${s.ok?"✓":"!"}</b>
+              <span>${esc(s.label)} · ${esc(s.detail||"")}</span></div>`).join(""):""}
+        </div>` : `
+        <div class="setupcard ready">
+          <div class="sc-t">This workspace is ready.</div>
+          <div class="sc-s">Everything the demo needs is in place.</div>
+        </div>`}
+      <details class="detail-toggle" ${(rd.blockers||[]).length?"":""}>
+        <summary>See all ${(rd.checks||[]).length} checks</summary>
+        <div class="legend"><span><b>✓</b>passing</span><span><b>!</b>blocks go</span>
+          <span><b>?</b>not tested yet</span><span><b>○</b>optional, not present</span></div>
+        <div id="rdlist">${renderChecks(rd)}</div>
+      </details>`}
     </div>
   </div>`;
   $("#wsname").textContent = c.company || "";
@@ -411,6 +457,22 @@ function bindStart(){
   $("#f-target").onchange=saveCfg; $("#f-cvol").onchange=saveCfg;
   const rc=$("#recheck");
   if(rc) rc.onclick=async()=>{ S.ready=await j("/api/readiness").catch(()=>S.ready); renderStart(); };
+  const fa=$("#fixall");
+  if(fa) fa.onclick=async()=>{
+    fa.disabled=true; fa.innerHTML=`<span class="spin"></span> Setting up`;
+    let res=null;
+    try{ res=await post("/api/fix/all"); }catch(e){ res={ok:false,error:e.message}; }
+    if(res && res.steps){
+      // Show what each step did, so a failure is attributable rather than vague.
+      S.fixout.all={cls:res.ok?"good":"bad",
+        text:res.ok?"Workspace ready.":`Still blocked by ${(res.blockers||[]).join(", ")}`,
+        steps:res.steps};
+    } else {
+      S.fixout.all={cls:"bad",text:(res&&(res.error||res.human_action))||"Could not complete."};
+    }
+    S.ready=(res&&res.readiness)?res.readiness:await j("/api/readiness").catch(()=>S.ready);
+    renderStart();
+  };
   document.querySelectorAll("button.fixbtn").forEach(b=>b.onclick=async()=>{
     const key=b.dataset.key, label=b.textContent;
     b.disabled=true; b.innerHTML=`<span class="spin"></span>`;
