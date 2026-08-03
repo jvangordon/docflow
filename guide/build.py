@@ -147,11 +147,11 @@ CHECKS = [
     ("bad", "Serverless SQL warehouse", "app creates it", "btn"),
     ("bad", "Catalog workspace.docflow", "app creates it", "btn"),
     ("bad", "Document volume writable", "app creates it", "btn"),
-    ("good", "Foundation models reachable", "passing", "good"),
-    ("opt", "Knowledge Assistant", "made on Go", "btn"),
-    ("opt", "Information Extraction agent", "steps only", "none"),
-    ("bad", "Document Intelligence functions", "self-tests after", "none"),
-    ("opt", "Billed usage available", "informational", "none"),
+    ("opt", "Language model answers", "verified at go", "none"),
+    ("opt", "Document Intelligence functions", "verified at go", "none"),
+    ("opt", "Knowledge Assistant", "built at go", "none"),
+    ("opt", "Information Extraction agent", "built at go", "none"),
+    ("good", "Billed usage visible", "passing", "good"),
 ]
 
 rows = "".join(
@@ -191,19 +191,21 @@ to set the workspace up for itself. It finishes by printing a link to the app.</
 <p class="sub">To update later: press <b>Pull</b> in the Git folder, then run the notebook again.</p>
 
 <p style="margin-top:24px"><b>B · One command, if you have the CLI.</b></p>'''
-+ cmd("paste into terminal", "cd ~/projects/agentbricks-doc-demo && python3 install.py") + '''
++ cmd("paste into terminal", "git clone https://github.com/jvangordon/docflow && cd docflow && python3 install.py") + '''
 <p class="sub">Does exactly the same three things, and prints the app URL when it finishes.</p>''')}
 
 {step("2", "Open it", "1 min", '''
-<p>Open your app URL. You land on <b>Start</b>. The left side is the setup form, the right
-side is the readiness panel, and it should be unhappy. That is the point.</p>'''
+<p>Open your app URL. You land on <b>Start</b>. The left column is the three things you do,
+numbered. The right column is what the app builds for you the moment you press go.</p>'''
 + figure("cold-start.png", "The whole Start page, cold.",
-         "Form empty on the left, four checks failing on the right, Go greyed out at the bottom.")
-+ f'<div class="checklist">{rows}</div>' + '''
+         "Left: set up the workspace, name the customer, press go. Right: the four things the run builds. Go stays grey and the sentence beside it names exactly what is holding it up.")
++ figure("promise.png", "The right column never asks you for anything.",
+         "Documents, agents, lanes, results pages. When you press go this same column becomes the live run log.", zoom=True)
++ '''
 <div class="look"><b>What you are looking at</b>
-<p>Left side, the only two things you have to answer. Right side, one card telling you what
-this workspace is missing and offering to fix it. Go is greyed out until both sides are
-happy, and the sentence beside it always says exactly what is holding it up.</p></div>''')}
+<p>Nothing on the right is homework. The classifier, the Knowledge Assistant, extraction and
+the Genie space are all built for you during the run, and the checks list says so under
+"Built for you at go".</p></div>''')}
 
 {step("3", "Press one button", "1 min", '''
 <p>The app tells you what the workspace is missing in plain language, and offers to fix all of
@@ -216,8 +218,10 @@ it at once.</p>'''
 <div class="look"><b>What it just made</b><p>A 2X-Small serverless warehouse that stops itself
 after 10 idle minutes, a schema for the tables and Genie space, and a volume with folders for
 documents. When it finishes the card turns green and says the workspace is ready.</p></div>
-<p class="sub">Curious what it checked? Open <b>See all 9 checks</b> for the full list, including
-the two optional ones the app cannot create for you.</p>''')}
+<p class="sub">Curious what it checked? Open <b>All 9 checks</b> for the full list.
+Rows that need compute say "verified at go" instead of pretending to pass, and the two
+agent rows sit under "Built for you at go" with nothing for you to do.</p>'''
++ f'<div class="checklist">{rows}</div>')}
 
 {step("4", "Two answers", "30 sec", '''
 <p>Left side. These drive everything the run generates.</p>'''
@@ -231,12 +235,15 @@ the two optional ones the app cannot create for you.</p>''')}
 <tr><td><b>Catalog and schema</b></td><td>Where the tables, Genie space and run state live</td></tr>
 <tr><td><b>Documents</b></td><td>Leave as generate everything, or point at a volume of the customer's own PDFs</td></tr>
 </table>
-<div class="look"><b>Try something other than Manufacturing</b><p>Insurance gives you
-"Loss Run Review" and vocabulary like subrogation and loss run. Logistics gives you
-"Freight Claims Recovery Desk". It is the most convincing thirty seconds of the demo and
-it costs nothing to try.</p></div>
-<p>Press <b>Save</b>. It flashes Saved. <b>Go is now enabled.</b></p>'''
-+ figure("gobar-closeup.png", "The Go bar before you are ready.",
+<div class="look"><b>Try something other than Manufacturing</b><p>Type any industry you
+like — the chips just fill the box. Insurance gives you "Loss Run Review" and vocabulary
+like subrogation. Logistics gives you "Freight Claims Recovery Desk". It is the most
+convincing thirty seconds of the demo and it costs nothing to try.</p></div>
+<p>There is no save button. Every field saves itself as you type, so a reload never loses
+your entries. <b>Go enables the moment both fields are filled.</b></p>'''
++ figure("model-pick.png", "The model picker, under Advanced.",
+         "A dropdown of every model this workspace actually serves. If the pick stops answering, go finds one that does and says so in the log.", zoom=True)
++ figure("gobar-closeup.png", "The Go bar, ready.",
          "While anything is missing, Go stays grey and the sentence beside it names what is blocking.", zoom=True))}
 
 {step("5", "Press Go", "~2 min", '''
@@ -247,11 +254,12 @@ it costs nothing to try.</p></div>
 <table>
 <tr><th>At</th><th>What happens</th></tr>
 <tr><td class="t">~8s</td><td>Schema, volume and tables confirmed</td></tr>
-<tr><td class="t">~16s</td><td>Company research, using a model on the AI Gateway</td></tr>
-<tr><td class="t">~34s</td><td>Documents generated, watermarked, into their own folder</td></tr>
-<tr><td class="t">~35s</td><td>Knowledge Assistant created, indexing starts in the background</td></tr>
-<tr><td class="t">~36 to 120s</td><td>Documents processed: parse, classify, route, extract, audit, secure</td></tr>
-<tr><td class="t">~120s</td><td>Genie space created over the extracted tables, then Ready</td></tr>
+<tr><td class="t">~12s</td><td>Language model probed until one answers — the log names the model this run will use</td></tr>
+<tr><td class="t">~20s</td><td>Company research, on that same model</td></tr>
+<tr><td class="t">~40s</td><td>Documents generated, watermarked, into their own folder</td></tr>
+<tr><td class="t">~45s</td><td>Knowledge Assistant created · indexing continues in the background and never blocks the run</td></tr>
+<tr><td class="t">~50 to 150s</td><td>Documents processed: parse, classify, route, extract, audit, secure</td></tr>
+<tr><td class="t">~150s</td><td>Genie space over the extracted tables, an honest assistant status, then Ready</td></tr>
 </table>
 <p>Switch to <b>Flow</b> while it runs. This is the screen to show a customer.</p>'''
 + figure("flow.png", "Documents moving through the bricks.",
@@ -274,8 +282,11 @@ everything the run created with per section timings.</p>''')}
 <h2>Stand it down</h2><div class="mins">10 sec</div></div>
 <div class="body">
 <p>Nothing bills while idle. The warehouse stops itself after 10 minutes and Databricks stops
-the app 24 hours after deploy. To stop both immediately:</p>
+the app 24 hours after deploy. To stop the app immediately:</p>
 """ + cmd("paste into terminal", "databricks apps stop docflow") + """
+<p style="margin-top:14px">To wipe everything and start over — the app, the assistant, the
+schema and every document — open <b>reset_databricks.py</b> in the Git folder and press
+<b>Run all</b>. It removes things in the order that works and prints what it did.</p>
 <div class="look"><b>If a fix button fails</b><p>The message leads with what to do about it,
 and Databricks' own wording sits behind a "what Databricks reported" disclosure. Usually it
 means step 3 was skipped or did not finish.</p></div>
