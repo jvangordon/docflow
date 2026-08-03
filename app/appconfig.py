@@ -349,24 +349,19 @@ def readiness(deep: bool = False) -> dict:
         "the document volume, even where the Agents UI offers no tile for it.",
         auto=True)
 
-    cll = [n for n in custom if "classifier" in n.lower() or "docflow-c" in n.lower()]
-    add("classifier_brick", "Classification agent · built at go", bool(cll),
-        f"detected: {cll[0]}" if cll else
-        "POST /api/2.0/custom-llms. The run creates a Custom LLM agent for "
-        "routing, which is the API-creatable home for classification work.",
+    # Classification and extraction are SQL, not agents to build. ai_classify
+    # and ai_extract are the same functions the Agent Bricks tiles wrap, so
+    # these rows report the capability, not a chore.
+    add("classification", "Text classification · ai_classify in SQL", True,
+        "The run classifies every document with ai_classify over the warehouse. "
+        "Nothing to build, nothing to click.",
         auto=True)
 
-    ie = [n for n in custom if any(k in n.lower() for k in ("extract", "kie"))]
-    add("agent_bricks_ie", "Information Extraction agent · optional upgrade", bool(ie),
-        f"detected: {ie[0]} · the run uses it" if ie else
-        "The only Agent Bricks type with no create API — the Agents UI builds "
-        "it, nothing else can. Extraction runs on ai_extract meanwhile, and the "
-        "run adopts a managed agent automatically if you build one.",
-        link=f"{host}/ml/agents" if host else None,
-        link_label="Build one in Agents",
-        human=None if ie else "Optional. Name it so it contains 'extract' and "
-                              "the next run picks it up.",
-        optional=True)
+    add("extraction", "Information extraction · ai_extract in SQL", True,
+        "The run extracts typed fields with ai_extract over the warehouse. A "
+        "managed Information Extraction agent is adopted if one exists, but the "
+        "demo never needs one.",
+        auto=True)
 
     # ---- browse access: the app SP owns the schema, so people are locked out
     #      by default. Tested for real, because a presenter finds out mid-demo.

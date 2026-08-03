@@ -166,7 +166,6 @@ results = [
     run("no model answers a probe", sql_raises=True, expect_red="endpoints",
         expect_fix="/api/fix/models"),
     run("assistant absent", names=["databricks-gpt"], expect_red="knowledge_assistant"),
-    run("extraction agent absent", names=["databricks-gpt"], expect_red="agent_bricks_ie"),
     run("AI Functions unavailable", sql_raises=True, expect_red="ai_functions"),
     run("billing schema not enabled", sysstate="DISABLE_INITIALIZED",
         expect_red="billing_schema", expect_fix="/api/fix/billing"),
@@ -187,14 +186,15 @@ if not _by["endpoints"]["ok"]:
 # The two API-creatable bricks are built for you; IE is the only Agent Bricks
 # type with no create API, so it stays a user action with a link, not a chore
 # the app pretends it can do.
-if not (_by["knowledge_assistant"].get("auto") and _by["classifier_brick"].get("auto")):
-    _probs.append("API-creatable agent rows are not marked auto")
-if any(_by[k].get("fix_endpoint") for k in ("knowledge_assistant", "classifier_brick")):
-    _probs.append("an auto row still advertises a fix button")
-if _by["agent_bricks_ie"].get("auto"):
-    _probs.append("IE claims to be automatic, but it has no create API")
-if not _by["agent_bricks_ie"].get("optional"):
-    _probs.append("IE must be optional: the demo runs without it")
+# The assistant is built over the API; classification and extraction are SQL
+# functions the run calls directly. None of the three is a user chore.
+for _k in ("knowledge_assistant", "classification", "extraction"):
+    if not _by[_k].get("auto"):
+        _probs.append(f"{_k} is not marked auto")
+    if _by[_k].get("fix_endpoint"):
+        _probs.append(f"{_k} still advertises a fix button")
+if not (_by["classification"]["ok"] and _by["extraction"]["ok"]):
+    _probs.append("SQL capabilities should never read as missing")
 print(f"\n  [{'PASS' if not _probs else 'FAIL'}] gateway workspace: probe green, agents auto")
 for _p in _probs:
     print(f"         -> {_p}")

@@ -565,11 +565,22 @@ def lane_for(rec: dict) -> str:
 
 
 def stage_label() -> None:
-    """One structured call per doc yields the full routing decision record."""
+    """Text classification in SQL, then the agent's advisory read of it.
+
+    ai_classify IS the Text Classification capability — the same function the
+    Agent Bricks tile wraps — so the document type comes from it directly and
+    no agent has to be built by hand. The structured ai_query beside it is
+    advisory only: it explains the routing in a sentence and gives its own
+    opinion on extraction and Q&A, which the deterministic policy then either
+    confirms or overrules on screen.
+    """
+    types = ", ".join(f"'{t}'" for t in DOC_TYPES)
     sql(f"""CREATE OR REPLACE TABLE {FQ}.labeled AS
         SELECT doc_id,
+               ai_classify(substr(to_json(doc), 1, 3000), ARRAY({types})) AS doc_type,
                ai_query('{chat_model()}',
-                 concat('Classify this document and decide how it should be routed. ',
+                 concat('This document has already been classified. Decide how it ',
+                        'should be routed and explain the decision. ',
                         'Set needs_extraction true when the document has recurring fields ',
                         'worth putting in a table (invoices, purchase orders, claims, ',
                         'inspections, manifests). Set needs_qa true when a person would ask ',
@@ -580,13 +591,16 @@ def stage_label() -> None:
                         substr(to_json(doc), 1, 3000)),
                  responseFormat => '{ROUTING_SCHEMA.replace("'", "''")}') AS routing
         FROM {FQ}.parsed""", timeout="50s")
-    for doc_id, routing in sql(f"SELECT doc_id, routing FROM {FQ}.labeled"):
+    for doc_id, doc_type, routing in sql(
+            f"SELECT doc_id, doc_type, routing FROM {FQ}.labeled"):
         try:
             rec = json.loads(routing)
         except Exception:
-            rec = {"doc_type": "unknown", "confidence": 0.0, "sensitivity": "internal",
+            rec = {"confidence": 0.0, "sensitivity": "internal",
                    "needs_extraction": False, "needs_qa": False,
                    "retention_class": "unclassified", "why": "routing record unparseable"}
+        # ai_classify decides the type; the model's own guess never overrides it.
+        rec["doc_type"] = doc_type or rec.get("doc_type") or "unknown"
         with _lock:
             if doc_id in STATE.docs:
                 STATE.docs[doc_id].update({
@@ -649,7 +663,7 @@ def stage_extract() -> None:
                        ARRAY('unit_serial','purchase_date','failure_date',
                              'warranty_term_months','claim_amount','production_line')) AS x
               FROM {FQ}.labeled l JOIN {FQ}.parsed p USING(doc_id)
-              WHERE l.routing:doc_type = 'warranty_claim')""", timeout="50s")
+              WHERE l.doc_type = 'warranty_claim')""", timeout="50s")
     # Labels ARE the prompt for ai_extract. The bare label 'vendor' reads the
     # "Bill to" party off these invoices (the buyer, not the issuer), so the
     # label is spelled out to pin the issuing company.
@@ -664,11 +678,11 @@ def stage_extract() -> None:
                        ARRAY('vendor_company_that_issued_this_invoice',
                              'invoice_number','invoice_total_amount_due','unit_serials')) AS x
               FROM {FQ}.labeled l JOIN {FQ}.parsed p USING(doc_id)
-              WHERE l.routing:doc_type = 'supplier_invoice')""", timeout="50s")
+              WHERE l.doc_type = 'supplier_invoice')""", timeout="50s")
     for doc_id, in sql(f"SELECT doc_id FROM {FQ}.extract_warranty_claims"):
-        _ev(doc_id, "extracted", "fields -> extract_warranty_claims (ai_extract)")
+        _ev(doc_id, "extracted", "ai_extract -> extract_warranty_claims")
     for doc_id, in sql(f"SELECT doc_id FROM {FQ}.extract_supplier_invoices"):
-        _ev(doc_id, "extracted", "fields -> extract_supplier_invoices (ai_extract)")
+        _ev(doc_id, "extracted", "ai_extract -> extract_supplier_invoices")
 
 
 def stage_audit() -> None:
@@ -697,7 +711,7 @@ def stage_audit() -> None:
 def stage_secure() -> None:
     rows = sql(f"""SELECT l.doc_id, ai_mask(substr(to_json(p.doc),1,3000), ARRAY('person','email','phone_number'))
                    FROM {FQ}.labeled l JOIN {FQ}.parsed p USING(doc_id)
-                   WHERE l.routing:doc_type IN ('hr_document','safety_incident')""", timeout="50s")
+                   WHERE l.doc_type IN ('hr_document','safety_incident')""", timeout="50s")
     for doc_id, redacted in rows:
         data = (redacted or "").encode()
         wc().files.upload(f"{SEC_ROOT}/{doc_id}.redacted.txt", io.BytesIO(data), overwrite=True)

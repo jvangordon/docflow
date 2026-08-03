@@ -440,10 +440,8 @@ function renderStart(){
         <div class="beat"><div class="bt">Writes ${esc(company)}'s documents</div>
           <div class="bs">24 watermarked PDFs in their name — invoices, warranty claims,
             contracts, an HR file — in their own volume folder.</div></div>
-        <div class="beat"><div class="bt">Builds the agents</div>
-          <div class="bs">A text classifier reads every page. A Knowledge Assistant is created
-            and pointed at the documents. Extraction runs on Document Intelligence, upgraded to
-            a managed agent when one exists. A Genie space lands on the extracted tables.</div></div>
+        <div class="beat"><div class="bt">Runs it all on your warehouse</div>
+          <div class="bs">ai_classify reads every page and ai_extract pulls the fields, both in SQL — the same functions the Agent Bricks tiles wrap, with nothing to click. A Knowledge Assistant is created over the API and pointed at the documents, and a Genie space lands on the extracted tables.</div></div>
         <div class="beat"><div class="bt">Then waits for your cue</div>
           <div class="bs">Nothing processes until you press Process documents — from here or
             from the Flow page, with the room watching each page classified and sent down its
@@ -755,8 +753,8 @@ async function renderFlow(){
 function buildRiver(){
   const termY={ie:7, ka:26, ie_ka:45, secure:64, archive:81};
   const meta={
-    ie:["Information Extraction","ai_extract → Delta tables · adopts a managed agent if you build one","b-ie","ie",""],
-    ka:["Knowledge Assistant","created by this app over the API · covers Both too","b-ka","ka",""],
+    ie:["Information Extraction","ai_extract in SQL → typed Delta tables","b-ie","ie",""],
+    ka:["Knowledge Assistant","Agent Bricks, created over the API · covers Both too","b-ka","ka",""],
     ie_ka:["Both · IE + KA","one document, two capabilities","b-both","ie","hotT"],
     secure:["Secure filing only","redacted · its own locked volume","b-sec","sec",""],
     archive:["No action","retained · lineage kept","b-arch","mut","archT"]};
@@ -794,7 +792,7 @@ function buildRiver(){
       <div class="nlbl">INBOX<span>ai_parse_document</span></div></div>
     <div class="node" style="left:26.5%;top:34%">
       <div class="ring"><div class="ring2"></div><span class="num" id="c-hub">·</span></div>
-      <div class="nlbl">CLASSIFY + ROUTE<span>Custom LLM agent, created by this app</span></div></div>
+      <div class="nlbl">CLASSIFY + ROUTE<span>ai_classify in SQL · policy picks the lane</span></div></div>
     ${Object.entries(meta).map(([k,m])=>`
       <div class="term ${m[4]}" style="left:75%;top:${termY[k]}%">
         <b>${m[0]}</b><span>${m[1]}</span>

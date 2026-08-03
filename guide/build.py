@@ -150,8 +150,9 @@ CHECKS = [
     ("opt", "Language model answers", "verified at go", "none"),
     ("opt", "Document Intelligence functions", "verified at go", "none"),
     ("opt", "Knowledge Assistant", "built at go", "none"),
-    ("opt", "Information Extraction agent", "built at go", "none"),
-    ("opt", "Agent Bricks pages in the UI", "check by eye", "none"),
+    ("opt", "Text classification · ai_classify", "SQL, nothing to build", "none"),
+    ("opt", "Information extraction · ai_extract", "SQL, nothing to build", "none"),
+    ("opt", "People can open the documents", "granted at go", "none"),
     ("good", "Billed usage visible", "passing", "good"),
 ]
 
@@ -220,7 +221,7 @@ it at once.</p>'''
 after 10 idle minutes, a schema for the tables and Genie space, and two volumes: <b>docs</b>,
 which the run makes browsable to everyone in the workspace, and <b>secure</b>, which nobody but
 the app can open. When it finishes the card turns green and says the workspace is ready.</p></div>
-<p class="sub">Curious what it checked? Open <b>All 10 checks</b> for the full list.
+<p class="sub">Curious what it checked? Open <b>All 11 checks</b> for the full list.
 Rows that need compute say "verified at go" instead of pretending to pass, and the two
 agent rows sit under "Built for you at go" with nothing for you to do.</p>'''
 + f'<div class="checklist">{rows}</div>')}

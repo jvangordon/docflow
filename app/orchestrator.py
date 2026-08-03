@@ -152,58 +152,6 @@ def grant_browse_access(cat: str, sch: str, cfg: dict | None = None) -> dict:
     return {"granted": granted, "errors": errs}
 
 
-def ensure_classifier(cfg: dict) -> None:
-    """Create the routing brick through the one API that can make one.
-
-    Agent Bricks exposes create APIs for Custom LLM, Knowledge Assistant and
-    Supervisor only; the Information Extraction and Text Classification tiles
-    are UI-created. Custom LLM is Databricks' documented home for
-    classification work, so the routing lane runs on a real Agent Brick that
-    appears in the Agents list instead of a bare model call. Optional
-    throughout: if the workspace cannot make one, routing falls back to a
-    structured ai_query and the log says so.
-    """
-    t0 = time.time()
-    name = "docflow-classifier"
-    try:
-        w = _w()
-        found = None
-        try:
-            for x in w.serving_endpoints.list():
-                if x.name and name in x.name:
-                    found = x.name
-                    break
-        except Exception:
-            pass
-        if found:
-            GO["assets"]["classifier"] = {"name": name, "endpoint": found}
-            _log("Classification brick", "ok", f"using existing · {found}")
-        else:
-            cl = w.agent_bricks.create_custom_llm(
-                name=name,
-                instructions=(
-                    "You route business documents. Given a document's text, decide its "
-                    "type, whether its recurring fields belong in a table, and whether a "
-                    "person would ask questions of its prose. Answer only with the "
-                    "requested structure."),
-                guidelines=[
-                    "Invoices, purchase orders, claims, inspections and manifests have "
-                    "fields worth extracting.",
-                    "Contracts, policies, manuals and safety sheets are worth asking "
-                    "questions of.",
-                    "HR and medical files are sensitive: neither, secure filing only.",
-                ])
-            GO["assets"]["classifier"] = {"name": name, "id": cl.id,
-                                          "endpoint": cl.endpoint_name}
-            _log("Classification brick", "ok",
-                 f"created a Custom LLM agent · {cl.endpoint_name or cl.id} · "
-                 f"visible under Agents")
-    except Exception as e:
-        _log("Classification brick", "warn",
-             f"not available here, routing runs on structured ai_query · {str(e)[:110]}")
-    _section("Create the classification brick", time.time() - t0)
-
-
 def resolve_model() -> None:
     """Find a model this workspace actually serves before spending any time.
 
@@ -501,7 +449,6 @@ def go(cfg: dict, stage: str = "all") -> None:
             resolve_model()          # fail in second ten, not minute six
             research_company(cfg)
             build_corpus(cfg)
-            ensure_classifier(cfg)   # real Agent Brick for the routing lane
             ensure_ka()              # indexing continues in background
         if stage == "prepare":
             docs = GO["assets"].get("documents", {})
