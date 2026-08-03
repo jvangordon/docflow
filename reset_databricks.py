@@ -35,6 +35,7 @@ w = WorkspaceClient()
 print(f"workspace : {w.config.host}")
 print(f"as        : {w.current_user.me().user_name}")
 
+# COMMAND ----------
 
 # MAGIC %md ## 1. The Knowledge Assistant, while its owner still exists
 # MAGIC
@@ -96,6 +97,8 @@ else:
     print(f"schema {CATALOG}.{SCHEMA}: dropped with everything in it ({state})")
 
 # COMMAND ----------
+
+# MAGIC %md ## 4. The app, last — its identity is only safe to lose now
 
 # COMMAND ----------
 
