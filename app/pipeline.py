@@ -63,6 +63,103 @@ def wc() -> WorkspaceClient:
     return _w
 
 
+# ------------------------------------------------------------- model resolve
+# Workspaces disagree about model names. Enterprise workspaces expose
+# databricks-* pay-per-token serving endpoints; Free Edition moved managed
+# models into Unity AI Gateway, where the same families answer under
+# different names and the classic endpoints 404. The app therefore never
+# trusts a configured name: it probes candidates with a one-token ai_query
+# and uses the first one that actually answers on this warehouse.
+_MODEL = {"name": "", "note": "", "tried": 0}
+
+# quality-ordered families; each is tried under every spelling a workspace
+# might serve it as
+_FAMILIES = (
+    "claude-sonnet-4-6", "claude-haiku-4-5", "gpt-5-mini",
+    "llama-4-maverick", "qwen35-122b-a10b", "gpt-oss-120b",
+    "qwen3-next-80b-a3b-instruct", "meta-llama-3-3-70b-instruct",
+    "gpt-oss-20b", "gemma-3-12b",
+)
+
+
+def model_candidates() -> list[str]:
+    """Every model name this workspace might answer on, best first."""
+    out: list[str] = []
+
+    def push(n):
+        n = (n or "").strip()
+        if n and n not in out and re.fullmatch(r"[A-Za-z0-9._-]{1,120}", n):
+            out.append(n)
+
+    push(CHAT_ENDPOINT)                      # the configured choice always leads
+    try:
+        import appconfig
+        push(appconfig.load_config().get("resolved_model"))   # last known good
+    except Exception:
+        pass
+    try:                                     # enterprise path: real endpoints
+        for e in wc().serving_endpoints.list():
+            n = e.name or ""
+            if n.startswith("databricks-") and not any(
+                    k in n for k in ("embed", "gte-", "bge-", "image")):
+                push(n)
+    except Exception:
+        pass
+    # Gateway path: UC-registered models. These are the REAL names on Free
+    # Edition, so they come before any blind spelling, quality-ranked by the
+    # family list where possible.
+    uc: list[str] = []
+    try:
+        for cat, sch in (("system", "ai"), ("workspace", "default")):
+            for m in wc().registered_models.list(catalog_name=cat, schema_name=sch):
+                if m.name and not any(k in m.name for k in ("embed", "gte", "bge")):
+                    uc.append(f"{cat}.{sch}.{m.name}")
+                    uc.append(m.name)
+    except Exception:
+        pass
+    def rank(n):
+        for i, fam in enumerate(_FAMILIES):
+            if fam in n:
+                return i
+        return len(_FAMILIES)
+    for n in sorted(uc, key=rank):
+        push(n)
+    for fam in _FAMILIES:                    # blind spellings, last resort
+        push(f"databricks-{fam}")
+        push(f"system.ai.{fam}")
+        push(fam)
+    return out
+
+
+def chat_model() -> str:
+    """The model every ai_query in the app calls. Resolved beats configured."""
+    return _MODEL["name"] or CHAT_ENDPOINT
+
+
+def resolve_chat_model(max_tries: int = 16) -> dict:
+    """Probe candidates until one answers; remember it. Raises when none do."""
+    cands = model_candidates()[:max_tries]
+    errs: list[str] = []
+    for name in cands:
+        try:
+            sql(f"SELECT ai_query('{name}', 'Reply with exactly: OK')", timeout="50s")
+            _MODEL.update({"name": name, "tried": len(errs) + 1,
+                           "note": "" if name == CHAT_ENDPOINT else
+                           f"'{CHAT_ENDPOINT}' is not served here · using {name}"})
+            try:
+                import appconfig
+                appconfig.save_config({"resolved_model": name})
+            except Exception:
+                pass
+            return dict(_MODEL, model=name)
+        except Exception as e:
+            errs.append(f"{name}: {str(e)[:60]}")
+    raise RuntimeError(
+        f"No language model answered ai_query on this warehouse. Tried "
+        f"{len(cands)}: {', '.join(c for c in cands[:6])}…  First error: "
+        f"{errs[0] if errs else 'none'}")
+
+
 def warehouse_id() -> str:
     global WAREHOUSE_ID
     if not WAREHOUSE_ID:
@@ -436,7 +533,7 @@ def stage_label() -> None:
     """One structured call per doc yields the full routing decision record."""
     sql(f"""CREATE OR REPLACE TABLE {FQ}.labeled AS
         SELECT doc_id,
-               ai_query('{CHAT_ENDPOINT}',
+               ai_query('{chat_model()}',
                  concat('Classify this document and decide how it should be routed. ',
                         'Set needs_extraction true when the document has recurring fields ',
                         'worth putting in a table (invoices, purchase orders, claims, ',
@@ -634,14 +731,14 @@ SCHEMA_HINT = (
 
 
 def ask_structured(question: str) -> dict:
-    if not re.fullmatch(r"[A-Za-z0-9._-]{1,120}", CHAT_ENDPOINT):
+    if not re.fullmatch(r"[A-Za-z0-9._-]{1,120}", chat_model()):
         return {"error": "invalid chat endpoint configured"}
     prompt = (
         f"You translate questions to Databricks SQL. Tables in schema {FQ}: {SCHEMA_HINT}. "
         f"Return ONLY one SELECT statement, fully qualified table names, no markdown, "
         f"no CTEs, no WITH clause. Question: {question}"
     )
-    rows = sql(f"SELECT ai_query('{CHAT_ENDPOINT}', :prompt)", timeout="50s",
+    rows = sql(f"SELECT ai_query('{chat_model()}', :prompt)", timeout="50s",
                params={"prompt": prompt})
     gen = rows[0][0] if rows and rows[0] else ""
     try:
@@ -649,4 +746,4 @@ def ask_structured(question: str) -> dict:
     except BadSQL as e:
         return {"error": f"rejected generated SQL: {e}", "sql": (gen or "")[:500]}
     data = sql(safe, timeout="50s", row_limit=50)
-    return {"sql": safe, "rows": data, "engine": f"ai_query({CHAT_ENDPOINT}) + serverless warehouse"}
+    return {"sql": safe, "rows": data, "engine": f"ai_query({chat_model()}) + serverless warehouse"}

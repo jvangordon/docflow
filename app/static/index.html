@@ -121,9 +121,24 @@ select.ctl{appearance:none}
 .said[open] summary::after{content:" ▴"}
 .waitfor{font:600 11px var(--mono);color:var(--faint);border:1px dashed var(--hair2);
   border-radius:7px;padding:6px 11px;white-space:nowrap}
-.legend{display:flex;gap:16px;flex-wrap:wrap;margin:10px 0 4px;
-  font:500 10.5px var(--mono);color:var(--faint)}
-.legend b{color:var(--dim);font-weight:700;margin-right:4px}
+.movehead{display:flex;align-items:center;gap:12px;margin:32px 0 2px}
+.movehead.first{margin-top:6px}
+.mnum{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--hair2);flex:none;
+  display:inline-flex;align-items:center;justify-content:center;font:700 12px var(--mono);color:var(--dim)}
+.movehead h3{font-size:15.5px;font-weight:700;letter-spacing:-.015em}
+.movehead .mstat{margin-left:auto;font:500 11px var(--mono);color:var(--faint)}
+.movehead.done .mnum{border-color:rgba(74,222,151,.5);color:var(--ie)}
+.movehead.done .mstat{color:var(--ie)}
+.beat{position:relative;padding:0 0 22px}
+.beat::before{content:"";position:absolute;left:-25.5px;top:7px;width:8px;height:8px;border-radius:50%;
+  background:var(--bg);border:1.5px solid var(--faint)}
+.beat .bt{font-size:14.5px;font-weight:700;letter-spacing:-.01em}
+.beat .bs{font-size:12.5px;color:var(--dim);line-height:1.6;margin-top:4px;max-width:52ch}
+.autohead{margin:20px 0 2px;font:600 10px var(--mono);letter-spacing:.16em;
+  text-transform:uppercase;color:var(--faint)}
+.chk.auto .glyph{color:var(--faint)}
+.chk.auto h4{color:var(--ink2);font-weight:600}
+.savestat{font:500 11px var(--mono);color:var(--faint);margin-left:auto;transition:opacity .4s}
 /* One obvious action beats a panel of buttons. Detail stays one click away. */
 .setupcard{border:1px solid var(--hair2);border-radius:13px;padding:20px 22px;margin:12px 0 8px;
   background:linear-gradient(135deg,rgba(255,59,32,.06),transparent 62%),var(--bg2)}
@@ -286,52 +301,88 @@ async function loadStart(){
 function formComplete(){
   const c=S.cfg||{}; return !!(c.company && c.industry && c.catalog && c.schema);
 }
+function gateMsg(){
+  const rd=S.ready||{}, blockers=rd.blockers||[];
+  const running = !!(S.golog && S.golog.phase==="running");
+  if(running) return "The run is working. The right column is live.";
+  if(blockers.length) return `Step 1 first — ${blockers.length} check${blockers.length>1?"s":""} still red.`;
+  if(!formComplete()) return "Step 2 needs a customer name and an industry.";
+  return "Ready. Anything not yet verified is proven in go's first seconds, and a rerun never duplicates.";
+}
+function goAllowed(){
+  const rd=S.ready||{};
+  const running = !!(S.golog && S.golog.phase==="running");
+  return formComplete() && !(rd.blockers||[]).length && !running;
+}
 function renderStart(){
   const c=S.cfg||{}, scan=S.scan||{}, rd=S.ready||{checks:[]};
-  // Once a run exists the log is the story; readiness folds into a summary.
   const started = !!(S.golog && S.golog.steps && S.golog.steps.length);
   const cats = scan.catalogs||[];
   const catOptions = [];
-  cats.forEach(cat=> (cat.schemas.length?cat.schemas:["docflow"]).forEach(s=>
-    catOptions.push(`${cat.name}.${s}`)));
+  cats.forEach(cat=> (cat.schemas.length?cat.schemas:["docflow"]).forEach(sc=>
+    catOptions.push(`${cat.name}.${sc}`)));
   if(!catOptions.includes("workspace.docflow")) catOptions.unshift("workspace.docflow");
   const cur = `${c.catalog||"workspace"}.${c.schema||"docflow"}`;
   const vols = scan.volumes||[];
   const doneN = ["company","industry"].filter(k=>c[k]).length;
-  // Go is gated on BOTH the form and the required checks, which is the promise
-  // the Start page makes. Optional checks never block.
-  const running = !!(S.golog && S.golog.phase==="running");
-  const blockers = (rd.blockers||[]);
-  const goOK = formComplete() && !blockers.length && !running;
-  const golabel = running ? "Running" : "Go";
-  const gomsg = running ? "The run is working. The log is on the right."
-    : !formComplete() ? "Add the customer and industry above to enable go."
-    : blockers.length ? `Blocked by ${blockers.length} required check${blockers.length>1?"s":""}: ${blockers.join(", ")}.`
-    : "Setup can be re-run safely and removed with one click after the demo.";
+  const blockers = rd.blockers||[];
+  const company = c.company || "your customer";
+  const ranSecs = S.golog && S.golog.sections ? S.golog.sections["Total, go to ready"] : null;
+
   stage.innerHTML = `
   <div class="over">Portable installer · this workspace</div>
   <h1>Two answers, one button.</h1>
-  <p class="dek">DocFlow prepares this workspace for a live document demo. It scans what exists, creates what is missing, and runs documents through Databricks agents while you watch.</p>
+  <p class="dek">Name a customer and an industry. The app writes their documents, builds the
+    agents, routes every page through them on screen, and ends on pages their team could use
+    tomorrow.</p>
   <div class="rule"></div>
   <div class="split">
     <div>
-      <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:4px">
-        <span class="over">Set up the demo</span>
-        <span style="font:500 11.5px var(--mono);color:var(--dim)">${doneN} of 2</span>
-        <span style="margin-left:auto;font:500 11px var(--mono);color:var(--faint)">
-          scanned · ${cats.length} catalogs · ${vols.length} volumes</span>
+      <div class="over">You do three things</div>
+
+      <div class="movehead first ${blockers.length?"":"done"}">
+        <span class="mnum">1</span><h3>Set up this workspace</h3>
+        <span class="mstat">${blockers.length?blockers.length+" to fix":"ready"}</span>
+        <button class="btn" style="margin-left:10px;padding:4px 11px;font-size:11px" id="recheck">Re-check</button>
       </div>
-      <div class="f ${c.company?"done":""}"><label><i class="fnum">1</i>Customer name<em>required</em></label>
+      ${blockers.length ? `
+        <div class="setupcard">
+          <div class="sc-t">This workspace needs ${blockers.length} thing${blockers.length>1?"s":""}.</div>
+          <div class="sc-s">A warehouse, a schema, a place for documents, a model that answers.
+            One press creates whatever is missing.</div>
+          <button class="btn hot" id="fixall">Set up this workspace</button>
+          <div class="fixout ${S.fixout.all?S.fixout.all.cls:""}" id="out-all">${
+            S.fixout.all?esc(S.fixout.all.text):""}</div>
+          ${S.fixout.all&&S.fixout.all.steps?S.fixout.all.steps.map(x=>
+            `<div class="sc-step ${x.ok?"ok":"bad"}"><b>${x.ok?"✓":"!"}</b>
+              <span>${esc(x.label)} · ${esc(x.detail||"")}</span></div>`).join(""):""}
+        </div>` : `
+        <div class="setupcard ready">
+          <div class="sc-t">This workspace is ready.</div>
+          <div class="sc-s">Everything the run needs is in place.${
+            (rd.unverified||[]).length?` Go proves ${esc(rd.unverified.join(" and ").toLowerCase())} in its first seconds.`:""}</div>
+        </div>`}
+      <details class="detail-toggle">
+        <summary>All ${(rd.checks||[]).length} checks</summary>
+        <div id="rdlist">${renderChecks(rd)}</div>
+      </details>
+
+      <div class="movehead ${doneN===2?"done":""}">
+        <span class="mnum">2</span><h3>Name the customer</h3>
+        <span class="mstat">${doneN} of 2</span><span class="savestat" id="savestat"></span>
+      </div>
+      <div class="f ${c.company?"done":""}" id="fw-company"><label>Customer name<em>required</em></label>
         <input class="ctl" id="f-company" value="${esc(c.company)}" placeholder="Who is this demo for?">
         <div class="hint">Appears on every page and inside every generated document.</div></div>
-      <div class="f ${c.industry?"done":""}"><label><i class="fnum">2</i>Industry<em>required</em></label>
-        <input class="ctl" id="f-industry" value="${esc(c.industry)}" placeholder="Manufacturing, Insurance, Healthcare...">
-        <div class="chips">${["Manufacturing","Insurance","Healthcare","Financial services","Retail"]
+      <div class="f ${c.industry?"done":""}" id="fw-industry"><label>Industry<em>required</em></label>
+        <input class="ctl" id="f-industry" value="${esc(c.industry)}" placeholder="Type any industry">
+        <div class="chips">${["Manufacturing","Insurance","Healthcare","Financial services","Retail","Logistics"]
           .map(x=>`<span class="tag pick ${c.industry===x?"on":""}" data-ind="${x}">${x}</span>`).join("")}</div>
-        <div class="hint">Drives the demo vocabulary, the questions, and both operations pages.</div></div>
+        <div class="hint">Type anything — the chips just fill the box for you. The industry drives
+          the vocabulary, the suggested questions, and both operations pages.</div></div>
       <div class="f" style="border-bottom:0">
         <details class="adv">
-          <summary>Where it writes, and which documents · defaults are fine</summary>
+          <summary>Where it writes, and which model · defaults are fine</summary>
           <div style="margin-top:12px">
             <label style="margin-bottom:7px">Catalog and schema</label>
             <select class="ctl mono" id="f-target">
@@ -344,91 +395,82 @@ function renderStart(){
               <option value="">No customer documents · generate everything</option>
               ${vols.map(v=>`<option ${c.customer_volume===v?"selected":""}>${esc(v)}</option>`).join("")}
             </select>
-            <div class="hint">Point at a volume of the customer's PDFs and the run reads them in place, generating only what is missing.</div>
-            <label style="margin:16px 0 7px">Setup model</label>
-            <input class="ctl mono" id="f-model" style="font-size:13px" value="${esc(c.chat_endpoint||"databricks-claude-sonnet-4-6")}">
+            <div class="hint">Point at a volume of the customer's PDFs and the run reads them in
+              place, generating only what is missing.</div>
+            <label style="margin:16px 0 7px">Model</label>
+            <input class="ctl mono" id="f-model" list="modellist" style="font-size:13px"
+              value="${esc(c.chat_endpoint||"databricks-claude-sonnet-4-6")}">
+            <datalist id="modellist">${(scan.models||[]).map(m=>`<option value="${esc(m)}">`).join("")}</datalist>
+            <div class="hint">Any model this workspace serves. If this name does not answer, go
+              finds one that does and says so in the log.</div>
           </div>
         </details>
       </div>
+
+      <div class="movehead ${S.golog&&S.golog.phase==="done"?"done":""}">
+        <span class="mnum">3</span><h3>Press go</h3>
+        <span class="mstat">${S.golog&&S.golog.phase==="done"&&ranSecs?`ran in ${ranSecs}s`:"~2 min"}</span>
+      </div>
       <div class="gobar">
-        <button class="btn hot" id="gobtn" ${goOK?"":"disabled"}>${golabel}</button>
-        <button class="btn" id="savebtn">Save</button>
-        <span class="msg" id="gomsg">${esc(gomsg)}</span>
+        <button class="btn hot" id="gobtn" ${goAllowed()?"":"disabled"}>${
+          S.golog&&S.golog.phase==="running"?"Running":"Go"}</button>
+        <span class="msg" id="gomsg">${esc(gateMsg())}</span>
       </div>
     </div>
-    <div>${started ? `
-      <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:14px">
-        <span class="over">Run log</span>
+
+    <div>
+      <div class="over">The app does the rest</div>
+      ${started ? `
+      <div style="display:flex;align-items:baseline;gap:14px;margin:14px 0 14px">
         <span style="font:500 11.5px var(--mono);color:var(--dim)" id="runsum">${
           S.golog.phase==="running"?"working":S.golog.phase==="done"
             ?`ready in ${S.golog.sections["Total, go to ready"]||"—"}s`:"stopped"}</span>
       </div>
-      <div class="spine" id="golog">${renderGolog()}</div>
-      <details style="margin-top:26px">
-        <summary style="cursor:pointer;font:600 10px var(--mono);letter-spacing:.16em;
-          text-transform:uppercase;color:var(--faint);list-style:none">Readiness · ${
-          (rd.checks||[]).filter(x=>x.ok).length} of ${(rd.checks||[]).length} pass ▾</summary>
-        <div id="rdlist" style="margin-top:12px">${renderChecks(rd)}</div>
-      </details>` : `
-      <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:6px">
-        <span class="over">Workspace</span>
-        <span style="font:500 11.5px var(--mono);color:var(--dim)" id="rdsum"></span>
-        <button class="btn" style="margin-left:auto;padding:5px 13px;font-size:11.5px" id="recheck">Re-check</button>
+      <div class="spine" id="golog">${renderGolog()}</div>` : `
+      <div class="spine" style="margin-top:16px">
+        <div class="beat"><div class="bt">Writes ${esc(company)}'s documents</div>
+          <div class="bs">24 watermarked PDFs in their name — invoices, warranty claims,
+            contracts, an HR file — in their own volume folder.</div></div>
+        <div class="beat"><div class="bt">Builds the agents</div>
+          <div class="bs">A text classifier reads every page. A Knowledge Assistant is created
+            and pointed at the documents. Extraction runs on Document Intelligence, upgraded to
+            a managed agent when one exists. A Genie space lands on the extracted tables.</div></div>
+        <div class="beat"><div class="bt">Routes every document, on screen</div>
+          <div class="bs">Watch each page classified and sent down its lane on the Flow page —
+            extraction, assistant, both, or secure filing that no AI reads.</div></div>
+        <div class="beat"><div class="bt">Ends on pages their team could use</div>
+          <div class="bs">A claims desk and a supplier desk built from the extracted fields, and
+            Ask, where every answer cites the page it came from.</div></div>
       </div>
-      ${(rd.blockers||[]).length ? `
-        <div class="setupcard">
-          <div class="sc-t">This workspace needs ${(rd.blockers||[]).length} thing${(rd.blockers||[]).length>1?"s":""} before it can run a demo.</div>
-          <div class="sc-s">A warehouse, a schema, and a place to keep documents. The app can create all of it.</div>
-          <button class="btn hot" id="fixall">Set up this workspace</button>
-          <div class="fixout ${S.fixout.all?S.fixout.all.cls:""}" id="out-all">${
-            S.fixout.all?esc(S.fixout.all.text):""}</div>
-          ${S.fixout.all&&S.fixout.all.steps?S.fixout.all.steps.map(s=>
-            `<div class="sc-step ${s.ok?"ok":"bad"}"><b>${s.ok?"✓":"!"}</b>
-              <span>${esc(s.label)} · ${esc(s.detail||"")}</span></div>`).join(""):""}
-        </div>` : `
-        <div class="setupcard ready">
-          <div class="sc-t">This workspace is ready.</div>
-          <div class="sc-s">Everything the demo needs is in place.</div>
-        </div>`}
-      <details class="detail-toggle" ${(rd.blockers||[]).length?"":""}>
-        <summary>See all ${(rd.checks||[]).length} checks</summary>
-        <div class="legend"><span><b>✓</b>passing</span><span><b>!</b>blocks go</span>
-          <span><b>?</b>not tested yet</span><span><b>○</b>optional, not present</span></div>
-        <div id="rdlist">${renderChecks(rd)}</div>
-      </details>`}
+      <p class="hint" style="margin-top:6px">Everything lands in this workspace under
+        ${esc(cur)}, and running go twice never duplicates any of it.</p>`}
     </div>
   </div>`;
   $("#wsname").textContent = c.company || "";
   bindStart();
-  const rs=$("#rdsum");
-  if(rs){
-    // Required progress is the number that decides whether go unlocks.
-    const opt=(rd.checks||[]).filter(x=>x.optional);
-    const optOK=opt.filter(x=>x.ok).length;
-    rs.textContent = `${rd.required_ok??0} of ${rd.required_total??0} required`
-      + (opt.length?` · ${optOK} of ${opt.length} optional`:"");
-  }
 }
 function renderChecks(rd){
-  const byKey = Object.fromEntries((rd.checks||[]).map(c=>[c.key,c]));
-  return (rd.checks||[]).map(ch=>{
-    const blocking = !ch.ok && !ch.optional;
+  const all = rd.checks||[];
+  const byKey = Object.fromEntries(all.map(x=>[x.key,x]));
+  const row = ch => {
+    const blocking = !ch.ok && !ch.optional && !ch.untested;
     const cls = ch.ok?"ok":(ch.fixable_by_app?"fx":"ad");
-    const glyph = ch.ok?"✓":(ch.untested?"?":(blocking?"!":"○"));
-    // A remedy that cannot succeed yet is shown as a waiting note, not a button.
+    const glyph = ch.ok?"✓":(ch.untested?"·":(blocking?"!":"○"));
     const dep = ch.depends_on ? byKey[ch.depends_on] : null;
     const waiting = dep && !dep.ok ? dep.label : null;
     const act = ch.ok?"":(waiting
       ? `<span class="waitfor">after ${esc(waiting)}</span>`
       : ch.fixable_by_app
       ? `<button class="fixbtn" data-fix="${esc(ch.fix_endpoint)}" data-key="${esc(ch.key)}">${esc(ch.fix_label||"Fix")}</button>`
+      : ch.untested
+      ? `<span class="waitfor">verified at go</span>`
       : (ch.link?`<a class="fixbtn" style="text-decoration:none" href="${esc(ch.link)}" target="_blank" rel="noopener">${esc(ch.link_label||"Open")} ↗</a>`:""));
-    const steps = (!ch.ok && ch.steps && ch.steps.length)
-      ? `<ol class="steps">${ch.steps.map(s=>`<li>${esc(s)}</li>`).join("")}</ol>` : "";
+    const steps = (!ch.ok && !ch.untested && ch.steps && ch.steps.length)
+      ? `<ol class="steps">${ch.steps.map(x=>`<li>${esc(x)}</li>`).join("")}</ol>` : "";
     const link2 = (!ch.ok && ch.link && ch.fixable_by_app)
       ? `<a class="dlink" href="${esc(ch.link)}" target="_blank" rel="noopener">${esc(ch.link_label||"Open in workspace")} ↗</a>` : "";
     return `<div class="chk ${cls}" id="chk-${esc(ch.key)}">
-      <div class="toprow"><span class="glyph" title="${ch.ok?'passing':ch.untested?'not tested yet':blocking?'blocks go':'optional'}">${glyph}</span>
+      <div class="toprow"><span class="glyph">${glyph}</span>
         <h4>${esc(ch.label)} <span class="${ch.optional?"opt":"req"}">${ch.optional?"optional":"required"}</span></h4>
         <div>${act}</div></div>
       <p>${esc(ch.detail||"")}${ch.human_action&&!ch.ok?" "+esc(ch.human_action):""}</p>
@@ -438,22 +480,60 @@ function renderChecks(rd){
         S.fixout[ch.key]&&S.fixout[ch.key].detail
           ? `<details class="said"><summary>what Databricks reported</summary>${esc(S.fixout[ch.key].detail)}</details>`
           : ""}</div></div>`;
-  }).join("") || `<p class="hint">Readiness could not load. Re-check.</p>`;
+  };
+  const main = all.filter(x=>!x.auto).map(row).join("");
+  const auto = all.filter(x=>x.auto);
+  const autoRows = auto.length ? `<div class="autohead">Built for you at go</div>` +
+    auto.map(ch=>`<div class="chk auto"><div class="toprow"><span class="glyph">→</span>
+      <h4>${esc(ch.label)}</h4></div><p>${esc(ch.detail||"")}</p></div>`).join("") : "";
+  return (main + autoRows) || `<p class="hint">Readiness could not load. Re-check.</p>`;
 }
 function renderGolog(){
   const g=S.golog;
   if(!g || !g.steps || !g.steps.length)
     return `<div class="snode"><span class="st">—</span>Waiting for go. The log streams here.</div>`;
-  return g.steps.map(s=>`<div class="snode ${s.status==="ok"?"ok":s.status==="err"?"err":"run"}">
-    <span class="st num">${s.t}s</span>${esc(s.name)}<span class="det">${esc(s.detail)}</span></div>`).join("")
+  return g.steps.map(x=>`<div class="snode ${x.status==="ok"?"ok":x.status==="err"?"err":"run"}">
+    <span class="st num">${x.t}s</span>${esc(x.name)}<span class="det">${esc(x.detail)}</span></div>`).join("")
     + (g.phase==="running"?`<div class="snode run"><span class="st"><span class="spin"></span></span>working</div>`:"");
 }
+/* Save without re-rendering: a rebuild mid-keystroke is how entries get lost. */
+let _saveTimer=null;
+function queueSave(){
+  clearTimeout(_saveTimer);
+  const st=$("#savestat"); if(st) st.textContent="saving…";
+  _saveTimer=setTimeout(saveCfg, 700);
+}
+async function saveCfg(){
+  clearTimeout(_saveTimer);
+  const t=($("#f-target").value==="__new"?"workspace.docflow":$("#f-target").value).split(".");
+  const body={ company:$("#f-company").value.trim(), industry:$("#f-industry").value.trim(),
+    catalog:t[0], schema:t[1]||"docflow", customer_volume:$("#f-cvol").value,
+    chat_endpoint:$("#f-model").value.trim() };
+  S.cfg = await post("/api/config", body).catch(()=>S.cfg);
+  syncFormState();
+  const st=$("#savestat");
+  if(st){ st.textContent="saved ✓"; setTimeout(()=>{const x=$("#savestat"); if(x&&x.textContent==="saved ✓") x.textContent="";},1800); }
+}
+function syncFormState(){
+  const c=S.cfg||{};
+  $("#wsname").textContent = c.company || "";
+  const fc=$("#fw-company"), fi=$("#fw-industry");
+  if(fc) fc.classList.toggle("done", !!c.company);
+  if(fi) fi.classList.toggle("done", !!c.industry);
+  document.querySelectorAll(".tag.pick").forEach(x=>
+    x.classList.toggle("on", x.dataset.ind===c.industry));
+  const gb=$("#gobtn"); if(gb) gb.disabled=!goAllowed();
+  const gm=$("#gomsg"); if(gm) gm.textContent=gateMsg();
+  const mh=document.querySelectorAll(".movehead")[1];
+  if(mh){ const n=["company","industry"].filter(k=>c[k]).length;
+    mh.classList.toggle("done", n===2);
+    const ms=mh.querySelector(".mstat"); if(ms) ms.textContent=`${n} of 2`; }
+}
 function bindStart(){
-  document.querySelectorAll(".tag.pick").forEach(t=>t.onclick=()=>{
-    $("#f-industry").value=t.dataset.ind; saveCfg(); });
-  $("#savebtn").onclick=saveCfg;
+  document.querySelectorAll(".tag.pick").forEach(x=>x.onclick=()=>{
+    $("#f-industry").value=x.dataset.ind; saveCfg(); });
   ["f-company","f-industry","f-model"].forEach(id=>{ const el=$("#"+id);
-    el && (el.onchange=saveCfg); });
+    if(el){ el.oninput=queueSave; el.onchange=saveCfg; } });
   $("#f-target").onchange=saveCfg; $("#f-cvol").onchange=saveCfg;
   const rc=$("#recheck");
   if(rc) rc.onclick=async()=>{ S.ready=await j("/api/readiness").catch(()=>S.ready); renderStart(); };
@@ -463,7 +543,6 @@ function bindStart(){
     let res=null;
     try{ res=await post("/api/fix/all"); }catch(e){ res={ok:false,error:e.message}; }
     if(res && res.steps){
-      // Show what each step did, so a failure is attributable rather than vague.
       S.fixout.all={cls:res.ok?"good":"bad",
         text:res.ok?"Workspace ready.":`Still blocked by ${(res.blockers||[]).join(", ")}`,
         steps:res.steps};
@@ -473,21 +552,20 @@ function bindStart(){
     S.ready=(res&&res.readiness)?res.readiness:await j("/api/readiness").catch(()=>S.ready);
     renderStart();
   };
-  document.querySelectorAll("button.fixbtn").forEach(b=>b.onclick=async()=>{
-    const key=b.dataset.key, label=b.textContent;
-    b.disabled=true; b.innerHTML=`<span class="spin"></span>`;
+  document.querySelectorAll("button.fixbtn").forEach(bx=>bx.onclick=async()=>{
+    const key=bx.dataset.key;
+    bx.disabled=true; bx.innerHTML=`<span class="spin"></span>`;
     let res=null;
-    try{ res=await post(b.dataset.fix); }
+    try{ res=await post(bx.dataset.fix); }
     catch(e){ res={ok:false,error:e.message}; }
     // Success is only claimed when the platform actually reports success, and
     // the message survives the re-check that follows.
     const good = res && res.ok !== false && !res.error;
-    // On failure the instruction leads; the platform's wording is kept but
-    // demoted, because the reader needs the next action first.
     S.fixout[key] = {
       cls: good?"good":"bad",
       text: good
         ? (Array.isArray(res.created) ? "created "+res.created.join(", ")
+           : res.model ? `${res.model} answers`
            : res.warehouse_id ? `created ${esc(res.name||"warehouse")}, stops after ${res.auto_stop_mins||10} idle minutes`
            : res.started ? "started "+res.started : "done")
         : ((res&&res.human_action) ? res.human_action : "Could not complete."),
@@ -503,20 +581,14 @@ function bindStart(){
     pollGo();
   };
 }
-async function saveCfg(){
-  const t=($("#f-target").value==="__new"?"workspace.docflow":$("#f-target").value).split(".");
-  const body={ company:$("#f-company").value.trim(), industry:$("#f-industry").value.trim(),
-    catalog:t[0], schema:t[1]||"docflow", customer_volume:$("#f-cvol").value,
-    chat_endpoint:$("#f-model").value.trim() };
-  S.cfg = await post("/api/config", body).catch(()=>S.cfg);
-  renderStart();
-  const sb=$("#savebtn"); if(sb){ sb.textContent="Saved ✓"; setTimeout(()=>{const b=$("#savebtn"); if(b) b.textContent="Save";},1600); }
-}
 function pollGo(){
   stopPollers();
   poll(async()=>{
     S.golog = await j("/api/golog").catch(()=>S.golog);
-    if(S.page==="start"){ const el=$("#golog"); if(el) el.innerHTML=renderGolog();
+    if(S.page==="start"){ const el=$("#golog");
+      if(!el && S.golog && S.golog.steps && S.golog.steps.length){
+        renderStart();   // first steps arrived: swap the promise for the live log
+      } else if(el){ el.innerHTML=renderGolog(); }
       const gb=$("#gobtn"); if(gb){ gb.disabled = S.golog && S.golog.phase==="running";
         gb.textContent = S.golog&&S.golog.phase==="running"?"Running":"Go"; } }
     if(S.golog && (S.golog.phase==="done"||S.golog.phase==="error")){

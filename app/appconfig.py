@@ -199,12 +199,12 @@ def readiness(deep: bool = False) -> dict:
 
     def add(key, label, ok, detail, fix=None, fix_label=None, human=None,
             link=None, link_label=None, steps=None, untested=False, optional=False,
-            depends_on=None):
+            depends_on=None, auto=False):
         checks.append({"key": key, "label": label, "ok": bool(ok), "detail": detail,
                        "fixable_by_app": bool(fix), "fix_endpoint": fix,
                        "fix_label": fix_label, "human_action": human,
                        "link": link, "link_label": link_label, "steps": steps or [],
-                       "untested": untested, "depends_on": depends_on,
+                       "untested": untested, "depends_on": depends_on, "auto": auto,
                        "optional": optional or key not in REQUIRED})
 
     w = None
@@ -297,41 +297,58 @@ def readiness(deep: bool = False) -> dict:
             human="Or grant READ VOLUME and WRITE VOLUME on the target volume.")
 
     # ---- 5/6/7. serving endpoints, assistant, extraction agent (each isolated)
+    # The old form of this check listed databricks-* endpoints and called that
+    # proof. Free Edition proved it wrong: its models answer under AI Gateway
+    # names while the classic endpoints 404. The only honest test is asking a
+    # model to answer, which needs the warehouse, so cold workspaces see it as
+    # a waiting check rather than a false pass.
     names: list[str] = []
     try:
         names = [e.name for e in w.serving_endpoints.list()]
-        fm = [n for n in names if n.startswith("databricks-")]
-        add("endpoints", "Foundation models reachable", bool(fm),
-            f"{len(fm)} pay-per-token endpoints available for setup calls" if fm
-            else "No foundation model endpoints are visible to this identity.",
-            link=f"{host}/ml/endpoints", link_label="Open Serving",
-            human=None if fm else "Bind a serving endpoint to this app, or enable Foundation Model APIs.")
-    except Exception as e:
-        add("endpoints", "Foundation models reachable", False, str(e)[:180],
-            link=f"{host}/ml/endpoints", link_label="Open Serving",
-            human="The app identity cannot list serving endpoints.")
+    except Exception:
+        pass
+    if pipeline._MODEL["name"]:
+        add("endpoints", "Language model answers", True,
+            f"ai_query answers on {pipeline._MODEL['name']}"
+            + (f" · {pipeline._MODEL['note']}" if pipeline._MODEL["note"] else ""))
+    elif deep:
+        try:
+            r = pipeline.resolve_chat_model()
+            add("endpoints", "Language model answers", True,
+                r["note"] or f"ai_query answers on {r['model']}")
+        except Exception as e:
+            add("endpoints", "Language model answers", False, _clean(str(e)),
+                fix="/api/fix/models", fix_label="Find a working model",
+                link=f"{host}/ml/ai-gateway", link_label="Open AI Gateway",
+                human="No model answered a probe. Add a model in AI Gateway, or "
+                      "set one this workspace serves under Advanced on the left.")
+    elif wh_state == "RUNNING":
+        add("endpoints", "Language model answers", False,
+            "Not tested yet this session. Go tests it in its first seconds, "
+            "or test now.",
+            fix="/api/fix/models", fix_label="Test now",
+            untested=True)
+    else:
+        add("endpoints", "Language model answers", False,
+            "Tested the moment a warehouse is up; go does it in its first "
+            "seconds either way.",
+            human="Runs with the warehouse check above.",
+            untested=True, depends_on="warehouse")
 
     custom = [n for n in names if not n.startswith("databricks-")]
     ka = [n for n in custom if n.startswith("ka-") or "knowledge" in n.lower()]
     add("knowledge_assistant", "Knowledge Assistant", bool(ka),
         f"detected: {ka[0]}" if ka else
-        "Not created yet. Go creates one and attaches the document volume.",
-        fix=None if ka else "/api/fix/assistant",
-        fix_label=None if ka else "Create now",
-        human=None if ka else "Optional before go: go creates it either way.")
+        "Go creates it and points it at the document volume. Nothing to do here.",
+        auto=True)
 
     ie = [n for n in custom if any(k in n.lower() for k in ("extract", "kie", "classif"))]
     add("agent_bricks_ie", "Information Extraction agent", bool(ie),
-        f"detected: {ie[0]}" if ie else
-        "Not present. Extraction runs on Document Intelligence, which is always available. "
-        "A managed agent is an optional upgrade and has no create API today.",
-        link=f"{host}/agents" if host else None, link_label="Open Agent Bricks",
-        human=None if ie else "Build one by hand to demo the managed agent path.",
-        steps=[] if ie else [
-            "Open Agent Bricks in the workspace",
-            "Choose Information Extraction and point it at the document volume",
-            "Name it so it contains 'extract', then re-check here",
-        ])
+        f"detected: {ie[0]} · the run uses it" if ie else
+        "Extraction runs on Document Intelligence, always available. A managed "
+        "agent is used automatically when one exists; there is no API to create "
+        "one, so the run never asks you for it.",
+        auto=True)
 
     # ---- 8. AI Functions actually execute (needs compute)
     if deep or wh_state == "RUNNING":
@@ -406,13 +423,15 @@ def readiness(deep: bool = False) -> dict:
             human="Cost stays an estimate, which never blocks a demo.")
 
     required = [c for c in checks if c["key"] in REQUIRED]
-    blockers = [c["label"] for c in required if not c["ok"]]
+    blockers = [c["label"] for c in required if not c["ok"] and not c.get("untested")]
+    unverified = [c["label"] for c in required if not c["ok"] and c.get("untested")]
     return {
         "ready_to_configure": not blockers,
         "ready_to_run": not blockers and wh_state == "RUNNING",
         "blockers": blockers,
+        "unverified": unverified,
         "required_total": len(required),
-        "required_ok": len(required) - len(blockers),
+        "required_ok": len([c for c in required if c["ok"]]),
         "warehouse_state": wh_state,
         "checks": checks,
         "note": ("Readiness never starts compute on its own. Anything that would begin "
@@ -461,6 +480,14 @@ def fix_assistant() -> dict:
     orchestrator.ensure_ka()
     st = orchestrator.ka_state()
     return {"ok": bool(st.get("endpoint")), "state": st}
+
+
+def fix_models() -> dict:
+    """Probe model names until one answers, save the winner to config."""
+    r = pipeline.resolve_chat_model()
+    save_config({"chat_endpoint": r["model"]})
+    return {"ok": True, "model": r["model"],
+            "note": r["note"] or f"{r['model']} answers ai_query"}
 
 
 def fix_billing() -> dict:
@@ -520,6 +547,12 @@ def fix_everything() -> dict:
     else:
         done.append({"key": "volume", "label": "Document volume", "ok": True,
                      "detail": "already available"})
+
+    if not checks.get("endpoints", {}).get("ok"):
+        run("endpoints", "Language model", fix_models, needs="warehouse")
+    else:
+        done.append({"key": "endpoints", "label": "Language model", "ok": True,
+                     "detail": "already answering"})
 
     rd = readiness(deep=True)
     return {"ok": not rd["blockers"], "steps": done, "readiness": rd,

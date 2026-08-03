@@ -239,6 +239,13 @@ def api_fix_probe():
                 "Start a serverless warehouse, then re-check.")
 
 
+@app.post("/api/fix/models")
+def api_fix_models():
+    return _fix(appconfig.fix_models,
+                "No model answered. Add one in AI Gateway, or set a model this "
+                "workspace serves under Advanced.")
+
+
 @app.post("/api/fix/all")
 def api_fix_all():
     """Run every available repair in dependency order, once."""
@@ -296,6 +303,11 @@ def api_scan():
                                if e.name.startswith("databricks-"))
     except Exception:
         pass
+    try:
+        out["models"] = pipeline.model_candidates()[:20]
+        out["model_resolved"] = pipeline._MODEL["name"]
+    except Exception:
+        pass
     return out
 
 
@@ -306,6 +318,17 @@ def api_go():
     if missing:
         return JSONResponse({"error": f"complete the setup first: {', '.join(missing)}"},
                             status_code=400)
+    # The same gate the page shows, enforced where it counts. A stale browser
+    # tab must not be able to start a run the workspace cannot finish.
+    try:
+        rd = appconfig.readiness()
+        if rd.get("blockers"):
+            return JSONResponse(
+                {"error": "workspace not ready: " + ", ".join(rd["blockers"])
+                          + ". Press Set up this workspace first.",
+                 "blockers": rd["blockers"]}, status_code=409)
+    except Exception:
+        pass                       # readiness itself failing must not strand go
     if not orchestrator.start(cfg):
         return JSONResponse({"error": "a run is already in progress"}, status_code=409)
     return {"started": True}

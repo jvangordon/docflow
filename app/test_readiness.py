@@ -116,6 +116,7 @@ def run(label, *, fail=None, names=None, cats=None, sysstate="ENABLE_COMPLETED",
         sql_raises=False, expect_red, expect_fix=None):
     """Inject one failure, then assert exactly that check goes red."""
     appconfig.pipeline.wc = lambda: Boom(fail or set(), names, cats, sysstate)
+    appconfig.pipeline._MODEL.update({"name": "", "note": "", "tried": 0})
     if sql_raises:
         appconfig.pipeline.sql = lambda *a, **k: (_ for _ in ()).throw(
             RuntimeError("UNSUPPORTED: ai_classify is not available in this region"))
@@ -135,8 +136,8 @@ def run(label, *, fail=None, names=None, cats=None, sysstate="ENABLE_COMPLETED",
         problems.append(f"emitted {len(by)} checks, expected 9 (a failure hid its neighbours)")
     if expect_fix and got and got.get("fix_endpoint") != expect_fix:
         problems.append(f"remedy was {got.get('fix_endpoint')}, expected {expect_fix}")
-    if got and not got["ok"] and not (got.get("fix_endpoint") or got.get("steps")
-                                      or got.get("human_action")):
+    if got and not got["ok"] and not got.get("auto") and not (
+            got.get("fix_endpoint") or got.get("steps") or got.get("human_action")):
         problems.append("failed with no remedy offered")
 
     ok = not problems
@@ -162,16 +163,35 @@ results = [
     run("no privilege to list schemas", fail={"schema_list"}, expect_red="catalog"),
     run("volume unreachable", fail={"volume"}, expect_red="volume",
         expect_fix="/api/bootstrap"),
-    run("serving endpoints denied", fail={"endpoints_list"}, expect_red="endpoints"),
-    run("no foundation models", names=[], expect_red="endpoints"),
-    run("assistant absent", names=["databricks-gpt"], expect_red="knowledge_assistant",
-        expect_fix="/api/fix/assistant"),
+    run("no model answers a probe", sql_raises=True, expect_red="endpoints",
+        expect_fix="/api/fix/models"),
+    run("assistant absent", names=["databricks-gpt"], expect_red="knowledge_assistant"),
     run("extraction agent absent", names=["databricks-gpt"], expect_red="agent_bricks_ie"),
     run("AI Functions unavailable", sql_raises=True, expect_red="ai_functions"),
     run("billing schema not enabled", sysstate="DISABLE_INITIALIZED",
         expect_red="billing_schema", expect_fix="/api/fix/billing"),
     run("system schema unreadable", fail={"sysschema"}, expect_red="billing_schema"),
 ]
+
+# Free Edition regression: no databricks-* endpoints visible, yet a model
+# answers under a gateway name. The check must pass on the probe, and the two
+# agent rows must present as built-at-go rather than as user tasks.
+appconfig.pipeline.wc = lambda: Boom(set(), [], None, "ENABLE_COMPLETED")
+appconfig.pipeline._MODEL.update({"name": "", "note": "", "tried": 0})
+appconfig.pipeline.sql = lambda *a, **k: [["OK"]]
+_r = appconfig.readiness(deep=True)
+_by = {c["key"]: c for c in _r["checks"]}
+_probs = []
+if not _by["endpoints"]["ok"]:
+    _probs.append("endpoints red although a model answered the probe")
+if not (_by["knowledge_assistant"].get("auto") and _by["agent_bricks_ie"].get("auto")):
+    _probs.append("agent rows are not marked auto")
+if any(_by[k].get("fix_endpoint") for k in ("knowledge_assistant", "agent_bricks_ie")):
+    _probs.append("an auto row still advertises a fix button")
+print(f"\n  [{'PASS' if not _probs else 'FAIL'}] gateway workspace: probe green, agents auto")
+for _p in _probs:
+    print(f"         -> {_p}")
+results.append(not _probs)
 
 # every fix endpoint the checks advertise must exist in the API
 import app as fastapi_app  # noqa: E402

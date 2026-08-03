@@ -110,6 +110,25 @@ def ensure_infra(cfg: dict) -> None:
     _section("Prepare workspace", time.time() - t0)
 
 
+def resolve_model() -> None:
+    """Find a model this workspace actually serves before spending any time.
+
+    Free Edition workspaces do not serve the databricks-* endpoints that
+    enterprise workspaces do, so the configured name is a guess until a
+    one-token probe proves it answers. Failing here, in second ten, beats
+    failing at minute six with documents already generated.
+    """
+    t0 = time.time()
+    try:
+        r = pipeline.resolve_chat_model()
+        _log("Language model", "ok",
+             r["note"] or f"{r['model']} answers ai_query on this warehouse")
+    except Exception as e:
+        _log("Language model", "err", str(e)[:220])
+        raise
+    _section("Resolve the language model", time.time() - t0)
+
+
 def research_company(cfg: dict) -> None:
     """One structured AI Gateway call: vocabulary + questions + use-case copy."""
     t0 = time.time()
@@ -160,7 +179,7 @@ def research_company(cfg: dict) -> None:
     )
     try:
         rows = pipeline.sql(
-            f"SELECT ai_query('{pipeline.CHAT_ENDPOINT}', :p, responseFormat => '{schema.replace(chr(39), chr(39)*2)}')",
+            f"SELECT ai_query('{pipeline.chat_model()}', :p, responseFormat => '{schema.replace(chr(39), chr(39)*2)}')",
             params={"p": prompt}, timeout="50s")
         theme = json.loads(rows[0][0])
         theme["source"] = "researched"
@@ -175,7 +194,7 @@ def research_company(cfg: dict) -> None:
                            "source": "generic",
                            "why": f"Company research did not run: {str(e)[:120]}"}
         _log("Company research", "warn",
-             "using generic wording, pages will not be industry specific")
+             f"using generic wording · research failed: {str(e)[:90]}")
     _section("Research the company", time.time() - t0)
 
 
@@ -239,6 +258,10 @@ def ensure_ka() -> None:
             _log("Knowledge Assistant", "ok", f"created · endpoint {ka.endpoint_name}")
         else:
             _log("Knowledge Assistant", "ok", f"using existing · endpoint {ka.endpoint_name}")
+        # The asset is recorded the moment it exists. A slow source attach
+        # below must not cost the rest of the run its knowledge of the KA.
+        GO["assets"]["ka"] = {"name": ka.name, "endpoint": ka.endpoint_name,
+                              "display": KA_DISPLAY}
         have_source = False
         try:
             for s in w.knowledge_assistants.list_knowledge_sources(ka.name):
@@ -246,15 +269,50 @@ def ensure_ka() -> None:
         except Exception:
             pass
         if not have_source:
-            w.knowledge_assistants.create_knowledge_source(ka.name, K.KnowledgeSource(
-                display_name="demo-documents", description="Demo document volume",
-                source_type="files", files=K.FilesSpec(path=f"{pipeline.VOL_ROOT}/inbox")))
-            _log("Knowledge source", "ok", "volume attached · indexing in background")
-        GO["assets"]["ka"] = {"name": ka.name, "endpoint": ka.endpoint_name,
-                              "display": KA_DISPLAY}
+            # On a freshly created assistant this call can hang inside the
+            # SDK's five-minute retry budget while the control plane finishes
+            # provisioning. Indexing is background work by definition, so the
+            # run caps its wait and moves on; a rerun adopts and re-attaches.
+            outcome: list = []
+
+            def _attach():
+                try:
+                    w.knowledge_assistants.create_knowledge_source(ka.name, K.KnowledgeSource(
+                        display_name="demo-documents", description="Demo document volume",
+                        source_type="files", files=K.FilesSpec(path=f"{pipeline.VOL_ROOT}/inbox")))
+                    outcome.append("ok")
+                except Exception as ex:
+                    outcome.append(str(ex))
+            th = threading.Thread(target=_attach, daemon=True)
+            th.start()
+            th.join(75)
+            if th.is_alive() or (outcome and "timed out" in outcome[0].lower()):
+                _log("Knowledge source", "ok",
+                     "attaching in the background · the Ask page uses the "
+                     "assistant the moment indexing finishes")
+            elif outcome and outcome[0] == "ok":
+                _log("Knowledge source", "ok", "volume attached · indexing in background")
+            else:
+                _log("Knowledge source", "warn",
+                     f"not attached yet, a rerun retries it · {outcome[0][:120] if outcome else ''}")
     except Exception as e:
         _log("Knowledge Assistant", "warn", str(e)[:200])
     _section("Create the Knowledge Assistant", time.time() - t0)
+
+
+def report_ka() -> None:
+    """Close the run with the assistant's true state instead of a guess."""
+    try:
+        st = ka_state()
+        if st.get("ready"):
+            _log("Knowledge Assistant", "ok",
+                 f"ready · {st.get('endpoint', '')} answers with citations")
+        elif st.get("endpoint"):
+            _log("Knowledge Assistant", "ok",
+                 f"{st.get('endpoint')} still indexing · Ask falls back to "
+                 f"governed SQL until it is ready, then switches on its own")
+    except Exception:
+        pass
 
 
 def ensure_genie() -> None:
@@ -318,11 +376,13 @@ def go(cfg: dict) -> None:
         pipeline.STATE.money = {"caught_usd": 0.0, "cost_usd": 0.0}
     try:
         ensure_infra(cfg)
+        resolve_model()              # fail in second ten, not minute six
         research_company(cfg)
         build_corpus(cfg)
         ensure_ka()                  # indexing continues in background
         run_documents()
         ensure_genie()               # after tables exist
+        report_ka()                  # honest status, never a wait
         with _glock:
             GO["phase"] = "done"
             GO["finished"] = time.time()
@@ -389,7 +449,7 @@ def route_question(question: str) -> str:
             "required": ["route"]}, "strict": True}})
     try:
         rows = pipeline.sql(
-            f"SELECT ai_query('{pipeline.CHAT_ENDPOINT}', :p, responseFormat => '{schema.replace(chr(39), chr(39)*2)}')",
+            f"SELECT ai_query('{pipeline.chat_model()}', :p, responseFormat => '{schema.replace(chr(39), chr(39)*2)}')",
             params={"p": "Route this question. 'tables' when it asks about counts, sums, "
                          "amounts, dates or comparisons over extracted fields. 'documents' "
                          "when it asks what a document says, requires, or allows. "
