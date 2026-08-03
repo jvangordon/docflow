@@ -18,7 +18,7 @@ cd ~/projects/agentbricks-doc-demo && databricks apps create docflow
 ```
 
 ```bash
-cd ~/projects/agentbricks-doc-demo && databricks sync app /Workspace/Users/jvangordon@gmail.com/docflow-app --full && databricks apps deploy docflow --source-code-path /Workspace/Users/jvangordon@gmail.com/docflow-app
+cd ~/projects/agentbricks-doc-demo && databricks sync app /Workspace/Users/<you>/docflow-app --full && databricks apps deploy docflow --source-code-path /Workspace/Users/<you>/docflow-app
 ```
 
 Creating the app takes a few minutes because Databricks provisions compute for
