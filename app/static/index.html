@@ -755,8 +755,8 @@ async function renderFlow(){
 function buildRiver(){
   const termY={ie:7, ka:26, ie_ka:45, secure:64, archive:81};
   const meta={
-    ie:["Information Extraction","ai_extract → Delta tables · managed agent auto-detected","b-ie","ie",""],
-    ka:["Knowledge Assistant","the one Agent Bricks type with a create API · covers Both too","b-ka","ka",""],
+    ie:["Information Extraction","ai_extract → Delta tables · adopts a managed agent if you build one","b-ie","ie",""],
+    ka:["Knowledge Assistant","created by this app over the API · covers Both too","b-ka","ka",""],
     ie_ka:["Both · IE + KA","one document, two capabilities","b-both","ie","hotT"],
     secure:["Secure filing only","redacted · its own locked volume","b-sec","sec",""],
     archive:["No action","retained · lineage kept","b-arch","mut","archT"]};
@@ -794,7 +794,7 @@ function buildRiver(){
       <div class="nlbl">INBOX<span>ai_parse_document</span></div></div>
     <div class="node" style="left:26.5%;top:34%">
       <div class="ring"><div class="ring2"></div><span class="num" id="c-hub">·</span></div>
-      <div class="nlbl">CLASSIFY + ROUTE<span>structured ai_query · no UI agent needed</span></div></div>
+      <div class="nlbl">CLASSIFY + ROUTE<span>Custom LLM agent, created by this app</span></div></div>
     ${Object.entries(meta).map(([k,m])=>`
       <div class="term ${m[4]}" style="left:75%;top:${termY[k]}%">
         <b>${m[0]}</b><span>${m[1]}</span>

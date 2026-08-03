@@ -106,25 +106,102 @@ def ensure_infra(cfg: dict) -> None:
         except Exception:
             pass
     pipeline.set_target(cat, sch, "docs")
-    # The app's identity owns everything it just made, so without these grants
-    # the humans in the room cannot open a single document in Catalog Explorer.
-    # The secure volume deliberately gets nothing: opening it should fail, and
-    # that denial is the compliance beat of the demo.
-    try:
-        for g in (f"GRANT USE SCHEMA ON SCHEMA {cat}.{sch} TO `account users`",
-                  f"GRANT SELECT ON SCHEMA {cat}.{sch} TO `account users`",
-                  f"GRANT READ VOLUME ON VOLUME {cat}.{sch}.docs TO `account users`"):
-            pipeline.sql(g)
-        _log("Browse access", "ok",
-             "workspace users can open the schema, tables and documents · "
-             "the secure volume alone stays locked")
-    except Exception as e:
-        _log("Browse access", "warn",
-             f"documents stay app-only in Catalog Explorer · {str(e)[:120]}")
+    grant_browse_access(cat, sch, cfg)
     boot = pipeline.bootstrap()
     _log("Schema, volume, tables", "ok" if not boot.get("errors") else "warn",
          f"{cat}.{sch} · {boot['statements']} statements")
     _section("Prepare workspace", time.time() - t0)
+
+
+def grant_browse_access(cat: str, sch: str, cfg: dict | None = None) -> dict:
+    """Let humans open what the app's identity owns.
+
+    The app SP owns the schema it creates, so without this nobody in the room
+    can open a single document: 'User does not have USE SCHEMA privilege'.
+    Group names differ per workspace, so every plausible principal is tried and
+    the result names the one that worked. The secure volume is deliberately
+    left out — opening it should fail, and that denial is the compliance beat.
+    """
+    principals = ["account users", "users"]
+    import appconfig
+    owner = (cfg or {}).get("owner_email") or appconfig._installer()
+    if owner:
+        principals.insert(0, owner)          # the person who installed it
+    granted, errs = [], []
+    for who in principals:
+        try:
+            for g in (f"GRANT USE CATALOG ON CATALOG {cat} TO `{who}`",
+                      f"GRANT USE SCHEMA ON SCHEMA {cat}.{sch} TO `{who}`",
+                      f"GRANT SELECT ON SCHEMA {cat}.{sch} TO `{who}`",
+                      f"GRANT READ VOLUME ON VOLUME {cat}.{sch}.docs TO `{who}`"):
+                pipeline.sql(g)
+            granted.append(who)
+        except Exception as e:
+            errs.append(f"{who}: {str(e)[:70]}")
+    if granted:
+        _log("Browse access", "ok",
+             f"{', '.join(granted)} can open the schema, tables and documents · "
+             f"the secure volume alone stays locked")
+    else:
+        # Never silent: the presenter needs the SQL before they are on stage.
+        _log("Browse access", "warn",
+             f"you cannot browse the documents yet. Run this as yourself: "
+             f"GRANT USE SCHEMA, SELECT ON SCHEMA {cat}.{sch} TO `<you>`; "
+             f"GRANT READ VOLUME ON VOLUME {cat}.{sch}.docs TO `<you>` "
+             f"· {errs[0] if errs else ''}")
+    return {"granted": granted, "errors": errs}
+
+
+def ensure_classifier(cfg: dict) -> None:
+    """Create the routing brick through the one API that can make one.
+
+    Agent Bricks exposes create APIs for Custom LLM, Knowledge Assistant and
+    Supervisor only; the Information Extraction and Text Classification tiles
+    are UI-created. Custom LLM is Databricks' documented home for
+    classification work, so the routing lane runs on a real Agent Brick that
+    appears in the Agents list instead of a bare model call. Optional
+    throughout: if the workspace cannot make one, routing falls back to a
+    structured ai_query and the log says so.
+    """
+    t0 = time.time()
+    name = "docflow-classifier"
+    try:
+        w = _w()
+        found = None
+        try:
+            for x in w.serving_endpoints.list():
+                if x.name and name in x.name:
+                    found = x.name
+                    break
+        except Exception:
+            pass
+        if found:
+            GO["assets"]["classifier"] = {"name": name, "endpoint": found}
+            _log("Classification brick", "ok", f"using existing · {found}")
+        else:
+            cl = w.agent_bricks.create_custom_llm(
+                name=name,
+                instructions=(
+                    "You route business documents. Given a document's text, decide its "
+                    "type, whether its recurring fields belong in a table, and whether a "
+                    "person would ask questions of its prose. Answer only with the "
+                    "requested structure."),
+                guidelines=[
+                    "Invoices, purchase orders, claims, inspections and manifests have "
+                    "fields worth extracting.",
+                    "Contracts, policies, manuals and safety sheets are worth asking "
+                    "questions of.",
+                    "HR and medical files are sensitive: neither, secure filing only.",
+                ])
+            GO["assets"]["classifier"] = {"name": name, "id": cl.id,
+                                          "endpoint": cl.endpoint_name}
+            _log("Classification brick", "ok",
+                 f"created a Custom LLM agent · {cl.endpoint_name or cl.id} · "
+                 f"visible under Agents")
+    except Exception as e:
+        _log("Classification brick", "warn",
+             f"not available here, routing runs on structured ai_query · {str(e)[:110]}")
+    _section("Create the classification brick", time.time() - t0)
 
 
 def resolve_model() -> None:
@@ -424,6 +501,7 @@ def go(cfg: dict, stage: str = "all") -> None:
             resolve_model()          # fail in second ten, not minute six
             research_company(cfg)
             build_corpus(cfg)
+            ensure_classifier(cfg)   # real Agent Brick for the routing lane
             ensure_ka()              # indexing continues in background
         if stage == "prepare":
             docs = GO["assets"].get("documents", {})

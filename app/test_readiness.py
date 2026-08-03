@@ -132,8 +132,8 @@ def run(label, *, fail=None, names=None, cats=None, sysstate="ENABLE_COMPLETED",
         problems.append(f"check '{expect_red}' vanished from the list")
     elif got["ok"]:
         problems.append(f"'{expect_red}' stayed green under its own failure")
-    if len(by) != 10:
-        problems.append(f"emitted {len(by)} checks, expected 10 (a failure hid its neighbours)")
+    if len(by) != 11:
+        problems.append(f"emitted {len(by)} checks, expected 11 (a failure hid its neighbours)")
     if expect_fix and got and got.get("fix_endpoint") != expect_fix:
         problems.append(f"remedy was {got.get('fix_endpoint')}, expected {expect_fix}")
     if got and not got["ok"] and not got.get("auto") and not (
@@ -184,10 +184,17 @@ _by = {c["key"]: c for c in _r["checks"]}
 _probs = []
 if not _by["endpoints"]["ok"]:
     _probs.append("endpoints red although a model answered the probe")
-if not (_by["knowledge_assistant"].get("auto") and _by["agent_bricks_ie"].get("auto")):
-    _probs.append("agent rows are not marked auto")
-if any(_by[k].get("fix_endpoint") for k in ("knowledge_assistant", "agent_bricks_ie")):
+# The two API-creatable bricks are built for you; IE is the only Agent Bricks
+# type with no create API, so it stays a user action with a link, not a chore
+# the app pretends it can do.
+if not (_by["knowledge_assistant"].get("auto") and _by["classifier_brick"].get("auto")):
+    _probs.append("API-creatable agent rows are not marked auto")
+if any(_by[k].get("fix_endpoint") for k in ("knowledge_assistant", "classifier_brick")):
     _probs.append("an auto row still advertises a fix button")
+if _by["agent_bricks_ie"].get("auto"):
+    _probs.append("IE claims to be automatic, but it has no create API")
+if not _by["agent_bricks_ie"].get("optional"):
+    _probs.append("IE must be optional: the demo runs without it")
 print(f"\n  [{'PASS' if not _probs else 'FAIL'}] gateway workspace: probe green, agents auto")
 for _p in _probs:
     print(f"         -> {_p}")

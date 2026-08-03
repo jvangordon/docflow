@@ -239,6 +239,12 @@ def api_fix_probe():
                 "Start a serverless warehouse, then re-check.")
 
 
+@app.post("/api/fix/grants")
+def api_fix_grants():
+    return _fix(appconfig.fix_grants,
+                "Grant yourself USE SCHEMA and SELECT on the schema in a SQL editor.")
+
+
 @app.post("/api/fix/models")
 def api_fix_models():
     return _fix(appconfig.fix_models,

@@ -26,6 +26,7 @@ import time
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.apps import AppDeployment
+from databricks.sdk.service.workspace import ImportFormat
 
 w = WorkspaceClient()
 me = w.current_user.me().user_name
@@ -69,6 +70,22 @@ else:
 # MAGIC %md ## 2. Deploy the code from this Git folder
 
 # COMMAND ----------
+
+# Tell the app who installed it, so its grants can name a real person instead
+# of guessing at workspace group names.
+try:
+    import os as _os
+    yaml_path = SOURCE.replace("/Workspace", "", 1) + "/app.yaml"
+    body = w.workspace.download(yaml_path).read().decode()
+    if "DOCFLOW_OWNER" not in body:
+        body = body.rstrip() + f"\nenv:\n  - name: DOCFLOW_OWNER\n    value: {me}\n"
+        import io as _io
+        w.workspace.upload(yaml_path, _io.BytesIO(body.encode()),
+                           format=ImportFormat.AUTO, overwrite=True)
+        print(f"recorded installer identity: {me}")
+except Exception as e:
+    print(f"could not record installer identity ({str(e)[:80]}) — the app will "
+          f"grant to workspace groups instead")
 
 dep = w.apps.deploy(app_name=APP_NAME,
                     app_deployment=AppDeployment(source_code_path=SOURCE)).result()

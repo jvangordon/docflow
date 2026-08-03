@@ -52,6 +52,12 @@ HEX_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 
 
 # ------------------------------------------------------------------ config io
+def _installer() -> str:
+    """Who ran the installer, recorded into the app env at deploy time."""
+    import os
+    return os.environ.get("DOCFLOW_OWNER", "")
+
+
 def load_config() -> dict:
     try:
         resp = pipeline.wc().files.download(CONFIG_PATH)
@@ -337,27 +343,57 @@ def readiness(deep: bool = False) -> dict:
 
     custom = [n for n in names if not n.startswith("databricks-")]
     ka = [n for n in custom if n.startswith("ka-") or "knowledge" in n.lower()]
-    add("knowledge_assistant", "Knowledge Assistant", bool(ka),
+    add("knowledge_assistant", "Knowledge Assistant · built at go", bool(ka),
         f"detected: {ka[0]}" if ka else
-        "Go creates it and points it at the document volume. Nothing to do here.",
+        "POST /api/2.1/knowledge-assistants. The run creates it and attaches "
+        "the document volume, even where the Agents UI offers no tile for it.",
         auto=True)
 
-    add("bricks_ui", "Agent Bricks pages open in the UI", False,
-        "The run creates and uses its agents over the API either way. Opening "
-        "them in the Agents UI mid-demo is preview-gated per workspace, and "
-        "the API cannot see that flag, so check it by eye once.",
-        link=f"{host}/ml/agents", link_label="Open Agents",
-        human="If an agent row there says 'Brick type not enabled', flip the "
-              "Agent Bricks previews on, or skip the show-the-UI beat.",
+    cll = [n for n in custom if "classifier" in n.lower() or "docflow-c" in n.lower()]
+    add("classifier_brick", "Classification agent · built at go", bool(cll),
+        f"detected: {cll[0]}" if cll else
+        "POST /api/2.0/custom-llms. The run creates a Custom LLM agent for "
+        "routing, which is the API-creatable home for classification work.",
+        auto=True)
+
+    ie = [n for n in custom if any(k in n.lower() for k in ("extract", "kie"))]
+    add("agent_bricks_ie", "Information Extraction agent · optional upgrade", bool(ie),
+        f"detected: {ie[0]} · the run uses it" if ie else
+        "The only Agent Bricks type with no create API — the Agents UI builds "
+        "it, nothing else can. Extraction runs on ai_extract meanwhile, and the "
+        "run adopts a managed agent automatically if you build one.",
+        link=f"{host}/ml/agents" if host else None,
+        link_label="Build one in Agents",
+        human=None if ie else "Optional. Name it so it contains 'extract' and "
+                              "the next run picks it up.",
         optional=True)
 
-    ie = [n for n in custom if any(k in n.lower() for k in ("extract", "kie", "classif"))]
-    add("agent_bricks_ie", "Information Extraction agent", bool(ie),
-        f"detected: {ie[0]} · the run uses it" if ie else
-        "Extraction runs on Document Intelligence, always available. A managed "
-        "agent is used automatically when one exists; there is no API to create "
-        "one, so the run never asks you for it.",
-        auto=True)
+    # ---- browse access: the app SP owns the schema, so people are locked out
+    #      by default. Tested for real, because a presenter finds out mid-demo.
+    if deep or wh_state == "RUNNING":
+        try:
+            rows = pipeline.sql(f"SHOW GRANTS ON SCHEMA {cat}.{sch}")
+            who = {str(r[0]) for r in rows if r and r[0]}
+            human = [p for p in who if "@" in p or "users" in p.lower()]
+            add("browse", "People can open the documents", bool(human),
+                f"granted to {', '.join(sorted(human)[:3])}" if human else
+                "Only the app's identity can open this schema, so nobody in the "
+                "room can browse the documents it generates.",
+                fix=None if human else "/api/fix/grants",
+                fix_label=None if human else "Grant browse access",
+                human=None if human else
+                    f"Or run as yourself: GRANT USE SCHEMA, SELECT ON SCHEMA "
+                    f"{cat}.{sch} TO `<you>`",
+                optional=True)
+        except Exception:
+            add("browse", "People can open the documents", False,
+                "Could not read the grants on this schema yet.",
+                fix="/api/fix/grants", fix_label="Grant browse access",
+                untested=True, optional=True)
+    else:
+        add("browse", "People can open the documents", False,
+            "Checked once a warehouse is up; go grants it during the run.",
+            untested=True, depends_on="warehouse", optional=True)
 
     # ---- 8. AI Functions actually execute (needs compute)
     if deep or wh_state == "RUNNING":
@@ -489,6 +525,20 @@ def fix_assistant() -> dict:
     orchestrator.ensure_ka()
     st = orchestrator.ka_state()
     return {"ok": bool(st.get("endpoint")), "state": st}
+
+
+def fix_grants() -> dict:
+    """Re-run the browse grants against the current target."""
+    import orchestrator
+    cfg = load_config()
+    cat, sch = cfg.get("catalog") or "workspace", cfg.get("schema") or "docflow"
+    out = orchestrator.grant_browse_access(cat, sch, cfg)
+    if out["granted"]:
+        return {"ok": True, "created": [f"browse access for {p}" for p in out["granted"]]}
+    return {"ok": False,
+            "human_action": f"Run as yourself in a SQL editor: GRANT USE SCHEMA, "
+                            f"SELECT ON SCHEMA {cat}.{sch} TO `<your email>`",
+            "error": (out["errors"] or [""])[0]}
 
 
 def fix_models() -> dict:
