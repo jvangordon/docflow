@@ -35,27 +35,11 @@ w = WorkspaceClient()
 print(f"workspace : {w.config.host}")
 print(f"as        : {w.current_user.me().user_name}")
 
-# COMMAND ----------
 
-# MAGIC %md ## 1. The app
-
-# COMMAND ----------
-
-if APP_NAME in {a.name for a in w.apps.list()}:
-    w.apps.delete(name=APP_NAME)
-    for _ in range(40):
-        if APP_NAME not in {a.name for a in w.apps.list()}:
-            break
-        time.sleep(5)
-    gone = APP_NAME not in {a.name for a in w.apps.list()}
-    print(f"app '{APP_NAME}': {'removed, its identity went with it' if gone else 'delete still propagating, harmless'}")
-else:
-    print(f"app '{APP_NAME}': already gone")
-
-# COMMAND ----------
-
-# MAGIC %md ## 2. The Knowledge Assistant
-
+# MAGIC %md ## 1. The Knowledge Assistant, while its owner still exists
+# MAGIC
+# MAGIC The app's identity owns the assistant. Deleting the app first orphans it,
+# MAGIC and an orphaned assistant refuses to die. Owner outlives assistant, always.
 # COMMAND ----------
 
 try:
@@ -72,7 +56,7 @@ except Exception as e:
 
 # COMMAND ----------
 
-# MAGIC %md ## 3. The Genie space
+# MAGIC %md ## 2. The Genie space
 
 # COMMAND ----------
 
@@ -89,7 +73,7 @@ except Exception as e:
 
 # COMMAND ----------
 
-# MAGIC %md ## 4. The schema, tables, volume and documents
+# MAGIC %md ## 3. The schema, tables, volume and documents
 
 # COMMAND ----------
 
@@ -110,6 +94,21 @@ else:
         r = w.statement_execution.get_statement(r.statement_id)
         state = r.status.state.value if r.status and r.status.state else "?"
     print(f"schema {CATALOG}.{SCHEMA}: dropped with everything in it ({state})")
+
+# COMMAND ----------
+
+# COMMAND ----------
+
+if APP_NAME in {a.name for a in w.apps.list()}:
+    w.apps.delete(name=APP_NAME)
+    for _ in range(40):
+        if APP_NAME not in {a.name for a in w.apps.list()}:
+            break
+        time.sleep(5)
+    gone = APP_NAME not in {a.name for a in w.apps.list()}
+    print(f"app '{APP_NAME}': {'removed, its identity went with it' if gone else 'delete still propagating, harmless'}")
+else:
+    print(f"app '{APP_NAME}': already gone")
 
 # COMMAND ----------
 
