@@ -1198,6 +1198,23 @@ def ask_genie(question: str) -> dict:
     return out
 
 
+def _sql_fallback(question: str, why: str) -> dict:
+    """Answer from the governed tables when the assistant cannot yet.
+
+    Whoever is presenting must never be shown a platform error. The tables
+    exist, so the question still gets a real, sourced answer with an honest
+    note about which engine produced it.
+    """
+    t0 = time.time()
+    out = pipeline.ask_structured(question)
+    out["engine"] = "sql"
+    out["seconds"] = round(time.time() - t0, 1)
+    out["note"] = why
+    if not out.get("error") and not out.get("text"):
+        out["text"] = "Answered from the extracted tables."
+    return out
+
+
 def ask_assistant(question: str) -> dict:
     """Send a wording question to the assistant that owns that domain."""
     ql = question.lower()
@@ -1214,11 +1231,11 @@ def ask_assistant(question: str) -> dict:
         if any(st.get("endpoint") and not st.get("sources") for _, st in states):
             _attach_source_async()
         waiting = ", ".join(sp["about"] for sp, st in states if st.get("endpoint"))
-        return {"engine": "assistant", "pending": True,
-                "states": [st for _, st in states],
-                "text": (f"The assistants ({waiting or 'both'}) are still indexing "
-                         f"their document folders. Ask this again in a few minutes "
-                         f"— table questions answer right now.")}
+        return _sql_fallback(
+            question,
+            f"The assistants ({waiting or 'both'}) are still reading their "
+            f"documents, so this came from the governed tables. Ask again "
+            f"shortly for a cited answer.")
     spec, st = pick
     w = _w()
     t0 = time.time()
@@ -1232,8 +1249,12 @@ def ask_assistant(question: str) -> dict:
             for c in (item.get("content") or []):
                 if isinstance(c, dict) and c.get("text"):
                     text += c["text"]
-        if not text:
-            text = json.dumps(raw)[:500]
+        low = (text or "").strip().lower().rstrip(".")
+        if not text or low in ("internal error", "error"):
+            return _sql_fallback(
+                question,
+                "The assistant could not answer that yet, so this came from the "
+                "governed tables.")
         return {"engine": "assistant", "seconds": round(time.time() - t0, 1),
                 "text": text, "endpoint": st["endpoint"], "assistant": spec["about"]}
     except Exception as e:
@@ -1244,7 +1265,10 @@ def ask_assistant(question: str) -> dict:
                     "text": "That assistant is not connected to its documents yet. "
                             "Connecting it now — ask this exact question again in a "
                             "few minutes."}
-        return {"engine": "assistant", "error": msg[:250], "endpoint": st.get("endpoint")}
+        return _sql_fallback(
+            question,
+            f"The assistant is unavailable right now, so this came from the "
+            f"governed tables. ({msg[:80]})")
 
 
 def ask(question: str) -> dict:
