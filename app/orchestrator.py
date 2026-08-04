@@ -215,7 +215,7 @@ def ensure_infra(cfg: dict) -> None:
     if not exists(f"SHOW VOLUMES IN {cat}.{sch} LIKE 'secure'"):
         pipeline.sql(f"CREATE VOLUME IF NOT EXISTS {cat}.{sch}.secure")
     for sub in ("inbox", "processed", "archive", "generated",
-                "ka_contracts", "ka_claims"):
+                "ka_contracts", "ka_claims", "ka_all"):
         try:
             w.files.create_directory(f"/Volumes/{cat}/{sch}/docs/{sub}")
         except Exception:
@@ -532,8 +532,10 @@ def build_corpus(cfg: dict) -> None:
                        f"{pipeline.VOL_ROOT}/inbox/{item['filename']}"]
             if fol:
                 # A copy in the owning assistant's folder, so each assistant
-                # indexes only its own documents instead of the whole inbox.
+                # indexes only its own documents instead of the whole inbox,
+                # plus a pooled copy for tiers that allow only one assistant.
                 targets.append(f"{pipeline.VOL_ROOT}/{fol}/{item['filename']}")
+                targets.append(f"{pipeline.VOL_ROOT}/ka_all/{item['filename']}")
             for dest in targets:
                 # Re-read per upload and let each buffer go: holding every PDF
                 # in memory at once is the heaviest moment of the whole run,
@@ -696,7 +698,9 @@ def attach_assistant_sources() -> None:
             # When the tier allowed only one assistant, that one indexes the
             # whole inbox so contract AND claim questions still get answers.
             lone = len(_KA_THREAD["created"]) == 1 and len(ASSISTANTS) > 1
-            folder = (f"{pipeline.VOL_ROOT}/inbox" if lone
+            # ka_all holds every assistant-lane document and nothing else — never
+            # the inbox, which carries the HR file no assistant may ever read.
+            folder = (f"{pipeline.VOL_ROOT}/ka_all" if lone
                       else f"{pipeline.VOL_ROOT}/{spec['folder']}")
             have = False
             try:
