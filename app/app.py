@@ -367,6 +367,47 @@ def api_golog():
     return out
 
 
+class PageGen(BaseModel):
+    instruction: str
+    slug: str = ""
+    title: str = ""
+    model: str = ""
+
+
+@app.get("/api/pages")
+def api_pages():
+    """The SA's own presentation pages, listed for the nav."""
+    import pages
+    return {"pages": pages.list_pages()}
+
+
+@app.get("/api/pages/{slug}")
+def api_page(slug: str):
+    import pages
+    rec = pages.get_page(slug)
+    if not rec:
+        return JSONResponse({"error": "no such page"}, status_code=404)
+    return rec
+
+
+@app.post("/api/pages/generate")
+def api_page_generate(body: PageGen):
+    import pages
+    try:
+        return pages.generate(body.instruction, slug=body.slug,
+                              title=body.title, model=body.model)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": appconfig._clean(str(e), 220)}, status_code=200)
+
+
+@app.delete("/api/pages/{slug}")
+def api_page_delete(slug: str):
+    import pages
+    return {"deleted": pages.delete_page(slug)}
+
+
 @app.get("/api/questions")
 def api_questions():
     """Suggestion chips come from Databricks (assistant examples, the Genie

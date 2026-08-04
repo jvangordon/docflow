@@ -219,7 +219,7 @@ def ensure_infra(cfg: dict) -> None:
     if not exists(f"SHOW VOLUMES IN {cat}.{sch} LIKE 'secure'"):
         pipeline.sql(f"CREATE VOLUME IF NOT EXISTS {cat}.{sch}.secure")
     for sub in ("inbox", "processed", "archive", "generated",
-                "ka_contracts", "ka_claims", "ka_all"):
+                "ka_contracts", "ka_claims", "ka_all", "pages"):
         try:
             w.files.create_directory(f"/Volumes/{cat}/{sch}/docs/{sub}")
         except Exception:

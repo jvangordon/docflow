@@ -287,6 +287,8 @@ body[data-prompter="1"] main{padding-bottom:150px}
     <button data-go="claims">Claims</button>
     <button data-go="suppliers">Suppliers</button>
     <button data-go="built">Built</button>
+    <span id="custompages" style="display:contents"></span>
+    <button data-go="newpage" title="Add a page for this audience" style="opacity:.55">+ Page</button>
   </nav>
   <div class="mast-right"><span class="ws" id="wsname"></span></div>
 </header>
@@ -1129,6 +1131,102 @@ async function loadBuilt(){
   <p>A Databricks App, agents governed by Unity Catalog, a Genie space over Delta tables, deployed from one bundle. Everything on this page works the same way in your own workspace.</p></div>`;
 }
 
+/* ---------------- SA-authored pages ----------------
+   A page added from inside the app: describe it, pick a model from the
+   gateway, iterate in the same box. Stored on the volume, so it survives
+   restarts and leaves with the teardown. */
+async function refreshCustomNav(){
+  const holder=document.getElementById("custompages");
+  if(!holder) return;
+  const d=await j("/api/pages").catch(()=>({pages:[]}));
+  S.custom=(d.pages||[]);
+  holder.innerHTML=S.custom.map(pg=>
+    `<button data-go="p-${esc(pg.slug)}">${esc(pg.title)}</button>`).join("");
+  holder.querySelectorAll("button").forEach(b=>b.onclick=()=>go(b.dataset.go));
+}
+async function goCustom(slug, push){
+  stopPollers(); S.page="p-"+slug;
+  if(push!==false && location.hash.slice(1)!==S.page) location.hash=S.page;
+  document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("on",b.dataset.go===S.page));
+  stage.innerHTML=`<div class="empty"><span class="spin"></span></div>`;
+  const rec=await j("/api/pages/"+encodeURIComponent(slug)).catch(()=>null);
+  if(!rec||rec.error){ stage.innerHTML=`<div class="empty"><b>That page is gone</b></div>`; return; }
+  stage.innerHTML=`
+    <div style="display:flex;align-items:baseline;gap:12px">
+      <div class="over">Added for this audience</div>
+      <button class="btn" style="margin-left:auto;padding:4px 12px;font-size:11px"
+        id="editpage">Edit</button>
+      <button class="btn" style="padding:4px 12px;font-size:11px" id="delpage">Remove</button>
+    </div>
+    <div id="customhtml" style="margin-top:14px"></div>`;
+  document.getElementById("customhtml").innerHTML=rec.html||"";
+  document.getElementById("editpage").onclick=()=>{ S.editSlug=slug; go("newpage"); };
+  document.getElementById("delpage").onclick=async()=>{
+    await fetch("/api/pages/"+encodeURIComponent(slug),{method:"DELETE"});
+    await refreshCustomNav(); go("start");
+  };
+  renderPrompter("");
+}
+async function loadPageBuilder(){
+  const slug=S.editSlug||""; S.editSlug="";
+  const rec=slug?await j("/api/pages/"+encodeURIComponent(slug)).catch(()=>null):null;
+  const scan=S.scan||await j("/api/scan").catch(()=>({}));
+  S.scan=scan;
+  const models=(scan.models||[]);
+  stage.innerHTML=`
+  <div class="over">Add a page</div>
+  <h1>${rec?`Editing “${esc(rec.title)}”`:"A page for this audience."}</h1>
+  <p class="dek">Describe the page — the topic, the two or three things it should land,
+    the visual you want. It renders in the app's own design. Keep talking to refine it.</p>
+  <div class="rule"></div>
+  <div class="split">
+    <div>
+      <div class="f"><label>${rec?"Refine it":"What should this page show?"}</label>
+        <textarea class="ctl" id="pg-inst" rows="5" style="resize:vertical;font:500 14px var(--sans)"
+          placeholder="A page that introduces Lakebase: what it is in one line, two features — instant databases and branching — and a simple visual showing a database branching like git."></textarea>
+      </div>
+      ${rec?"":`<div class="f"><label>Page title · shows in the top nav</label>
+        <input class="ctl" id="pg-title" placeholder="Lakebase"></div>`}
+      <div class="f" style="border-bottom:0"><label>Model · from this workspace</label>
+        <select class="ctl mono" id="pg-model" style="font-size:13px">
+          ${models.map(m=>`<option ${m===(rec&&rec.model)?"selected":""}>${esc(m)}</option>`).join("")||"<option>databricks-claude-sonnet-4-6</option>"}
+        </select></div>
+      <div class="gobar">
+        <button class="btn hot" id="pg-gen">${rec?"Apply":"Create the page"}</button>
+        <span class="msg" id="pg-msg">${rec?"The result replaces the page; the conversation is kept.":"Takes ten to thirty seconds."}</span>
+      </div>
+      ${rec&&rec.chat?`<details style="margin-top:18px"><summary style="cursor:pointer;font:600 10px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint)">Conversation so far</summary>
+        <div style="margin-top:10px">${rec.chat.filter(c=>c.role==="instruction").map(c=>
+          `<div class="snode"><span class="st">›</span>${esc(c.content.slice(0,160))}</div>`).join("")}</div></details>`:""}
+    </div>
+    <div>
+      <div class="over">Preview</div>
+      <div id="pg-preview" style="margin-top:12px;border:1px dashed var(--hair2);border-radius:14px;
+        padding:18px;min-height:220px">${rec?rec.html:`<p class="hint">The page appears here.</p>`}</div>
+    </div>
+  </div>`;
+  document.getElementById("pg-gen").onclick=async(ev)=>{
+    const b=ev.currentTarget, inst=document.getElementById("pg-inst").value.trim();
+    const msg=document.getElementById("pg-msg");
+    if(!inst){ msg.textContent="Describe the page first."; return; }
+    b.disabled=true; b.innerHTML=`<span class="spin"></span> Writing`;
+    msg.textContent="The model is writing the page…";
+    const body={instruction:inst, slug:(rec&&rec.slug)||"",
+      title:(document.getElementById("pg-title")||{}).value||"",
+      model:document.getElementById("pg-model").value};
+    let out=null;
+    try{ out=await post("/api/pages/generate", body); }
+    catch(e){ out={error:e.message}; }
+    b.disabled=false; b.textContent=rec?"Apply":"Create the page";
+    if(!out||out.error){ msg.textContent=out&&out.error||"That did not work — try again."; return; }
+    document.getElementById("pg-preview").innerHTML=out.html;
+    msg.textContent="Saved. It is in the top nav now — keep refining or open it.";
+    S.editSlug=out.slug;
+    await refreshCustomNav();
+  };
+  renderPrompter("");
+}
+
 /* ---------------- presenter prompter ----------------
    A one-line teleprompter for whoever is presenting: the value on screen and
    the next click, written by the run's own research. Dismiss hides it for the
@@ -1153,8 +1251,9 @@ function renderPrompter(page){
 }
 
 /* ---------------- router ---------------- */
-const LOADERS={start:loadStart,docs:loadDocs,flow:loadFlow,ask:loadAsk,claims:loadClaims,suppliers:loadSuppliers,built:loadBuilt};
+const LOADERS={start:loadStart,docs:loadDocs,flow:loadFlow,ask:loadAsk,claims:loadClaims,suppliers:loadSuppliers,built:loadBuilt,newpage:loadPageBuilder};
 async function go(page, push){
+  if(page && page.startsWith("p-")){ return goCustom(page.slice(2), push); }
   if(!LOADERS[page]) page="start";
   stopPollers(); S.page=page;
   if(push!==false && location.hash.slice(1)!==page) location.hash=page;
@@ -1167,6 +1266,7 @@ async function go(page, push){
   document.body.dataset.ready="1";
 }
 document.querySelectorAll("#nav button").forEach(b=>b.onclick=()=>go(b.dataset.go));
+refreshCustomNav();
 window.addEventListener("hashchange",()=>{ const p=location.hash.slice(1);
   if(p && p!==S.page) go(p,false); });
 go(location.hash.slice(1)||"start", false);
