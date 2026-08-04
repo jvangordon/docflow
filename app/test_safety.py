@@ -168,5 +168,20 @@ else:
         first = (pr.stderr.strip().split("\n") or [""])[-3:]
         rec("frontend JavaScript parses", pr.returncode == 0,
             "clean" if pr.returncode == 0 else " ".join(x.strip() for x in first)[:120])
+# --- 8. teardown must demand proof, never a name -----------------------------
+reset_src = open(os.path.join(os.path.dirname(here), "reset_databricks.py")).read()
+rcode = "\n".join(l for l in reset_src.split("\n") if not l.startswith("# MAGIC"))
+rec("app deletion requires the DocFlow fingerprint",
+    "app_is_ours" in rcode and 'FINGERPRINT in (a.description or "")' in rcode,
+    "fingerprint required")
+rec("genie deletion requires the space to reference this demo's tables",
+    "genie_ours" in rcode and "serialized_space" in rcode, "content proof required")
+rec("an unmarked schema needs distinctive tables, not generic names",
+    "DISTINCTIVE" in rcode and "len(distinctive_found) >= 2" in rcode,
+    "two distinctive tables required")
+rec("generic table names alone never authorise deletion",
+    "names a customer\n                  f\" could own too" in rcode
+    or "could own too" in rcode, "explicitly refused")
+
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

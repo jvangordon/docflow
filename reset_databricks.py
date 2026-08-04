@@ -44,6 +44,13 @@ OWNED_TABLES = ["documents", "events", "extract_warranty_claims",
                 "extract_supplier_invoices", "audit_findings",
                 "parsed", "labeled", "run_metrics"]
 OWNED_VOLUMES = ["docs", "secure"]
+# Names only this demo would ever use. Generic names like 'documents' or
+# 'events' prove nothing on their own — a customer could plausibly own those —
+# so a schema without the marker must show at least two of these before this
+# notebook will treat its contents as the demo's.
+DISTINCTIVE = ["extract_warranty_claims", "extract_supplier_invoices",
+               "audit_findings"]
+FINGERPRINT = "[docflow-demo-app]"
 KA_DISPLAYS = ["docflow-ka-contracts", "docflow-ka-claims", "docflow-ka"]
 GENIE_TITLE = "DocFlow Genie"
 SCHEMA_MARKER = "docflow-demo-app"
@@ -126,16 +133,24 @@ else:
             readable, tabs, vols = False, set(), set()
             print(f"could not read {CATALOG}.{SCHEMA}: {str(e)[:120]}")
         strays = sorted((tabs - set(OWNED_TABLES)) | (vols - set(OWNED_VOLUMES)))
+        distinctive_found = sorted(tabs & set(DISTINCTIVE))
         if not readable:
             # Unknown is not the same as unsafe-and-known. Say which it is.
             print(f"schema {CATALOG}.{SCHEMA}: could not be inspected, so nothing "
                   f"inside it will be touched. Re-run once the warehouse is up.")
             blocked.append(f"{CATALOG}.{SCHEMA} (could not inspect)")
-        elif not strays and (tabs or vols):
+        elif not strays and len(distinctive_found) >= 2:
             schema_is_ours = True
-            print(f"schema {CATALOG}.{SCHEMA}: no marker, but every object in it is "
-                  f"on the DocFlow inventory and nothing else is present —")
+            print(f"schema {CATALOG}.{SCHEMA}: no marker, but it holds "
+                  f"{', '.join(distinctive_found)} and nothing this demo did not "
+                  f"create —")
             print(f"  treating it as this demo's ({len(tabs)} tables, {len(vols)} volumes).")
+        elif not strays and (tabs or vols):
+            print(f"schema {CATALOG}.{SCHEMA}: no marker, and its contents "
+                  f"({', '.join(sorted(tabs | vols)[:4])}) are names a customer "
+                  f"could own too.")
+            print("  Not enough proof this demo created them — nothing will be touched.")
+            blocked.append(f"{CATALOG}.{SCHEMA} (unmarked, names not distinctive)")
         else:
             print(f"schema {CATALOG}.{SCHEMA}: NO DocFlow marker, and it holds "
                   f"object(s) the demo did not create: {', '.join(strays[:5])}")
@@ -173,17 +188,41 @@ except Exception as e:
     print(f"cannot list assistants: {str(e)[:120]}")
 
 # genie space, by exact title only
+genie_ours = []
 try:
-    for s in (w.genie.list_spaces().spaces or []):
-        if (s.title or "") == GENIE_TITLE:
-            plan_delete.append(f"genie space {s.title}")
+    for sp in (w.genie.list_spaces().spaces or []):
+        if (sp.title or "") != GENIE_TITLE:
+            continue
+        # Proof, not a title match: the space must point at this demo's tables.
+        proof = False
+        try:
+            raw = getattr(w.genie.get_space(sp.space_id), "serialized_space", "") or ""
+            proof = any(t in raw for t in DISTINCTIVE) or FINGERPRINT in raw
+        except Exception:
+            proof = False
+        if proof:
+            genie_ours.append(sp.space_id)
+            plan_delete.append(f"genie space {sp.title}")
+        else:
+            print(f"genie space '{GENIE_TITLE}' does not reference this demo's "
+                  f"tables — leaving it alone.")
+            blocked.append(f"genie space {GENIE_TITLE} (not this demo's)")
 except Exception as e:
     print(f"cannot list genie spaces: {str(e)[:120]}")
 
 # the app, by exact name only
+app_is_ours = False
 try:
-    if APP_NAME in {a.name for a in w.apps.list()}:
-        plan_delete.append(f"app {APP_NAME}")
+    for a in w.apps.list():
+        if a.name != APP_NAME:
+            continue
+        if FINGERPRINT in (a.description or ""):
+            app_is_ours = True
+            plan_delete.append(f"app {APP_NAME}")
+        else:
+            print(f"app '{APP_NAME}' exists but carries no DocFlow fingerprint — "
+                  f"it is not this demo's, and will be left alone.")
+            blocked.append(f"app {APP_NAME} (not created by this demo)")
 except Exception as e:
     print(f"cannot list apps: {str(e)[:120]}")
 
@@ -230,10 +269,11 @@ else:
 
     # 3b. genie space
     try:
-        for s in (w.genie.list_spaces().spaces or []):
-            if (s.title or "") == GENIE_TITLE:
-                w.genie.trash_space(s.space_id)
-                print(f"trashed genie space '{s.title}'")
+        for sid in genie_ours:
+            w.genie.trash_space(sid)
+            print(f"trashed genie space '{GENIE_TITLE}'")
+        if False:
+            pass
     except Exception as e:
         print(f"genie: {str(e)[:140]}")
 
@@ -274,7 +314,7 @@ else:
 
     # 3e. the app last — its identity owns the assistants above
     try:
-        if APP_NAME in {a.name for a in w.apps.list()}:
+        if app_is_ours and APP_NAME in {a.name for a in w.apps.list()}:
             w.apps.delete(name=APP_NAME)
             for _ in range(40):
                 if APP_NAME not in {a.name for a in w.apps.list()}:
