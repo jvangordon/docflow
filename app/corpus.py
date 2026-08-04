@@ -90,6 +90,73 @@ ROUTING = {
 }
 
 # claim_id, serial, purchase date, term months, failure date, cents, line, planted
+# ---------------------------------------------------------------- LLM records
+# The research call authors the actual document records for the customer's
+# industry: what failed, when, for how much. The values below are only the
+# fallback used when that call does not run, and the seed the test suite pins.
+# Whatever the model writes, the app recomputes ground truth from it, so the
+# arithmetic the demo proves is always the arithmetic on the page.
+GEN = {"claims": [], "invoices": [], "inspections": []}
+
+
+def _d(v, fallback):
+    """A date the model wrote, or the fallback if it wrote nonsense."""
+    try:
+        y, m, d = str(v)[:10].split("-")
+        return date(int(y), int(m), int(d))
+    except Exception:
+        return fallback
+
+
+def _cents(v, fallback):
+    try:
+        n = float(re.sub(r"[^0-9.]", "", str(v)))
+        return int(round(n * 100)) if n > 0 else fallback
+    except Exception:
+        return fallback
+
+
+def _claims_spec(rng):
+    """The claim records to render: the model's, repaired, or the default pack.
+
+    A demo with nothing outside its warranty window has no money story, so if
+    the model's claims are all in-window the two largest are pushed past their
+    term. The repair is arithmetic on the model's own dates, never a made-up
+    number, and every rendered document then agrees with the tables.
+    """
+    rows = []
+    for i, c in enumerate(GEN.get("claims") or []):
+        purchased = _d(c.get("purchase_date"), date(2024, 6, 1))
+        try:
+            term = max(6, min(60, int(re.sub(r"[^0-9]", "", str(c.get("warranty_term_months") or 24)))))
+        except Exception:
+            term = 24
+        failed = _d(c.get("failure_date"), _add_months(purchased, term + 2))
+        if failed <= purchased:
+            failed = _add_months(purchased, term + 2)
+        rows.append([str(c.get("claim_id") or f"WC-{2214 + i}")[:16],
+                     str(c.get("unit_serial") or f"SN-{44781 + i * 137}")[:20],
+                     purchased, term, failed,
+                     _cents(c.get("claim_amount"), 120000 + i * 31000),
+                     str(c.get("production_line") or f"Line {i % 4 + 1}")[:24],
+                     False])
+    # The corpus shape is a contract the pipeline and the pages rely on, so a
+    # short or over-long model response is padded or trimmed rather than
+    # allowed to change how many documents exist.
+    want = len(WARRANTY_SPEC)
+    if len(rows) < 2:
+        return [list(x) for x in WARRANTY_SPEC]
+    for i in range(len(rows), want):
+        rows.append(list(WARRANTY_SPEC[i]))
+    rows = rows[:want]
+    outside = [r for r in rows if r[4] > _add_months(r[2], r[3])]
+    if len(outside) < 2:
+        for r in sorted(rows, key=lambda x: -x[5])[:2]:
+            r[4] = _add_months(_add_months(r[2], r[3]), 2)
+    rows[0][7] = True                       # the invoice cross-check anchors here
+    return rows
+
+
 WARRANTY_SPEC = [
     ("WC-2214", "SN-44781", date(2023, 11, 2), 24, date(2026, 3, 18), 214000, "Line 3", True),
     ("WC-2219", "SN-51209", date(2024, 9, 10), 24, date(2026, 2, 14), 68550, "Line 1", False),
@@ -302,13 +369,23 @@ def _invoice(inv_id, company, vendor, inv_date, items, contact, phone, planted):
     return inv_id, story, gt, planted
 
 def _build_invoices(company, rng):
-    planted_items = [("Servo actuator assembly, serial SN-44781", 1, 198000),
-                     ("Actuator mounting bracket kit", 2, 4550),
+    # The first invoice is the cross-check for claim one: same serial, same
+    # purchase date, so "prove it" has an answer on another page.
+    claims = _claims_spec(rng)
+    anchor = claims[0]
+    gen0 = (GEN.get("claims") or [{}])[0] if GEN.get("claims") else {}
+    comp = (gen0.get("component") or _narr("component_names", 0))
+    planted_items = [(f"{comp}, serial {anchor[1]}", 1, max(1000, anchor[5] - 40000)),
+                     (f"{comp} mounting kit", 2, 4550),
                      ("On-site commissioning service, 1 day", 1, 35000)]
-    docs = [_invoice("INV-88213", company, CONTRACT["supplier"], date(2023, 11, 2),
+    inv_id = str((GEN.get("invoices") or [{}])[0].get("invoice_no") or "INV-88213")[:16] \
+        if GEN.get("invoices") else "INV-88213"
+    docs = [_invoice(inv_id, company, CONTRACT["supplier"], anchor[2],
                      planted_items, rng.choice(PEOPLE), _phone(rng), True)]
+    extra = (GEN.get("invoices") or [])[1:5]
     for i in range(4):
-        vendor = rng.choice(VENDOR_NAMES)
+        spec_i = extra[i] if i < len(extra) else {}
+        vendor = str(spec_i.get("vendor") or rng.choice(VENDOR_NAMES))[:60]
         inv_date = date(2026, 4, 6) + timedelta(days=rng.randrange(70))
         items = [(d, rng.randint(1, 12), p) for d, p in rng.sample(PARTS, rng.randint(3, 5))]
         docs.append(_invoice(f"INV-{88214 + i}", company, vendor, inv_date, items,
@@ -338,10 +415,14 @@ def _build_pos(company, rng):
 
 def _build_claims(company, rng):
     docs = []
-    for k, (cid, serial, purchased, term, failed, cents, line, planted) in enumerate(WARRANTY_SPEC):
+    for k, (cid, serial, purchased, term, failed, cents, line, planted) in enumerate(_claims_spec(rng)):
         expires, contact = _add_months(purchased, term), rng.choice(PEOPLE)
         proof = f"Invoice INV-88213, {CONTRACT['supplier']}" if cid == "WC-2214" else "On file"
-        component = _narr("component_names", k)
+        gen = (GEN.get("claims") or [])
+        component = ((gen[k].get("component") if k < len(gen) else "") or "").strip() \
+            or _narr("component_names", k)
+        failure_note = ((gen[k].get("failure_note") if k < len(gen) else "") or "").strip() \
+            or _narr("claim_failures", k)
         story = (_form(_title("warranty_claim"),
                        f"Supplier warranty recovery claim submitted by {_esc(company)}",
                        [("Claim ID", cid), ("Claimant", f"{company}, {FICTIONAL_SITE}"),
@@ -350,7 +431,7 @@ def _build_claims(company, rng):
                         ("Failure date", failed.isoformat()), ("Claim amount", _usd(cents)),
                         ("Production line", line), ("Proof of purchase", proof),
                         ("Filed by", f"{contact} - {_email(contact)} - {_phone(rng)}")])
-                 + _sec("Failure description", _narr("claim_failures", k))
+                 + _sec("Failure description", failure_note)
                  + _sec("Requested resolution", _narr("claim_resolution")))
         gt = {"claim_id": cid, "serial_number": serial, "component": component,
               "purchase_date": purchased.isoformat(), "warranty_term_months": term,
@@ -565,6 +646,9 @@ def apply_world(world: dict | None) -> dict:
     labels = w.get("type_labels") or {}
     for t, meta in TAXONOMY.items():
         meta["title"] = str(labels.get(t) or _DEFAULT_TITLES[t])[:48]
+    g = w.get("generated") or {}
+    GEN["claims"] = [x for x in (g.get("claims") or []) if isinstance(x, dict)][:6]
+    GEN["invoices"] = [x for x in (g.get("invoices") or []) if isinstance(x, dict)][:5]
     n = w.get("narratives") or {}
     for k, dflt in _DEFAULT_NARR.items():
         v = n.get(k)

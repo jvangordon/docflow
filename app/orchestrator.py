@@ -326,6 +326,28 @@ def research_company(cfg: dict) -> None:
                         "filing_days": {"type": "string"}},
                         "required": ["supplier", "penalty_pct", "cap_pct",
                                      "warranty_months", "filing_days"]},
+                    "generated": {"type": "object", "properties": {
+                        "claims": {"type": "array", "items": {"type": "object",
+                            "properties": {
+                                "claim_id": {"type": "string"},
+                                "unit_serial": {"type": "string"},
+                                "component": {"type": "string"},
+                                "purchase_date": {"type": "string"},
+                                "warranty_term_months": {"type": "string"},
+                                "failure_date": {"type": "string"},
+                                "claim_amount": {"type": "string"},
+                                "production_line": {"type": "string"},
+                                "failure_note": {"type": "string"}},
+                            "required": ["claim_id","unit_serial","component",
+                                         "purchase_date","warranty_term_months",
+                                         "failure_date","claim_amount",
+                                         "production_line","failure_note"]}},
+                        "invoices": {"type": "array", "items": {"type": "object",
+                            "properties": {
+                                "invoice_no": {"type": "string"},
+                                "vendor": {"type": "string"}},
+                            "required": ["invoice_no","vendor"]}}},
+                        "required": ["claims", "invoices"]},
                     "narratives": {"type": "object", "properties": {
                         "component_names": {"type": "array", "items": {"type": "string"}},
                         "claim_failures": {"type": "array", "items": {"type": "string"}},
@@ -351,7 +373,7 @@ def research_company(cfg: dict) -> None:
                                      "marketing_bullets", "contract_scope"]},
                 }, "required": ["site", "vendors", "line_items", "carriers",
                                 "destinations", "type_labels", "contract",
-                                "narratives"]},
+                                "narratives", "generated"]},
                 "story": {"type": "array", "items": {"type": "object",
                     "properties": {
                         "page": {"type": "string",
@@ -403,6 +425,17 @@ def research_company(cfg: dict) -> None:
         "CT-7701 and a Warranty Terms policy CT-7702, so at least one wording "
         "question MUST quote the exact number you chose (e.g. the late-delivery "
         "penalty or the claim filing deadline), giving it a citable answer. "
+        "generated: the actual records the documents will state. claims: 5 "
+        "warranty or coverage claims this company would really file, each with "
+        "a claim_id, unit_serial (the industry's own asset identifier style), "
+        "component (what failed), purchase_date and failure_date as YYYY-MM-DD "
+        "between 2023-01-01 and 2026-06-30, warranty_term_months as a number, "
+        "claim_amount in plain dollars, production_line (the line, site, unit or "
+        "department), and a failure_note of 20-40 words. Vary the amounts widely "
+        "and realistically for this industry. IMPORTANT: make exactly two of them "
+        "fall OUTSIDE their coverage — failure_date later than purchase_date plus "
+        "warranty_term_months — and the rest comfortably inside. invoices: 5 "
+        "invoice_no and vendor pairs in this industry's numbering style. "
         "narratives: prose the documents print verbatim, all in this industry's "
         "voice. component_names: 5 things this company buys or services that "
         "could fail. claim_failures: 5 failure descriptions, 20-40 words each, "
