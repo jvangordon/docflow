@@ -233,8 +233,35 @@ def readiness(deep: bool = False) -> dict:
             best = next((x for x in cands
                          if getattr(x.state, "value", str(x.state)) == "RUNNING"), cands[0])
             wh_state = getattr(best.state, "value", str(best.state))
-            add("warehouse", "Serverless SQL warehouse", True,
-                f"{best.name} · {wh_state}. Document Intelligence needs serverless, not Pro or Classic.")
+            # A warehouse can sit in STARTING forever when the workspace has no
+            # serverless capacity left. That reads as "slow" but never resolves,
+            # so the health message is surfaced as its own failure.
+            hmsg = ""
+            try:
+                h = w.warehouses.get(best.id).health
+                if h and str(getattr(h, "status", "")).endswith("FAILED"):
+                    hmsg = str(getattr(h, "message", "") or "")
+            except Exception:
+                pass
+            if "RESOURCE_EXHAUSTED" in hmsg or "limit for s" in hmsg:
+                add("warehouse", "Serverless SQL warehouse", False,
+                    f"{best.name} cannot start: this workspace has no serverless "
+                    f"capacity left. On Free Edition the warehouse, any running "
+                    f"app, and every agent endpoint share one quota.",
+                    link=f"{host}/compute", link_label="Open Compute",
+                    human="Free capacity, then press Re-check:",
+                    steps=["Delete Knowledge Assistants you are not using "
+                           "(each holds a serving endpoint)",
+                           "Stop any other Databricks App that is running",
+                           "Stop other serverless warehouses",
+                           "Wait about a minute, then Re-check"])
+            elif hmsg:
+                add("warehouse", "Serverless SQL warehouse", False,
+                    f"{best.name} is unhealthy: {_clean(hmsg, 160)}",
+                    link=f"{host}/compute", link_label="Open Compute")
+            else:
+                add("warehouse", "Serverless SQL warehouse", True,
+                    f"{best.name} · {wh_state}. Document Intelligence needs serverless, not Pro or Classic.")
         else:
             add("warehouse", "Serverless SQL warehouse", False,
                 "No serverless warehouse is visible to this app.",

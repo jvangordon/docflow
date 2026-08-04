@@ -570,6 +570,28 @@ def _ka_hint(e: Exception) -> str:
 _KA_THREAD: dict = {"thread": None, "created": {}}
 
 
+def _capacity_ok() -> bool:
+    """Is there serverless headroom left for another endpoint?
+
+    Free Edition shares one serverless quota between the SQL warehouse, the
+    app, and every agent endpoint. Creating a second assistant when the
+    warehouse is already starved does not just fail — it starves the pipeline
+    that the whole demo depends on.
+    """
+    try:
+        w = _w()
+        for x in w.warehouses.list():
+            if not getattr(x, "enable_serverless_compute", False):
+                continue
+            h = w.warehouses.get(x.id).health
+            msg = str(getattr(h, "message", "") or "")
+            if "RESOURCE_EXHAUSTED" in msg or "limit for s" in msg:
+                return False
+    except Exception:
+        pass
+    return True
+
+
 def create_assistants_early() -> None:
     """Start assistant creation the moment prepare begins, off-thread.
 
@@ -587,6 +609,7 @@ def create_assistants_early() -> None:
                     existing[x.display_name or ""] = x
             except Exception:
                 pass
+            made = 0
             for spec in ASSISTANTS:
                 try:
                     ka = existing.get(spec["display"])
@@ -597,6 +620,13 @@ def create_assistants_early() -> None:
                              f"'{spec['display']}' already exists here and was not "
                              f"created by this demo — leaving it untouched. Rename "
                              f"it or remove it to let the demo build its own.")
+                        continue
+                    if ka is None and made and not _capacity_ok():
+                        _log(f"Assistant · {spec['about']}", "warn",
+                             "skipped: this workspace has no serverless capacity "
+                             "left, and taking more would stall the SQL warehouse "
+                             "the pipeline needs. The first assistant covers the "
+                             "demo; delete it later to reclaim capacity.")
                         continue
                     if ka is None:
                         ka = w.knowledge_assistants.create_knowledge_assistant(
@@ -615,6 +645,7 @@ def create_assistants_early() -> None:
                     GO["assets"].setdefault("assistants", {})[spec["display"]] = {
                         "name": ka.name, "endpoint": ka.endpoint_name,
                         "about": spec["about"]}
+                    made += 1
                 except Exception as e:
                     _log(f"Assistant · {spec['about']}", "warn", _ka_hint(e))
         except Exception as e:
@@ -1047,6 +1078,7 @@ def _attach_source_async() -> None:
             by_display = {}
             for x in w.knowledge_assistants.list_knowledge_assistants():
                 by_display[x.display_name or ""] = x
+            made = 0
             for spec in ASSISTANTS:
                 ka = by_display.get(spec["display"])
                 if ka is None:

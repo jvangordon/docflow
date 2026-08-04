@@ -55,7 +55,14 @@ print(f"target    : {CATALOG}.{SCHEMA}")
 print(f"confirm   : {CONFIRM}")
 
 
-def sql(stmt):
+def sql(stmt, deadline_s=420):
+    """Run one statement, waiting out a cold warehouse.
+
+    A serverless warehouse can take minutes to start, and the statement sits
+    PENDING that whole time. Giving up early made a cold start look like a
+    failure — and, worse, made this notebook report a schema as holding
+    unrecognised objects when it simply could not read it.
+    """
     whs = [x for x in w.warehouses.list()
            if getattr(x, "enable_serverless_compute", False) and x.id]
     if not whs:
@@ -63,9 +70,12 @@ def sql(stmt):
     r = w.statement_execution.execute_statement(
         warehouse_id=whs[0].id, statement=stmt, wait_timeout="50s")
     st = r.status.state.value if r.status and r.status.state else "?"
-    t0 = time.time()
-    while st in ("PENDING", "RUNNING") and time.time() - t0 < 240:
-        time.sleep(3)
+    t0, said = time.time(), False
+    while st in ("PENDING", "RUNNING", "?") and time.time() - t0 < deadline_s:
+        if not said and time.time() - t0 > 20:
+            print("   (waiting for the SQL warehouse to start…)")
+            said = True
+        time.sleep(4)
         r = w.statement_execution.get_statement(r.statement_id)
         st = r.status.state.value if r.status and r.status.state else "?"
     if st != "SUCCEEDED":
@@ -105,12 +115,32 @@ else:
         print(f"schema {CATALOG}.{SCHEMA}: carries the DocFlow marker — its "
               f"DocFlow objects may be removed")
     else:
-        print(f"schema {CATALOG}.{SCHEMA}: NO DocFlow marker.")
-        print("  This schema was not created by the demo, so nothing inside it "
-              "will be touched.")
-        print("  If the demo did create it and the marker is missing, remove its "
-              "objects by hand in Catalog Explorer.")
-        blocked.append(f"{CATALOG}.{SCHEMA} (no DocFlow marker)")
+        # Installs predating the marker still deserve a clean teardown, but only
+        # on proof: every object present must be on the DocFlow inventory and
+        # nothing else may be there. One unrecognised object and we stop.
+        readable = True
+        try:
+            tabs = {str(r[1]) for r in sql(f"SHOW TABLES IN {CATALOG}.{SCHEMA}") if len(r) > 1}
+            vols = {str(r[1]) for r in sql(f"SHOW VOLUMES IN {CATALOG}.{SCHEMA}") if len(r) > 1}
+        except Exception as e:
+            readable, tabs, vols = False, set(), set()
+            print(f"could not read {CATALOG}.{SCHEMA}: {str(e)[:120]}")
+        strays = sorted((tabs - set(OWNED_TABLES)) | (vols - set(OWNED_VOLUMES)))
+        if not readable:
+            # Unknown is not the same as unsafe-and-known. Say which it is.
+            print(f"schema {CATALOG}.{SCHEMA}: could not be inspected, so nothing "
+                  f"inside it will be touched. Re-run once the warehouse is up.")
+            blocked.append(f"{CATALOG}.{SCHEMA} (could not inspect)")
+        elif not strays and (tabs or vols):
+            schema_is_ours = True
+            print(f"schema {CATALOG}.{SCHEMA}: no marker, but every object in it is "
+                  f"on the DocFlow inventory and nothing else is present —")
+            print(f"  treating it as this demo's ({len(tabs)} tables, {len(vols)} volumes).")
+        else:
+            print(f"schema {CATALOG}.{SCHEMA}: NO DocFlow marker, and it holds "
+                  f"object(s) the demo did not create: {', '.join(strays[:5])}")
+            print("  Nothing inside it will be touched.")
+            blocked.append(f"{CATALOG}.{SCHEMA} (unrecognised objects present)")
 
 # COMMAND ----------
 
