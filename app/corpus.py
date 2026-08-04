@@ -206,6 +206,83 @@ NARR = {
                          "304/316 with mill certs<br/>- Volume pricing on orders over 5 tons",
     "contract_scope": "Supplier will manufacture and deliver the components listed in each "
                       "purchase order issued under this agreement.",
+    "contract_warranty_procedure":
+        "To return a defective component, Buyer requests a return authorisation "
+        "number within ten business days of identifying the defect, quoting the "
+        "purchase order number, the component serial number and the observed "
+        "failure mode. Supplier issues the authorisation within two business "
+        "days and bears inbound freight on authorised returns. Replacement "
+        "components ship within five business days of Supplier receiving the "
+        "defective unit, and carry the balance of the original warranty term or "
+        "ninety days, whichever is longer.",
+    "contract_claims_documentation":
+        "Every reimbursement claim must include the unit serial number, the "
+        "original delivery date, the failure date, a description of the failure "
+        "mode written by the technician who observed it, and copies of the "
+        "service records for the affected unit. Claims relying on third-party "
+        "inspection reports must attach the full report, not a summary. "
+        "Incomplete claims are returned once for completion; a claim returned a "
+        "second time is closed and must be refiled.",
+    "contract_service_levels":
+        "Supplier maintains a technical support line staffed during Buyer's "
+        "production hours, with a response target of four business hours for "
+        "line-down events and one business day for all other enquiries. Twice "
+        "yearly, Supplier's quality engineer and Buyer's supplier-quality lead "
+        "review defect trends, open claims and corrective actions, and agree a "
+        "written action list with owners and dates.",
+    "contract_liability":
+        "Neither party is liable to the other for loss of profit, loss of "
+        "production or indirect loss, except where caused by wilful misconduct. "
+        "Supplier's aggregate liability under this agreement is capped at the "
+        "total value of purchase orders placed in the twelve months preceding "
+        "the claim.",
+    "claim_incident_narratives": [
+        "Operators reported intermittent stalling on the affected station over "
+        "two shifts before the unit failed outright at the start of the third. "
+        "The line supervisor logged the first stall as a minor fault and "
+        "cleared it by power-cycling; the second stall tripped the downstream "
+        "accumulation sensor and forced a controlled stop. Maintenance replaced "
+        "the unit from spares and returned the line to speed, tagging the "
+        "failed unit for warranty evaluation and quarantining it in the "
+        "returns cage.",
+        "The failure was found during the morning start-up checklist rather "
+        "than in production: the operator noted an abnormal reading during "
+        "warm-up and escalated before running product. Maintenance confirmed "
+        "the fault, pulled the unit, and completed the swap inside the "
+        "scheduled changeover window, so no production time was lost. The "
+        "failed unit was tagged, photographed and logged in the maintenance "
+        "system the same day.",
+        "The unit failed under full load mid-shift with no prior warning "
+        "logged. The area team followed the stoppage procedure, isolated the "
+        "station and switched production to the parallel line at reduced rate "
+        "while maintenance completed diagnosis. Inspection of the failed unit "
+        "showed damage consistent with internal wear rather than misuse, and "
+        "the service history shows the unit inside its scheduled maintenance "
+        "intervals throughout.",
+    ],
+    "claim_impacts": [
+        "The stoppage cost forty-seven minutes of line time and required "
+        "rescheduling one shipment; no product was scrapped.",
+        "No production impact: the fault was caught before the line started "
+        "and the swap fit inside planned downtime.",
+        "Output ran at reduced rate for the remainder of the shift, and one "
+        "order moved to the following day with customer agreement.",
+    ],
+    "inspection_findings": [
+        "Sampling across all four lines found workmanship generally within "
+        "specification, with the defect concentration on one line materially "
+        "above its trailing average. The dominant defect modes were seating "
+        "and alignment faults at a single station, consistent between shifts, "
+        "which points at fixturing or incoming component variation rather "
+        "than operator technique. Recommend a first-article check on the next "
+        "three incoming lots and a fixture calibration before the next run.",
+        "Defect rates on three of four lines held steady against the prior "
+        "month. The outlier line shows a rising trend for the third "
+        "consecutive report, and the failed units share a common supplier lot "
+        "code. Recommend quarantining the remaining stock from that lot, "
+        "notifying the supplier quality contact, and re-inspecting finished "
+        "goods built from it before release.",
+    ],
 }
 _DEFAULT_NARR = {k: (list(v) if isinstance(v, list) else v) for k, v in NARR.items()}
 
@@ -432,6 +509,8 @@ def _build_claims(company, rng):
                         ("Production line", line), ("Proof of purchase", proof),
                         ("Filed by", f"{contact} - {_email(contact)} - {_phone(rng)}")])
                  + _sec("Failure description", failure_note)
+                 + _sec("Incident narrative", _narr("claim_incident_narratives", k))
+                 + _sec("Operational impact", _narr("claim_impacts", k))
                  + _sec("Requested resolution", _narr("claim_resolution")))
         gt = {"claim_id": cid, "serial_number": serial, "component": component,
               "purchase_date": purchased.isoformat(), "warranty_term_months": term,
@@ -454,6 +533,7 @@ def _build_qirs(company, rng):
             gt_rows.append({"line": line, "units_inspected": units, "defects": defects,
                             "defect_rate_pct": rate})
         rows.append(["All lines", f"{tu:,}", str(td), f"{td / tu * 100:.2f}%"])
+        findings = _narr("inspection_findings", i)
         story = (_form(_title("quality_inspection"),
                        f"Final assembly audit - {_esc(company)}, {FICTIONAL_SITE}",
                        [("Report ID", qid), ("Inspection date", d.isoformat()),
@@ -462,7 +542,8 @@ def _build_qirs(company, rng):
                        Spacer(0, 14),
                        _grid(["Production line", "Units inspected", "Defects", "Defect rate"],
                              rows, [1.9 * inch, 1.8 * inch, 1.5 * inch, 1.8 * inch]))
-                 + _sec("Inspector remarks", QIR_REMARKS[qid]))
+                 + _sec("Inspector remarks", QIR_REMARKS[qid])
+                 + _sec("Inspector's findings", findings))
         gt = {"report_id": qid, "inspection_date": d.isoformat(), "inspector": inspector,
               "lines": gt_rows, "line3_defect_rate_pct": rates["Line 3"]}
         docs.append((qid, story, gt, True))
@@ -579,7 +660,19 @@ def _build_contracts(company, rng):
            Paragraph("Either party may terminate on ninety (90) days written notice. "
                      "Purchase orders accepted before notice survive termination.", S_BODY),
            Spacer(0, 6),
-           Paragraph("5. Governing terms", S_H2),
+           Paragraph("5. Warranty and returns procedure", S_H2),
+           Paragraph(_esc(_narr("contract_warranty_procedure")), S_BODY),
+           Spacer(0, 6),
+           Paragraph("6. Claim documentation requirements", S_H2),
+           Paragraph(_esc(_narr("contract_claims_documentation")), S_BODY),
+           Spacer(0, 6),
+           Paragraph("7. Service levels and quality reviews", S_H2),
+           Paragraph(_esc(_narr("contract_service_levels")), S_BODY),
+           Spacer(0, 6),
+           Paragraph("8. Limitation of liability", S_H2),
+           Paragraph(_esc(_narr("contract_liability")), S_BODY),
+           Spacer(0, 6),
+           Paragraph("9. Governing terms", S_H2),
            Paragraph("This agreement is governed by the laws of the State of Demoland. "
                      "It is fictional demonstration material and binds nobody.", S_BODY)]
     gt_msa = {"contract_id": "CT-7701", "supplier": K["supplier"],
@@ -652,11 +745,14 @@ def apply_world(world: dict | None) -> dict:
     n = w.get("narratives") or {}
     for k, dflt in _DEFAULT_NARR.items():
         v = n.get(k)
+        # Long-form prose is the point of the assistant lane: cap generously,
+        # not at a tweet.
+        cap = 1400
         if isinstance(dflt, list):
-            vv = [str(x).strip()[:400] for x in (v or []) if str(x).strip()]
+            vv = [str(x).strip()[:cap] for x in (v or []) if str(x).strip()]
             NARR[k] = vv if vv else list(dflt)
         else:
-            NARR[k] = (str(v).strip()[:400] or dflt) if v else dflt
+            NARR[k] = (str(v).strip()[:cap] or dflt) if v else dflt
     c = w.get("contract") or {}
     CONTRACT.update({
         "supplier": str(c.get("supplier") or VENDOR_NAMES[0])[:60],

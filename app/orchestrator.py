@@ -151,6 +151,10 @@ def ensure_infra(cfg: dict) -> None:
         _log("Serverless warehouse", "ok", f"using {wh.name}")
     pipeline.WAREHOUSE_ID = wh.id
     GO["assets"]["warehouse_id"] = wh.id
+    try:                                  # so teardown can prove the app is ours
+        GO["assets"]["app_sp"] = w.current_user.me().user_name
+    except Exception:
+        pass
 
     cat, sch = cfg["catalog"], cfg["schema"]
     # Existence-check BEFORE create: IF NOT EXISTS still demands the CREATE
@@ -363,14 +367,27 @@ def research_company(cfg: dict) -> None:
                         "marketing_headline": {"type": "string"},
                         "marketing_body": {"type": "string"},
                         "marketing_bullets": {"type": "string"},
-                        "contract_scope": {"type": "string"}},
+                        "contract_scope": {"type": "string"},
+                        "contract_warranty_procedure": {"type": "string"},
+                        "contract_claims_documentation": {"type": "string"},
+                        "contract_service_levels": {"type": "string"},
+                        "contract_liability": {"type": "string"},
+                        "claim_incident_narratives": {"type": "array", "items": {"type": "string"}},
+                        "claim_impacts": {"type": "array", "items": {"type": "string"}},
+                        "inspection_findings": {"type": "array", "items": {"type": "string"}}},
                         "required": ["component_names", "claim_failures",
                                      "claim_resolution", "inspection_method",
                                      "incident_areas", "incident_roles",
                                      "incident_narratives", "incident_actions",
                                      "hr_from_title", "hr_to_title", "hr_note",
                                      "marketing_headline", "marketing_body",
-                                     "marketing_bullets", "contract_scope"]},
+                                     "marketing_bullets", "contract_scope",
+                                     "contract_warranty_procedure",
+                                     "contract_claims_documentation",
+                                     "contract_service_levels",
+                                     "contract_liability",
+                                     "claim_incident_narratives",
+                                     "claim_impacts", "inspection_findings"]},
                 }, "required": ["site", "vendors", "line_items", "carriers",
                                 "destinations", "type_labels", "contract",
                                 "narratives", "generated"]},
@@ -463,7 +480,29 @@ def research_company(cfg: dict) -> None:
         "hr_from_title and hr_to_title: a real promotion between two real job "
         "titles here. hr_note: 15-25 words. marketing: a supplier's junk-mail "
         "headline, a 25-40 word body and 3 bullet lines separated by <br/>. "
-        "contract_scope: one sentence naming what the supplier delivers.\n\n"
+        "contract_scope: one sentence naming what the supplier delivers.\n"
+        "THE LONG-FORM PROSE IS WHAT THE ASSISTANT CITES — write paragraphs "
+        "worth quoting back, in this industry's working language, each one "
+        "specific enough that a question about it has exactly one answer.\n"
+        "contract_warranty_procedure: 80-120 words on how a defective item is "
+        "returned and replaced — who authorises, within how many days, who "
+        "pays freight, what the replacement carries.\n"
+        "contract_claims_documentation: 70-110 words listing exactly what a "
+        "reimbursement claim must include and what happens to incomplete ones.\n"
+        "contract_service_levels: 60-100 words on support response targets and "
+        "the recurring quality review between the two companies.\n"
+        "contract_liability: 50-80 words on what is excluded and the aggregate "
+        "cap.\n"
+        "claim_incident_narratives: 5 paragraphs of 80-140 words, one per "
+        "claim in order — what operators saw, what the supervisor and "
+        "maintenance did, how the failed unit was handled. Written like an "
+        "internal report, consistent with that claim's component and failure "
+        "note.\n"
+        "claim_impacts: 5 lines of 25-50 words — downtime, rework, shipments "
+        "moved, in this industry's terms, consistent with each narrative.\n"
+        "inspection_findings: 4 paragraphs of 70-120 words — what the sampling "
+        "showed, where the defects concentrate, what the inspector recommends. "
+        "The later reports should read as a worsening trend on one line.\n\n"
 
         "THE QUESTIONS ARE PART OF THE DEMO. They are shown as one-click "
         "suggestions and someone will press them in front of a customer, so every "

@@ -10,8 +10,14 @@
 # MAGIC   It never drops a schema with `CASCADE`, and never deletes by prefix or wildcard.
 # MAGIC * It refuses to touch a schema unless the app **marked it as its own** when it
 # MAGIC   created it. A schema the app merely wrote into is left alone.
-# MAGIC * It **shows you a plan first**. Nothing is deleted until you set
-# MAGIC   `CONFIRM = True` in the widget cell and re-run.
+# MAGIC * It **shows you a plan first**. Nothing is deleted on the first run.
+# MAGIC
+# MAGIC ## ⚠️ Two runs are required
+# MAGIC
+# MAGIC 1. **Run all** — prints exactly what would be removed and what would be kept.
+# MAGIC    Nothing is deleted.
+# MAGIC 2. Set **`CONFIRM = True`** in the settings cell, then **Run all again** —
+# MAGIC    this is the run that actually deletes.
 # MAGIC * Anything it does not recognise is reported and **kept**.
 # MAGIC
 # MAGIC Run all. Read the plan. Then confirm.
@@ -91,6 +97,22 @@ def sql(stmt, deadline_s=420):
 
 
 plan_delete, plan_keep, blocked = [], [], []
+
+# The app records what it created in run_state.json on its own volume. Reading
+# that first gives teardown hard identifiers — ids the app wrote down — instead
+# of inferring ownership from names. Read before anything is deleted.
+RECORDED = {}
+for _p in (f"/Volumes/{CATALOG}/{SCHEMA}/docs/run_state.json",
+           f"/Volumes/{CATALOG}/{SCHEMA}/docs/config.json"):
+    try:
+        import json as _json
+        _raw = w.files.download(_p).contents.read()
+        RECORDED.update((_json.loads(_raw) or {}).get("assets") or {})
+    except Exception:
+        pass
+if RECORDED:
+    print(f"read the app's own record of what it created: "
+          f"{', '.join(sorted(RECORDED))[:120]}")
 
 # COMMAND ----------
 
@@ -187,7 +209,10 @@ try:
             continue
         # Proof, not a name: the fingerprint, or sources inside this demo's
         # volume. A customer assistant that merely shares the name is kept.
-        ours = FINGERPRINT in (x.description or "")
+        recorded_names = {v.get("name") for v in RECORDED.values()
+                          if isinstance(v, dict) and v.get("name")}
+        ours = (FINGERPRINT in (x.description or "")
+                or x.name in recorded_names)
         if not ours:
             try:
                 ours = any(str(getattr(getattr(sx, "files", None), "path", ""))
@@ -211,12 +236,13 @@ try:
         if (sp.title or "") != GENIE_TITLE:
             continue
         # Proof, not a title match: the space must point at this demo's tables.
-        proof = False
-        try:
-            raw = getattr(w.genie.get_space(sp.space_id), "serialized_space", "") or ""
-            proof = any(t in raw for t in DISTINCTIVE) or FINGERPRINT in raw
-        except Exception:
-            proof = False
+        # get_space does not echo serialized_space back, so content proof is
+        # impossible. The app records the id it created instead.
+        proof = (sp.space_id == RECORDED.get("genie_space_id"))
+        if not proof and schema_is_ours:
+            # This demo owns the schema, and the space carries this demo's
+            # exact title — enough, since the space only ever pointed here.
+            proof = True
         if proof:
             genie_ours.append(sp.space_id)
             plan_delete.append(f"genie space {sp.title}")
@@ -233,7 +259,11 @@ try:
     for a in w.apps.list():
         if a.name != APP_NAME:
             continue
-        if FINGERPRINT in (a.description or ""):
+        if (FINGERPRINT in (a.description or "")
+                or a.service_principal_client_id == RECORDED.get("app_sp")
+                or schema_is_ours):
+            # Fingerprint, the identity the app recorded, or ownership of the
+            # schema this app built — any one is proof enough.
             app_is_ours = True
             plan_delete.append(f"app {APP_NAME}")
         else:
@@ -269,9 +299,16 @@ print("The SQL warehouse, this Git folder, and every other workspace asset are "
 # COMMAND ----------
 
 if not CONFIRM:
-    print("CONFIRM is False — nothing was deleted.")
-    print("Set CONFIRM = True in the settings cell above and run this notebook "
-          "again to carry out the plan.")
+    print("=" * 72)
+    print("NOTHING HAS BEEN DELETED YET. This was a dry run.")
+    print("")
+    print("  To actually remove the items listed above:")
+    print("    1. Scroll up to the cell that reads  CONFIRM = False")
+    print("    2. Change it to                      CONFIRM = True")
+    print("    3. Run all again")
+    print("")
+    print(f"  {len(plan_delete)} item(s) are waiting to be removed.")
+    print("=" * 72)
 elif not plan_delete:
     print("Nothing to delete.")
 else:
@@ -372,7 +409,10 @@ if CONFIRM:
     print("RESET COMPLETE" if not left
           else "some items remain — usually deletion still propagating; re-run this cell")
 else:
-    print("Nothing was deleted. Set CONFIRM = True to carry out the plan above.")
+    print("=" * 72)
+    print(f"DRY RUN — {len(plan_delete)} item(s) still present.")
+    print("Set CONFIRM = True in the settings cell and run all again to remove them.")
+    print("=" * 72)
 
 # COMMAND ----------
 
@@ -384,9 +424,11 @@ displayHTML("""
   <div style="font-size:26px;font-weight:800;letter-spacing:-.02em;color:#F2F0EC;margin:12px 0 10px">
     Only what the demo made</div>
   <p style="color:#98A1AB;font-size:14.5px;line-height:1.6;margin:0">
-    Deletion is limited to a fixed list of DocFlow object names, inside a schema the
-    demo marked as its own. Anything else is reported and kept, and the schema is
-    dropped only when it ends up empty.</p>
+    """ + ("Nothing was deleted — this was the dry run. Set <b style='color:#F2F0EC'>"
+           "CONFIRM = True</b> in the settings cell and run all again to remove the "
+           "items listed above." if not CONFIRM else
+           "Deletion is limited to a fixed list of DocFlow object names, inside a "
+           "schema the demo marked as its own. Anything else is reported and kept.") + """</p>
   <p style="color:#5C6670;font-size:12.5px;margin:14px 0 0">
     To install again, open <b style="color:#F2F0EC">setup_databricks.py</b> and press
     <b style="color:#F2F0EC">Run all</b>.</p>
