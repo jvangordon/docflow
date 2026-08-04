@@ -22,7 +22,7 @@
 APP_NAME = "docflow"
 CATALOG = "workspace"
 SCHEMA = "docflow"
-KA_DISPLAY = "docflow-ka"
+KA_DISPLAYS = ["docflow-ka-contracts", "docflow-ka-claims", "docflow-ka"]
 GENIE_TITLE = "DocFlow Genie"
 
 # COMMAND ----------
@@ -45,12 +45,12 @@ print(f"as        : {w.current_user.me().user_name}")
 
 try:
     hits = [x for x in w.knowledge_assistants.list_knowledge_assistants()
-            if (x.display_name or "") == KA_DISPLAY]
+            if (x.display_name or "") in KA_DISPLAYS]
     for x in hits:
         w.knowledge_assistants.delete_knowledge_assistant(x.name)
-        print(f"assistant '{KA_DISPLAY}': removed ({x.name}), endpoint goes with it")
+        print(f"assistant '{x.display_name}': removed ({x.name}), endpoint goes with it")
     if not hits:
-        print(f"assistant '{KA_DISPLAY}': already gone")
+        print("assistants: already gone")
 except Exception as e:
     print(f"assistant: could not remove — {str(e)[:140]}")
     print("  remove it by hand under AI/ML, Agents if it is still listed")

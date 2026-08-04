@@ -362,7 +362,9 @@ def api_golog():
 
 @app.get("/api/ka")
 def api_ka():
-    return orchestrator.ka_state()
+    out = orchestrator.ka_state()
+    out["assistants"] = orchestrator.assistants_state()
+    return out
 
 
 @app.get("/api/uc/claims")

@@ -15,7 +15,23 @@ from typing import Any, Optional
 
 import pipeline
 
-KA_DISPLAY = "docflow-ka"
+# One assistant per document domain, each indexing only its own folder.
+# A single assistant swallowing the whole inbox indexed 24 files to answer
+# questions about 11, and took the longest possible time to become useful.
+ASSISTANTS = [
+    {"display": "docflow-ka-contracts", "folder": "ka_contracts",
+     "types": ("supplier_contract",),
+     "about": "contracts and policy wording",
+     "instructions": "Answer questions about the supplied contracts and policy "
+                     "documents. Quote the clause and cite the source document "
+                     "and page."},
+    {"display": "docflow-ka-claims", "folder": "ka_claims",
+     "types": ("warranty_claim", "quality_inspection"),
+     "about": "claims and inspection wording",
+     "instructions": "Answer questions about the supplied claim and inspection "
+                     "documents. Cite the source document and page."},
+]
+LEGACY_KA = "docflow-ka"
 GENIE_TITLE = "DocFlow Genie"
 
 GO = {
@@ -100,7 +116,8 @@ def ensure_infra(cfg: dict) -> None:
         pipeline.sql(f"CREATE VOLUME IF NOT EXISTS {cat}.{sch}.docs")
     if not exists(f"SHOW VOLUMES IN {cat}.{sch} LIKE 'secure'"):
         pipeline.sql(f"CREATE VOLUME IF NOT EXISTS {cat}.{sch}.secure")
-    for sub in ("inbox", "processed", "archive", "generated"):
+    for sub in ("inbox", "processed", "archive", "generated",
+                "ka_contracts", "ka_claims"):
         try:
             w.files.create_directory(f"/Volumes/{cat}/{sch}/docs/{sub}")
         except Exception:
@@ -298,8 +315,10 @@ def build_corpus(cfg: dict) -> None:
         except Exception as e:
             _log("Customer documents", "warn", str(e)[:160])
     world = (GO.get("theme") or {}).get("world")
+    folder_of = {t: spec["folder"] for spec in ASSISTANTS for t in spec["types"]}
     with tempfile.TemporaryDirectory() as td:
         man = corpus.generate_corpus(cfg["company"], td, seed=38, world=world)
+        scoped = 0
         for item in man["generated"]:
             with open(os.path.join(td, item["filename"]), "rb") as f:
                 data = f.read()
@@ -307,6 +326,13 @@ def build_corpus(cfg: dict) -> None:
                            io.BytesIO(data), overwrite=True)
             w.files.upload(f"{pipeline.VOL_ROOT}/inbox/{item['filename']}",
                            io.BytesIO(data), overwrite=True)
+            # A copy into the owning assistant's folder, so each assistant
+            # indexes only its own documents instead of the whole inbox.
+            fol = folder_of.get(item["type"])
+            if fol:
+                w.files.upload(f"{pipeline.VOL_ROOT}/{fol}/{item['filename']}",
+                               io.BytesIO(data), overwrite=True)
+                scoped += 1
     GO["assets"]["documents"] = {"customer": customer_n, "generated": len(man["generated"]),
                                  "pack": "back office"}
     # Say what these documents are. They carry the customer's name but the
@@ -318,96 +344,128 @@ def build_corpus(cfg: dict) -> None:
     _section("Build the document set", time.time() - t0)
 
 
-def ensure_ka() -> None:
-    """Create or adopt the Knowledge Assistant; attach the volume source."""
-    t0 = time.time()
-    w = _w()
-    ka = None
-    try:
-        # Inside the try: older SDK builds lack this module, and the assistant
-        # is an enhancement, never a reason to stop the run.
-        from databricks.sdk.service import knowledgeassistants as K
-        for x in w.knowledge_assistants.list_knowledge_assistants():
-            if (x.display_name or "") == KA_DISPLAY:
-                ka = x
-                break
-        if ka is None:
-            ka = w.knowledge_assistants.create_knowledge_assistant(K.KnowledgeAssistant(
-                display_name=KA_DISPLAY,
-                description="Answers questions about the demo document set with citations.",
-                instructions="Answer questions about the supplied documents. "
-                             "Cite the source document and page."))
-            _log("Knowledge Assistant", "ok", f"created · endpoint {ka.endpoint_name}")
-        else:
-            _log("Knowledge Assistant", "ok", f"using existing · endpoint {ka.endpoint_name}")
-        # The asset is recorded the moment it exists. A slow source attach
-        # below must not cost the rest of the run its knowledge of the KA.
-        GO["assets"]["ka"] = {"name": ka.name, "endpoint": ka.endpoint_name,
-                              "display": KA_DISPLAY}
-        have_source = False
+_KA_THREAD: dict = {"thread": None, "created": {}}
+
+
+def create_assistants_early() -> None:
+    """Start assistant creation the moment prepare begins, off-thread.
+
+    Endpoint provisioning is the slowest thing the platform does in this whole
+    run (minutes on Free Edition), so it overlaps research and generation.
+    Sources attach later, once the scoped folders exist.
+    """
+    def _run():
         try:
-            for src in w.knowledge_assistants.list_knowledge_sources(ka.name):
-                path = ""
+            from databricks.sdk.service import knowledgeassistants as K
+            w = _w()
+            existing = {}
+            try:
+                for x in w.knowledge_assistants.list_knowledge_assistants():
+                    existing[x.display_name or ""] = x
+            except Exception:
+                pass
+            for spec in ASSISTANTS:
                 try:
+                    ka = existing.get(spec["display"])
+                    if ka is None:
+                        ka = w.knowledge_assistants.create_knowledge_assistant(
+                            K.KnowledgeAssistant(
+                                display_name=spec["display"],
+                                description=f"Answers questions about {spec['about']} "
+                                            f"with citations.",
+                                instructions=spec["instructions"]))
+                        _log(f"Assistant · {spec['about']}", "ok",
+                             f"created · endpoint {ka.endpoint_name} · provisioning "
+                             f"continues while documents generate")
+                    else:
+                        _log(f"Assistant · {spec['about']}", "ok",
+                             f"using existing · endpoint {ka.endpoint_name}")
+                    _KA_THREAD["created"][spec["display"]] = ka
+                    GO["assets"].setdefault("assistants", {})[spec["display"]] = {
+                        "name": ka.name, "endpoint": ka.endpoint_name,
+                        "about": spec["about"]}
+                except Exception as e:
+                    _log(f"Assistant · {spec['about']}", "warn", str(e)[:160])
+        except Exception as e:
+            _log("Assistants", "warn", str(e)[:160])
+    th = threading.Thread(target=_run, daemon=True)
+    th.start()
+    _KA_THREAD["thread"] = th
+
+
+def attach_assistant_sources() -> None:
+    """Point each assistant at its own folder — never the whole inbox."""
+    t0 = time.time()
+    th = _KA_THREAD.get("thread")
+    if th:
+        th.join(90)
+    try:
+        from databricks.sdk.service import knowledgeassistants as K
+        w = _w()
+        for spec in ASSISTANTS:
+            ka = _KA_THREAD["created"].get(spec["display"])
+            if ka is None:
+                continue
+            folder = f"{pipeline.VOL_ROOT}/{spec['folder']}"
+            have = False
+            try:
+                for src in w.knowledge_assistants.list_knowledge_sources(ka.name):
                     path = (src.files.path or "") if src.files else ""
-                except Exception:
-                    pass
-                if path.startswith(pipeline.VOL_ROOT):
-                    have_source = True
-                elif path:
-                    # A source pointing somewhere else means this assistant is
-                    # left over from an earlier install. Say so and attach the
-                    # current volume alongside rather than trusting stale files.
-                    _log("Knowledge source", "warn",
-                         f"existing source points at {path[:80]} · attaching the "
-                         f"current volume as well")
-        except Exception:
-            pass
-        if not have_source:
-            # On a freshly created assistant this call can hang inside the
-            # SDK's five-minute retry budget while the control plane finishes
-            # provisioning. Indexing is background work by definition, so the
-            # run caps its wait and moves on; a rerun adopts and re-attaches.
+                    if path == folder:
+                        have = True
+                    elif path:
+                        _log(f"Assistant · {spec['about']}", "warn",
+                             f"existing source points at {path[:70]} · attaching "
+                             f"{spec['folder']} as well")
+            except Exception:
+                pass
+            if have:
+                continue
             outcome: list = []
 
-            def _attach():
+            def _attach(name=ka.name, fol=folder, disp=spec["display"]):
                 try:
-                    w.knowledge_assistants.create_knowledge_source(ka.name, K.KnowledgeSource(
-                        display_name="demo-documents", description="Demo document volume",
-                        source_type="files", files=K.FilesSpec(path=f"{pipeline.VOL_ROOT}/inbox")))
+                    w.knowledge_assistants.create_knowledge_source(name, K.KnowledgeSource(
+                        display_name=f"{disp}-docs",
+                        description=f"Scoped demo documents: {fol}",
+                        source_type="files", files=K.FilesSpec(path=fol)))
                     outcome.append("ok")
                 except Exception as ex:
                     outcome.append(str(ex))
-            th = threading.Thread(target=_attach, daemon=True)
-            th.start()
-            th.join(75)
-            if th.is_alive() or (outcome and "timed out" in outcome[0].lower()):
-                _log("Knowledge source", "ok",
-                     "attaching in the background · the Ask page uses the "
-                     "assistant the moment indexing finishes")
+            t = threading.Thread(target=_attach, daemon=True)
+            t.start()
+            t.join(75)
+            if t.is_alive() or (outcome and "timed out" in outcome[0].lower()):
+                _log(f"Assistant · {spec['about']}", "ok",
+                     f"source attaching in the background · indexes only "
+                     f"{spec['folder']}, not the inbox")
             elif outcome and outcome[0] == "ok":
-                _log("Knowledge source", "ok", "volume attached · indexing in background")
+                _log(f"Assistant · {spec['about']}", "ok",
+                     f"indexing {spec['folder']} only · a fraction of the corpus, "
+                     f"so it is ready sooner")
             else:
-                _log("Knowledge source", "warn",
-                     f"not attached yet, a rerun retries it · {outcome[0][:120] if outcome else ''}")
+                _log(f"Assistant · {spec['about']}", "warn",
+                     f"source not attached yet, a rerun retries · "
+                     f"{outcome[0][:100] if outcome else ''}")
     except Exception as e:
-        _log("Knowledge Assistant", "warn", str(e)[:200])
-    _section("Create the Knowledge Assistant", time.time() - t0)
+        _log("Assistants", "warn", str(e)[:180])
+    _section("Attach assistant sources", time.time() - t0)
 
 
 def report_ka() -> None:
-    """Close the run with the assistant's true state instead of a guess."""
-    try:
-        st = ka_state()
-        if st.get("ready"):
-            _log("Knowledge Assistant", "ok",
-                 f"ready · {st.get('endpoint', '')} answers with citations")
-        elif st.get("endpoint"):
-            _log("Knowledge Assistant", "ok",
-                 f"{st.get('endpoint')} still indexing · Ask falls back to "
-                 f"governed SQL until it is ready, then switches on its own")
-    except Exception:
-        pass
+    """Close the run with each assistant's true state instead of a guess."""
+    for spec in ASSISTANTS:
+        try:
+            st = ka_state(spec["display"])
+            if st.get("ready") and st.get("indexed"):
+                _log(f"Assistant · {spec['about']}", "ok",
+                     f"ready · {st.get('endpoint', '')} answers with citations")
+            elif st.get("endpoint"):
+                _log(f"Assistant · {spec['about']}", "ok",
+                     f"still indexing its own folder · Ask answers from the "
+                     f"extracted tables until it is ready, then switches on its own")
+        except Exception:
+            pass
 
 
 def ensure_genie() -> None:
@@ -487,9 +545,11 @@ def go(cfg: dict, stage: str = "all") -> None:
         if stage in ("all", "prepare"):
             ensure_infra(cfg)
             resolve_model()          # fail in second ten, not minute six
+            create_assistants_early()   # endpoint provisioning is the slow
+                                        # part; overlap it with everything else
             research_company(cfg)
             build_corpus(cfg)
-            ensure_ka()              # indexing continues in background
+            attach_assistant_sources()  # scoped folders now exist
         if stage == "prepare":
             docs = GO["assets"].get("documents", {})
             n = int(docs.get("generated", 0)) + int(docs.get("customer", 0))
@@ -529,63 +589,74 @@ def start(cfg: dict, stage: str = "all") -> bool:
 
 
 # ---------------------------------------------------------------- ask
-def ka_state() -> dict:
+def ka_state(display: str | None = None) -> dict:
+    """True state of one assistant (by display name) or the first usable one.
+
+    An endpoint being Ready proves serving works, not that the assistant can
+    answer: with no attached source it errors 'qgen requires at least one
+    retrieval tool'. Ready therefore requires a source whenever the assistant
+    record is visible.
+    """
     w = _w()
-    # An app identity may not see assistants it didn't create in list results,
-    # A ka-* endpoint being Ready proves serving works, not that the assistant
-    # can answer: an assistant with no attached source serves an endpoint that
-    # errors with 'qgen requires at least one retrieval tool'. Ready therefore
-    # requires a source whenever the assistant record is visible to us.
-    ep = None
+    wanted = [display] if display else [a["display"] for a in ASSISTANTS] + [LEGACY_KA]
+    eps = []
     try:
-        for e in w.serving_endpoints.list():
-            if e.name and e.name.startswith("ka-"):
-                ep = e.name
-                break
+        eps = [e.name for e in w.serving_endpoints.list()
+               if e.name and e.name.startswith("ka-")]
     except Exception:
         pass
     try:
         for x in w.knowledge_assistants.list_knowledge_assistants():
-            if (x.display_name or "") == KA_DISPLAY:
-                out = {"state": str(x.state).split(".")[-1] if x.state else "",
-                       "endpoint": x.endpoint_name or ep, "name": x.name}
+            if (x.display_name or "") in wanted:
+                out = {"display": x.display_name,
+                       "state": str(x.state).split(".")[-1] if x.state else "",
+                       "endpoint": x.endpoint_name, "name": x.name}
                 try:
                     srcs = list(w.knowledge_assistants.list_knowledge_sources(x.name))
-                    out["sources"] = [str(s.state).split(".")[-1] if s.state else ""
-                                      for s in srcs]
+                    out["sources"] = [str(sc.state).split(".")[-1] if sc.state else ""
+                                      for sc in srcs]
                 except Exception:
                     out["sources"] = []
                 out["ready"] = bool(out.get("endpoint")) and bool(out["sources"])
-                out["indexed"] = any(s in ("UPDATED", "READY", "ACTIVE", "ONLINE")
-                                     for s in out["sources"])
-                return out
+                out["indexed"] = any(v in ("UPDATED", "READY", "ACTIVE", "ONLINE")
+                                     for v in out["sources"])
+                if display or (out["ready"] and out["indexed"]):
+                    return out
     except Exception:
         pass
-    if ep:
-        # Endpoint visible but the assistant record is not (adopted from a
-        # different owner). Optimistic, and ask() degrades honestly on error.
-        return {"state": "ACTIVE", "endpoint": ep, "sources": [],
+    if not display and eps:
+        return {"state": "ACTIVE", "endpoint": eps[0], "sources": [],
                 "ready": True, "via": "endpoint"}
-    return {"state": "absent", "ready": False}
+    return {"state": "absent", "ready": False, "display": display}
+
+
+def assistants_state() -> list[dict]:
+    return [dict(ka_state(a["display"]), about=a["about"]) for a in ASSISTANTS]
 
 
 def _attach_source_async() -> None:
-    """One quiet attempt to give the assistant its volume, off-thread."""
+    """One quiet attempt to give every source-less assistant its folder."""
     def _run():
         try:
             from databricks.sdk.service import knowledgeassistants as K
             w = _w()
+            by_display = {}
             for x in w.knowledge_assistants.list_knowledge_assistants():
-                if (x.display_name or "") == KA_DISPLAY:
-                    try:
-                        if list(w.knowledge_assistants.list_knowledge_sources(x.name)):
-                            return
-                    except Exception:
-                        pass
-                    w.knowledge_assistants.create_knowledge_source(x.name, K.KnowledgeSource(
-                        display_name="demo-documents", description="Demo document volume",
-                        source_type="files", files=K.FilesSpec(path=f"{pipeline.VOL_ROOT}/inbox")))
-                    return
+                by_display[x.display_name or ""] = x
+            for spec in ASSISTANTS:
+                ka = by_display.get(spec["display"])
+                if ka is None:
+                    continue
+                try:
+                    if list(w.knowledge_assistants.list_knowledge_sources(ka.name)):
+                        continue
+                except Exception:
+                    pass
+                w.knowledge_assistants.create_knowledge_source(ka.name, K.KnowledgeSource(
+                    display_name=f"{spec['display']}-docs",
+                    description="Scoped demo documents",
+                    source_type="files",
+                    files=K.FilesSpec(path=f"{pipeline.VOL_ROOT}/{spec['folder']}")))
         except Exception:
             pass
     threading.Thread(target=_run, daemon=True).start()
@@ -658,17 +729,27 @@ def ask_genie(question: str) -> dict:
 
 
 def ask_assistant(question: str) -> dict:
-    st = ka_state()
-    if not st.get("ready"):
-        if st.get("endpoint") and not st.get("sources"):
-            _attach_source_async()   # self-heal: the attach never landed
-            msg = ("The assistant exists but is not connected to the documents yet. "
-                   "Connecting it now — ask this exact question again in a few minutes.")
-        else:
-            msg = ("The Knowledge Assistant for this run is still being prepared. "
-                   "Ask this one again in a few minutes.")
-        return {"engine": "assistant", "pending": True, "state": st.get("state"),
-                "sources": st.get("sources", []), "text": msg}
+    """Send a wording question to the assistant that owns that domain."""
+    ql = question.lower()
+    contractish = any(k in ql for k in
+                      ("contract", "agreement", "clause", "penalt", "policy",
+                       "terms", "deadline", "notice", "termination", "goodwill",
+                       "filing"))
+    order = list(ASSISTANTS) if contractish else list(reversed(ASSISTANTS))
+    states = [(spec, ka_state(spec["display"])) for spec in order]
+    pick = next(((sp, st) for sp, st in states
+                 if st.get("ready") and st.get("indexed")), None) \
+        or next(((sp, st) for sp, st in states if st.get("ready")), None)
+    if not pick:
+        if any(st.get("endpoint") and not st.get("sources") for _, st in states):
+            _attach_source_async()
+        waiting = ", ".join(sp["about"] for sp, st in states if st.get("endpoint"))
+        return {"engine": "assistant", "pending": True,
+                "states": [st for _, st in states],
+                "text": (f"The assistants ({waiting or 'both'}) are still indexing "
+                         f"their document folders. Ask this again in a few minutes "
+                         f"— table questions answer right now.")}
+    spec, st = pick
     w = _w()
     t0 = time.time()
     try:
@@ -684,15 +765,13 @@ def ask_assistant(question: str) -> dict:
         if not text:
             text = json.dumps(raw)[:500]
         return {"engine": "assistant", "seconds": round(time.time() - t0, 1),
-                "text": text, "endpoint": st["endpoint"]}
+                "text": text, "endpoint": st["endpoint"], "assistant": spec["about"]}
     except Exception as e:
         msg = str(e)
         if "retrieval tool" in msg or "KBQA" in msg:
-            # The endpoint serves but the assistant has no source: attach one
-            # quietly and answer like the pending case instead of erroring.
             _attach_source_async()
             return {"engine": "assistant", "pending": True,
-                    "text": "The assistant is not connected to its documents yet. "
+                    "text": "That assistant is not connected to its documents yet. "
                             "Connecting it now — ask this exact question again in a "
                             "few minutes."}
         return {"engine": "assistant", "error": msg[:250], "endpoint": st.get("endpoint")}
