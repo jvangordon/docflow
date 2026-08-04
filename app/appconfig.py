@@ -30,7 +30,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "company": "",
     "industry": "",
     "notes": "",
-    "catalog": "workspace",
+    "catalog": pipeline.CATALOG,
     "schema": "docflow",
     "customer_volume": "",
     "chat_endpoint": "databricks-claude-sonnet-4-6",
@@ -222,7 +222,7 @@ def readiness(deep: bool = False) -> dict:
     checks: list[dict] = []
     host = _host()
     cfg = load_config()
-    cat, sch = cfg.get("catalog") or "workspace", cfg.get("schema") or "docflow"
+    cat, sch = cfg.get("catalog") or pipeline.CATALOG, cfg.get("schema") or "docflow"
 
     def add(key, label, ok, detail, fix=None, fix_label=None, human=None,
             link=None, link_label=None, steps=None, untested=False, optional=False,
@@ -607,7 +607,7 @@ def fix_catalog() -> dict:
     """Create the target catalog and schema. SQL path: on Default Storage
     workspaces the catalogs API refuses, but CREATE CATALOG succeeds."""
     cfg = load_config()
-    cat, sch = cfg.get("catalog") or "workspace", cfg.get("schema") or "docflow"
+    cat, sch = cfg.get("catalog") or pipeline.CATALOG, cfg.get("schema") or "docflow"
     made = []
 
     def exists(stmt):
@@ -651,7 +651,7 @@ def fix_grants() -> dict:
     """Re-run the browse grants against the current target."""
     import orchestrator
     cfg = load_config()
-    cat, sch = cfg.get("catalog") or "workspace", cfg.get("schema") or "docflow"
+    cat, sch = cfg.get("catalog") or pipeline.CATALOG, cfg.get("schema") or "docflow"
     out = orchestrator.grant_browse_access(cat, sch, cfg)
     if out["granted"]:
         return {"ok": True, "created": [f"browse access for {p}" for p in out["granted"]]}

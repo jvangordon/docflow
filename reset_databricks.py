@@ -29,9 +29,17 @@
 
 # COMMAND ----------
 
-# Set these to match the app's Advanced settings if you changed them.
+# Set these to match the app's Advanced settings if you changed them. Run as
+# a notebook, the two widgets at the top do the same job.
 CATALOG = "workspace"
 SCHEMA = "docflow"
+try:
+    dbutils.widgets.text("catalog", CATALOG)          # noqa: F821
+    dbutils.widgets.text("schema", SCHEMA)            # noqa: F821
+    CATALOG = dbutils.widgets.get("catalog").strip() or CATALOG  # noqa: F821
+    SCHEMA = dbutils.widgets.get("schema").strip() or SCHEMA     # noqa: F821
+except NameError:
+    pass
 
 # Nothing is deleted while this is False. Read the plan, then set it True.
 CONFIRM = False

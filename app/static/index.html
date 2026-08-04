@@ -351,11 +351,11 @@ function renderStart(){
   const c=S.cfg||{}, scan=S.scan||{}, rd=S.ready||{checks:[]};
   const started = !!(S.golog && S.golog.steps && S.golog.steps.length);
   const cats = scan.catalogs||[];
+  const cur = `${c.catalog||"workspace"}.${c.schema||"docflow"}`;
   const catOptions = [];
   cats.forEach(cat=> (cat.schemas.length?cat.schemas:["docflow"]).forEach(sc=>
     catOptions.push(`${cat.name}.${sc}`)));
-  if(!catOptions.includes("workspace.docflow")) catOptions.unshift("workspace.docflow");
-  const cur = `${c.catalog||"workspace"}.${c.schema||"docflow"}`;
+  if(!catOptions.includes(cur)) catOptions.unshift(cur);
   const vols = scan.volumes||[];
   const doneN = ["company","industry"].filter(k=>c[k]).length;
   const blockers = rd.blockers||[];
@@ -420,9 +420,13 @@ function renderStart(){
             <label style="margin-bottom:7px">Catalog and schema</label>
             <select class="ctl mono" id="f-target">
               ${catOptions.map(o=>`<option ${o===cur?"selected":""}>${esc(o)}</option>`).join("")}
-              <option value="__new">workspace.docflow — create if missing</option>
+              <option value="__custom">another catalog — type it in</option>
             </select>
-            <div class="hint">Tables, the Genie space and run state land here.</div>
+            <input class="ctl mono" id="f-tcustom" placeholder="catalog.schema"
+              style="display:none;margin-top:8px" value="">
+            <div class="hint">Tables, the Genie space and run state land here.
+              An existing catalog works — the app only adds its own schema,
+              and setup creates the catalog only when it is missing.</div>
             <label style="margin:16px 0 7px">Customer documents</label>
             <select class="ctl mono" id="f-cvol">
               <option value="">No customer documents · generate everything</option>
@@ -560,7 +564,9 @@ function queueSave(){
 }
 async function saveCfg(skipSync){
   clearTimeout(_saveTimer);
-  const t=($("#f-target").value==="__new"?"workspace.docflow":$("#f-target").value).split(".");
+  let tv=$("#f-target").value;
+  if(tv==="__custom"){ const tc=$("#f-tcustom"); tv=(tc&&tc.value.trim())||`${(S.cfg||{}).catalog||"workspace"}.${(S.cfg||{}).schema||"docflow"}`; }
+  const t=tv.split(".");
   const body={ company:$("#f-company").value.trim(), industry:$("#f-industry").value.trim(),
     catalog:t[0], schema:t[1]||"docflow", customer_volume:$("#f-cvol").value,
     chat_endpoint:$("#f-model").value.trim() };
@@ -589,7 +595,11 @@ function bindStart(){
     $("#f-industry").value=x.dataset.ind; saveCfg(); });
   ["f-company","f-industry","f-model"].forEach(id=>{ const el=$("#"+id);
     if(el){ el.oninput=queueSave; el.onchange=saveCfg; } });
-  $("#f-target").onchange=saveCfg; $("#f-cvol").onchange=saveCfg;
+  $("#f-target").onchange=e=>{ const tc=$("#f-tcustom");
+    if(tc) tc.style.display = e.target.value==="__custom" ? "block" : "none";
+    if(e.target.value!=="__custom") saveCfg(); else if(tc) tc.focus(); };
+  const tcu=$("#f-tcustom"); if(tcu){ tcu.onchange=saveCfg; }
+  $("#f-cvol").onchange=saveCfg;
   const rc=$("#recheck");
   if(rc) rc.onclick=async()=>{ S.ready=await j("/api/readiness").catch(()=>S.ready); renderStart(); };
   const fa=$("#fixall");

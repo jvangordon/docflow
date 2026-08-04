@@ -26,9 +26,11 @@ def rec(label, ok, detail=""):
 class FakeSQL:
     """Records statements and answers catalogue queries from a fake workspace."""
 
-    def __init__(self, tables=(), volumes=(), schemas=("docflow",), comment=""):
+    def __init__(self, tables=(), volumes=(), schemas=("docflow",), comment="",
+                 catalogs=None):
         self.tables, self.volumes = list(tables), list(volumes)
         self.schemas, self.comment = list(schemas), comment
+        self.catalogs = list(catalogs) if catalogs is not None else None
         self.seen = []
 
     def __call__(self, stmt, *a, **k):
@@ -41,7 +43,10 @@ class FakeSQL:
         if s.startswith("SHOW SCHEMAS"):
             return [[x] for x in self.schemas]
         if s.startswith("SHOW CATALOGS"):
-            return [["workspace"]]
+            if self.catalogs is None:
+                return [["workspace"]]
+            m = re.search(r"LIKE '([^']+)'", stmt, re.I)
+            return [[c] for c in self.catalogs if not m or c == m.group(1)]
         if s.startswith("DESCRIBE SCHEMA"):
             return [["Comment", self.comment]]
         return []
@@ -185,6 +190,40 @@ rec("an unmarked schema needs distinctive tables, not generic names",
 rec("generic table names alone never authorise deletion",
     "names a customer\n                  f\" could own too" in rcode
     or "could own too" in rcode, "explicitly refused")
+
+# --- 9. pointing at an existing catalog uses it in place ---------------------
+# The install can target a catalog the customer already owns. The app may add
+# its own schema there, but must never create, claim, or re-grant the catalog.
+orchestrator.GO["assets"] = {}
+fake9 = FakeSQL(tables=[], volumes=[], schemas=[], catalogs=["big_existing"])
+orchestrator.pipeline.sql = fake9
+try:
+    orchestrator.pipeline.set_target("big_existing", "docflow", "docs")
+    orchestrator.ensure_infra({"catalog": "big_existing", "schema": "docflow"})
+except Exception:
+    pass                                        # warehouse lookup is not faked
+cat_writes = [x for x in fake9.seen if "CREATE CATALOG" in x.upper()]
+rec("an existing catalog is never re-created", not cat_writes,
+    f"{len(cat_writes)} CREATE CATALOG" if cat_writes else "used in place")
+rec("an existing catalog is never claimed as ours",
+    orchestrator.GO["assets"].get("catalog_created_by_us") is not True, "unclaimed")
+
+here2 = os.path.dirname(os.path.abspath(__file__))
+setup_src = open(os.path.join(os.path.dirname(here2), "setup_databricks.py")).read()
+reset_src2 = open(os.path.join(os.path.dirname(here2), "reset_databricks.py")).read()
+appcfg_src = open(os.path.join(here2, "appconfig.py")).read()
+spa_src = open(os.path.join(here2, "static", "index.html")).read()
+rec("installer takes the catalog as a parameter",
+    'dbutils.widgets.text("catalog"' in setup_src, "widget present")
+rec("teardown takes catalog and schema as parameters",
+    'dbutils.widgets.text("catalog"' in reset_src2
+    and 'dbutils.widgets.text("schema"' in reset_src2, "widgets present")
+rec("app default catalog follows the install, not a literal",
+    '"catalog": pipeline.CATALOG' in appcfg_src
+    and 'or "workspace"' not in appcfg_src.replace('cfg.get("catalog") or', ""),
+    "pipeline.CATALOG")
+rec("frontend carries no hardcoded catalog target",
+    "workspace.docflow" not in spa_src, "picker is config-driven")
 
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

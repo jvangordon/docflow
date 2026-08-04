@@ -18,7 +18,17 @@
 # COMMAND ----------
 
 APP_NAME = "docflow"
-CATALOG = "workspace"   # catalog the app may create its schema in
+
+# Catalog the app works in. The widget above the notebook lets you point the
+# install at an EXISTING catalog (say, a sandbox your admin gave you) — the
+# notebook only creates the catalog when it does not exist yet, and the app
+# never touches anything in it beyond its own schema.
+CATALOG = "workspace"
+try:
+    dbutils.widgets.text("catalog", CATALOG)          # noqa: F821
+    CATALOG = dbutils.widgets.get("catalog").strip() or CATALOG  # noqa: F821
+except NameError:
+    pass
 
 # COMMAND ----------
 
@@ -77,12 +87,22 @@ try:
     import os as _os
     yaml_path = SOURCE.replace("/Workspace", "", 1) + "/app.yaml"
     body = w.workspace.download(yaml_path).read().decode()
+    add = []
     if "DOCFLOW_OWNER" not in body:
-        body = body.rstrip() + f"\nenv:\n  - name: DOCFLOW_OWNER\n    value: {me}\n"
+        add.append(("DOCFLOW_OWNER", me))
+    if "DOCFLOW_CATALOG" not in body and CATALOG != "workspace":
+        add.append(("DOCFLOW_CATALOG", CATALOG))
+    if add:
+        if "\nenv:" not in body:
+            body = body.rstrip() + "\nenv:\n"
+        else:
+            body = body.rstrip() + "\n"
+        for k, v in add:
+            body += f"  - name: {k}\n    value: {v}\n"
         import io as _io
         w.workspace.upload(yaml_path, _io.BytesIO(body.encode()),
                            format=ImportFormat.AUTO, overwrite=True)
-        print(f"recorded installer identity: {me}")
+        print("recorded: " + ", ".join(k for k, _ in add))
 except Exception as e:
     print(f"could not record installer identity ({str(e)[:80]}) — the app will "
           f"grant to workspace groups instead")
