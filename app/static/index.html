@@ -179,6 +179,16 @@ select.ctl{appearance:none}
 .river{position:absolute;inset:0;width:100%;height:100%}
 .rp{fill:none;stroke-width:1.75;stroke-linecap:round;stroke:var(--hair2)}
 .rp.on{stroke-dasharray:4 8;animation:flow 1.5s linear infinite}
+.rp.hot{stroke-width:2.6;filter:drop-shadow(0 0 5px currentColor);animation-duration:.85s}
+.term.working{border-color:rgba(255,122,69,.55);box-shadow:0 0 0 1px rgba(255,122,69,.25),
+  0 6px 26px rgba(255,59,32,.14)}
+.term .now{display:none;font:600 8.5px var(--mono);letter-spacing:.13em;text-transform:uppercase;
+  color:var(--lava2);margin-top:5px}
+.term.working .now{display:block}
+.stagenow{font:600 10px var(--mono);letter-spacing:.14em;text-transform:uppercase;
+  color:var(--lava2);margin-top:6px;min-height:12px}
+@keyframes pulsering{0%{transform:scale(1);opacity:.55}50%{transform:scale(1.13);opacity:.12}100%{transform:scale(1);opacity:.55}}
+.ring.busy{animation:pulsering 1.25s ease-in-out infinite}
 @keyframes flow{to{stroke-dashoffset:-12}}
 .hero{border:1px solid var(--hair);border-radius:16px;background:
   linear-gradient(180deg,rgba(242,240,236,.015),transparent 120px),var(--bg2);
@@ -511,14 +521,14 @@ function queueSave(){
   const st=$("#savestat"); if(st) st.textContent="saving…";
   _saveTimer=setTimeout(saveCfg, 700);
 }
-async function saveCfg(){
+async function saveCfg(skipSync){
   clearTimeout(_saveTimer);
   const t=($("#f-target").value==="__new"?"workspace.docflow":$("#f-target").value).split(".");
   const body={ company:$("#f-company").value.trim(), industry:$("#f-industry").value.trim(),
     catalog:t[0], schema:t[1]||"docflow", customer_volume:$("#f-cvol").value,
     chat_endpoint:$("#f-model").value.trim() };
   S.cfg = await post("/api/config", body).catch(()=>S.cfg);
-  syncFormState();
+  if(!skipSync) syncFormState();
   const st=$("#savestat");
   if(st){ st.textContent="saved ✓"; setTimeout(()=>{const x=$("#savestat"); if(x&&x.textContent==="saved ✓") x.textContent="";},1800); }
 }
@@ -583,10 +593,24 @@ function bindStart(){
             : await j("/api/readiness").catch(()=>S.ready);
     renderStart();
   });
-  $("#gobtn").onclick=async()=>{
+  $("#gobtn").onclick=async(ev)=>{
+    const b=ev.currentTarget;
     const stage = S.golog && S.golog.phase==="prepared" ? "process" : "prepare";
-    if(stage==="prepare") await saveCfg();
-    try{ await post("/api/go", {stage}); }catch(e){ $("#gomsg").textContent=e.message; return; }
+    // Feedback first, work second: a click with no visible change reads as a
+    // button that did not fire.
+    b.disabled=true;
+    b.innerHTML=`<span class="spin"></span> ${stage==="process"?"Processing":"Starting"}`;
+    const m=$("#gomsg");
+    if(m) m.textContent = stage==="process"
+      ? "Documents are entering the lanes. Open Flow to watch."
+      : "Preparing the workspace. The log appears on the right in a moment.";
+    if(stage==="prepare") await saveCfg(true);   // keep the pressed state
+    try{ await post("/api/go", {stage}); }
+    catch(e){
+      b.disabled=false; b.textContent = stage==="process"?"Process documents":"Go";
+      if(m) m.textContent=e.message;
+      return;
+    }
     pollGo();
   };
 }
@@ -684,8 +708,11 @@ async function renderFlow(){
       const b2=$("#procbtn");
       if(b2 && !b2._wired){ b2._wired=true; b2.onclick=async()=>{
         b2.disabled=true; b2.innerHTML=`<span class="spin"></span> Processing`;
+        const msg=b2.parentElement && b2.parentElement.querySelector(".msg");
+        if(msg) msg.textContent="Documents are entering the lanes.";
         try{ await post("/api/go", {stage:"process"}); }
-        catch(e){ b2.disabled=false; b2.textContent="Process documents"; }
+        catch(e){ b2.disabled=false; b2.textContent="Process documents";
+                  if(msg) msg.textContent=e.message; }
       }; }
     } else if(pb.innerHTML && g.phase!=="prepared"){ pb.innerHTML=""; }
   }
@@ -697,6 +724,34 @@ async function renderFlow(){
   const onoff=(id,on)=>{const el=document.getElementById(id); if(el) el.classList.toggle("on",!!on);};
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const dot=(id,show)=>{const el=document.getElementById(id); if(el) el.style.display=(show&&!reduce)?"":"none";};
+  // The board animates what the pipeline is doing right now, not the fact that
+  // something is running. Each stage names the paths it moves documents along.
+  const STAGE_PATHS = {
+    ingest:["in"], parse:["in"], label:["in"],
+    route:["ie","ka","b1","b2","sec"],
+    extract:["ie","b1"], audit:["ie","b1"], secure:["sec"],
+  };
+  const STAGE_LANES = {
+    route:["ie","ka","ie_ka","secure","archive"],
+    extract:["ie","ie_ka"], audit:["ie","ie_ka"], secure:["secure"],
+  };
+  const STAGE_WORD = {
+    ingest:"reading the inbox", parse:"ai_parse_document", label:"ai_classify",
+    route:"policy picks the lane", extract:"ai_extract", audit:"checking the math",
+    secure:"ai_mask + sealing",
+  };
+  const stage = running ? (st.phase||"") : "";
+  const livePaths = new Set(STAGE_PATHS[stage]||[]);
+  const liveLanes = new Set(STAGE_LANES[stage]||[]);
+  // A lane whose count just grew also flashes, so arrivals are visible even
+  // inside a long stage.
+  S._prev = S._prev || {};
+  const grew = {};
+  for(const k of Object.keys(lanes)){
+    grew[k] = lanes[k].length > (S._prev[k]||0);
+    S._prev[k] = lanes[k].length;
+  }
+  if(!running) S._prev = {};
   set("c-inbox", docs.length||"·");
   set("c-hub", inFlight||docs.length||"·");
   // Exclusive counts on every card: the five badges sum to the inbox, always.
@@ -705,13 +760,24 @@ async function renderFlow(){
   set("b-both", `${lanes.ie_ka.length} docs`);
   set("b-sec", `${lanes.secure.length} sealed`);
   set("b-arch", `${lanes.archive.length}`);
-  onoff("p-in", running);
-  onoff("p-ie", lanes.ie.length||running);
-  onoff("p-ka", lanes.ka.length||running);
-  onoff("p-b1", lanes.ie_ka.length||running);
-  onoff("p-b2", lanes.ie_ka.length||running);
-  onoff("p-sec", lanes.secure.length||running);
-  ["d-in","d-ie","d-ka","d-b1","d-b2","d-sec"].forEach(d=>dot(d, running));
+  // A path is lit when its stage is live; solid-but-quiet once docs have used it.
+  const laneOfPath = {in:null, ie:"ie", ka:"ka", b1:"ie_ka", b2:"ie_ka", sec:"secure"};
+  for(const pid of ["in","ie","ka","b1","b2","sec"]){
+    const ln = laneOfPath[pid];
+    const live = livePaths.has(pid) || (ln && grew[ln]);
+    const used = ln ? lanes[ln].length > 0 : docs.length > 0;
+    const el = document.getElementById("p-"+pid);
+    if(el){ el.classList.toggle("on", !!(live||used)); el.classList.toggle("hot", !!live); }
+    dot("d-"+pid, live);
+  }
+  for(const [k,el] of Object.entries({ie:"t-ie",ka:"t-ka",ie_ka:"t-both",secure:"t-sec",archive:"t-arch"})){
+    const card = document.getElementById(el);
+    if(card) card.classList.toggle("working", liveLanes.has(k));
+  }
+  const ring = document.querySelector(".ring");
+  if(ring) ring.classList.toggle("busy", ["label","route","parse"].includes(stage));
+  const sn = document.getElementById("stagenow");
+  if(sn) sn.textContent = stage ? (STAGE_WORD[stage]||stage) : "";
   const money = st.money||{};
   const routed = lanes.ie.length+lanes.ka.length+lanes.ie_ka.length+lanes.secure.length+lanes.archive.length;
   const eq = `${lanes.ie.length}+${lanes.ka.length}+${lanes.ie_ka.length}+${lanes.secure.length}+${lanes.archive.length} = ${routed}`;
@@ -792,11 +858,14 @@ function buildRiver(){
       <div class="nlbl">INBOX<span>ai_parse_document</span></div></div>
     <div class="node" style="left:26.5%;top:34%">
       <div class="ring"><div class="ring2"></div><span class="num" id="c-hub">·</span></div>
-      <div class="nlbl">CLASSIFY + ROUTE<span>ai_classify in SQL · policy picks the lane</span></div></div>
+      <div class="nlbl">CLASSIFY + ROUTE<span>ai_classify in SQL · policy picks the lane</span>
+        <div class="stagenow" id="stagenow"></div></div></div>
     ${Object.entries(meta).map(([k,m])=>`
-      <div class="term ${m[4]}" style="left:75%;top:${termY[k]}%">
+      <div class="term ${m[4]}" id="t-${{ie:"ie",ka:"ka",ie_ka:"both",secure:"sec",archive:"arch"}[k]}"
+           style="left:75%;top:${termY[k]}%">
         <b>${m[0]}</b><span>${m[1]}</span>
         <div class="tmeta"><span class="tag ${m[3]}" style="font-size:9px"><i class="d"></i><span id="${m[2]}">·</span></span></div>
+        <div class="now">working</div>
       </div>`).join("")}`;
 }
 const moneyFmt = v => v!=null?("$"+Number(v).toLocaleString(undefined,{maximumFractionDigits:0})):"—";

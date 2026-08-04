@@ -53,14 +53,15 @@ PARTS = [("Hardened tool steel blank 4140, 2 in", 8640), ("Carbide end mill, 12 
 
 # type -> corpus shape (count, doc-id prefix, printed title)
 TAXONOMY = {
-    "supplier_invoice":   {"count": 6, "prefix": "INV", "title": "Supplier Invoice"},
-    "purchase_order":     {"count": 3, "prefix": "PO",  "title": "Purchase Order"},
+    "supplier_invoice":   {"count": 5, "prefix": "INV", "title": "Supplier Invoice"},
+    "purchase_order":     {"count": 2, "prefix": "PO",  "title": "Purchase Order"},
     "warranty_claim":     {"count": 5, "prefix": "WC",  "title": "Warranty Claim"},
     "quality_inspection": {"count": 4, "prefix": "QIR", "title": "Quality Inspection Report"},
     "safety_incident":    {"count": 2, "prefix": "SI",  "title": "Safety Incident Report"},
     "hr_document":        {"count": 1, "prefix": "HR",  "title": "HR Document"},
     "shipping_manifest":  {"count": 2, "prefix": "SM",  "title": "Shipping Manifest"},
     "marketing":          {"count": 1, "prefix": "MKT", "title": "Marketing Mail"},
+    "supplier_contract":  {"count": 2, "prefix": "CT",  "title": "Supplier Agreement"},
 }
 
 # PLAN.md routing matrix. Secure lanes extract only from a redacted copy;
@@ -74,6 +75,7 @@ ROUTING = {
     "hr_document":        {"extract": False, "audit": False, "secure": True},
     "shipping_manifest":  {"extract": True,  "audit": False, "secure": False},
     "marketing":          {"extract": False, "audit": False, "secure": False},
+    "supplier_contract":  {"extract": False, "audit": False, "secure": False},
 }
 
 # claim_id, serial, purchase date, term months, failure date, cents, line, planted
@@ -246,7 +248,7 @@ def _build_invoices(company, rng):
                      ("On-site commissioning service, 1 day", 1, 35000)]
     docs = [_invoice("INV-88213", company, "Miller Tooling LLC", date(2023, 11, 2),
                      planted_items, rng.choice(PEOPLE), _phone(rng), True)]
-    for i in range(5):
+    for i in range(4):
         vendor = rng.choice(VENDOR_NAMES)
         inv_date = date(2026, 4, 6) + timedelta(days=rng.randrange(70))
         items = [(d, rng.randint(1, 12), p) for d, p in rng.sample(PARTS, rng.randint(3, 5))]
@@ -256,7 +258,7 @@ def _build_invoices(company, rng):
 
 def _build_pos(company, rng):
     docs = []
-    for i, po_id in enumerate(["PO-3341", "PO-3342", "PO-3343"]):
+    for i, po_id in enumerate(["PO-3341", "PO-3342"]):
         vendor, od = VENDOR_NAMES[i % 3], date(2026, 3, 9) + timedelta(days=rng.randrange(80))
         need, buyer = od + timedelta(days=21), rng.choice(PEOPLE)
         items = [(d, rng.randint(2, 20), p) for d, p in rng.sample(PARTS, rng.randint(3, 4))]
@@ -412,6 +414,73 @@ def _build_marketing(company, rng):
           "contact_email": "sales@example.com"}
     return [("MKT-001", story, gt, False)]
 
+def _build_contracts(company, rng):
+    del rng  # contract terms are the story; nothing random belongs in them
+    c = _esc(company)
+    msa = [Paragraph("MASTER SUPPLY AGREEMENT", S_TITLE),
+           Paragraph(f"CT-7701 - between {c} (Buyer) and Miller Tooling LLC (Supplier) - "
+                     f"effective 1 March 2024", S_SUB),
+           Spacer(0, 8),
+           Paragraph("1. Scope", S_H2),
+           Paragraph("Supplier will manufacture and deliver the components listed in each "
+                     "purchase order issued under this agreement. Each purchase order "
+                     "references these terms unless it states otherwise in writing.", S_BODY),
+           Spacer(0, 6),
+           Paragraph("2. Delivery and late-delivery penalty", S_H2),
+           Paragraph("Time is of the essence. Where delivery arrives after the need-by date "
+                     "on the purchase order, Buyer may deduct a late-delivery penalty of five "
+                     "percent (5%) of the purchase order value for each full week of delay, "
+                     "capped at fifteen percent (15%) in aggregate. Penalties are deducted "
+                     "from the next invoice, not invoiced separately.", S_BODY),
+           Spacer(0, 6),
+           Paragraph("3. Component warranty pass-through", S_H2),
+           Paragraph("Supplier warrants all delivered components for twenty-four (24) months "
+                     "from delivery. Where Buyer honours an end-customer warranty claim "
+                     "caused by a defective supplied component, Supplier reimburses Buyer "
+                     "the component cost plus documented labour, provided the claim is "
+                     "notified within sixty (60) days of Buyer settling it.", S_BODY),
+           Spacer(0, 6),
+           Paragraph("4. Termination", S_H2),
+           Paragraph("Either party may terminate on ninety (90) days written notice. "
+                     "Purchase orders accepted before notice survive termination.", S_BODY),
+           Spacer(0, 6),
+           Paragraph("5. Governing terms", S_H2),
+           Paragraph("This agreement is governed by the laws of the State of Demoland. "
+                     "It is fictional demonstration material and binds nobody.", S_BODY)]
+    gt_msa = {"contract_id": "CT-7701", "supplier": "Miller Tooling LLC",
+              "late_delivery_penalty": "5% per full week, capped at 15%",
+              "component_warranty_months": "24"}
+    pol = [Paragraph("WARRANTY TERMS AND SERVICE POLICY", S_TITLE),
+           Paragraph(f"CT-7702 - {c} - customer-facing policy - revision C, "
+                     f"January 2025", S_SUB),
+           Spacer(0, 8),
+           Paragraph("1. Coverage window", S_H2),
+           Paragraph(f"{c} warrants each unit against defects in materials and workmanship "
+                     "for the warranty term stated on the unit's certificate, measured from "
+                     "the date of purchase. Coverage ends when that term lapses; failures "
+                     "reported after the coverage window are not eligible for repair or "
+                     "replacement at company cost, and are quoted as billable service.", S_BODY),
+           Spacer(0, 6),
+           Paragraph("2. Filing a claim", S_H2),
+           Paragraph("Claims must be filed within thirty (30) days of the failure date, with "
+                     "the unit serial number, purchase date and a description of the failure "
+                     "mode. Claims missing a verifiable purchase date are held for review "
+                     "rather than denied outright.", S_BODY),
+           Spacer(0, 6),
+           Paragraph("3. Exclusions", S_H2),
+           Paragraph("Damage from improper installation, unauthorised modification, or "
+                     "operation outside the published duty cycle is excluded. Consequential "
+                     "and incidental damages are excluded to the extent law allows.", S_BODY),
+           Spacer(0, 6),
+           Paragraph("4. Out-of-window goodwill", S_H2),
+           Paragraph("Requests outside the coverage window may be considered for partial "
+                     "goodwill credit where the failure mode matches an open quality "
+                     "investigation. Goodwill is discretionary and never an admission "
+                     "of liability.", S_BODY)]
+    gt_pol = {"contract_id": "CT-7702", "policy": "Warranty Terms and Service Policy",
+              "claim_filing_deadline_days": "30"}
+    return [("CT-7701", msa, gt_msa, False), ("CT-7702", pol, gt_pol, False)]
+
 def generate_corpus(company: str, out_dir: str, seed: int = 38) -> dict:
     """Generate the 24-document corpus into out_dir and return the manifest:
     {"company", "seed", "generated": [{doc_id, type, filename, planted_trap,
@@ -421,7 +490,8 @@ def generate_corpus(company: str, out_dir: str, seed: int = 38) -> dict:
     rng = random.Random(seed)
     os.makedirs(out_dir, exist_ok=True)
     builders = (_build_invoices, _build_pos, _build_claims, _build_qirs,
-                _build_incidents, _build_hr, _build_manifests, _build_marketing)
+                _build_incidents, _build_hr, _build_manifests, _build_marketing,
+                _build_contracts)
     generated = []
     for dtype, build in zip(TAXONOMY, builders):  # TAXONOMY declaration order
         for doc_id, story, gt, planted in build(company, rng):

@@ -113,11 +113,9 @@ def lane_coverage(doc_plan: dict) -> dict:
         "counts": out,
         "names": LANE_NAMES,
         "empty_demo_lanes": empty,
-        # Honest gap: no shipped document type routes to Knowledge Assistant alone.
-        "known_gap": ("No current document type routes to Knowledge Assistant on its own. "
-                      "Contracts and manuals route to both engines, so the ka lane stays "
-                      "at zero until a KA-only type is added.")
-        if "ka" in empty else None,
+        # Two supplier contracts route to the assistant alone; a still-empty ka
+        # lane now means the run has not processed yet, not a missing doc type.
+        "known_gap": None,
         "total_docs": sum(int(v or 0) for v in (doc_plan or {}).values()),
     }
 
@@ -262,11 +260,22 @@ def readiness(deep: bool = False) -> dict:
     try:
         cats = [c.name for c in w.catalogs.list()]
         if cat not in cats:
+            # Creating a catalog needs CREATE CATALOG on the metastore, which an
+            # app identity does not get in a fresh workspace. Offer the button
+            # (it works where the right exists) but lead with the two things
+            # that always work, so nobody hunts for a privilege they cannot grant.
             add("catalog", f"Catalog {cat}", False,
-                f"'{cat}' does not exist in this workspace.",
-                fix="/api/fix/catalog", fix_label="Create it",
-                link=f"{host}/explore/data", link_label="Open Catalog",
-                human="Creating a catalog needs CREATE CATALOG on the metastore.")
+                f"'{cat}' does not exist here, and creating a catalog needs a "
+                f"metastore privilege this app's identity will not have.",
+                fix="/api/fix/catalog", fix_label="Try anyway",
+                link=f"{host}/explore/data", link_label="Open Catalog Explorer",
+                human="Two things that always work:",
+                steps=[
+                    f"Pick a catalog you already have under Advanced on the left — "
+                    f"any catalog you can create a schema in works.",
+                    f"Or create '{cat}' yourself in Catalog Explorer, then re-run "
+                    f"setup_databricks.py so the app is granted rights on it.",
+                ])
         else:
             try:
                 schemas = [s.name for s in w.schemas.list(catalog_name=cat)]

@@ -95,11 +95,13 @@ print("deployment:", dep.status.state if dep.status else "?",
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 3. Give the app the rights to set the workspace up
+# MAGIC ## 3. Make the catalog, and give the app its rights
 # MAGIC
-# MAGIC A new app has an identity with rights to nothing. These two grants are what
-# MAGIC let the readiness panel create a warehouse, a schema and a volume for you
-# MAGIC instead of sending you to the console.
+# MAGIC A new app has an identity with rights to nothing, and creating a catalog
+# MAGIC needs a privilege that identity will never have in a fresh workspace. This
+# MAGIC notebook runs as **you**, so it creates the catalog here and then grants the
+# MAGIC app what it needs — which is what lets the readiness panel build the rest
+# MAGIC for you instead of sending you to the console.
 
 # COMMAND ----------
 
@@ -129,6 +131,50 @@ elif rec:
         print("cluster creation: FAILED —", str(e)[:160])
         print("  a workspace admin can tick 'Allow cluster creation' on this")
         print("  service principal under Settings, Identity and access.")
+
+# Creating a catalog needs CREATE CATALOG on the metastore, which an app's
+# identity will not have in a fresh workspace. This notebook runs as you, so
+# it does that part here rather than letting the app fail at it later.
+def _sql(stmt):
+    whs = [x for x in w.warehouses.list()
+           if getattr(x, "enable_serverless_compute", False) and x.id]
+    if not whs:
+        raise RuntimeError("no serverless warehouse yet")
+    r = w.statement_execution.execute_statement(
+        warehouse_id=whs[0].id, statement=stmt, wait_timeout="50s")
+    st = r.status.state.value if r.status and r.status.state else "?"
+    t0 = time.time()
+    while st in ("PENDING", "RUNNING") and time.time() - t0 < 180:
+        time.sleep(3)
+        r = w.statement_execution.get_statement(r.statement_id)
+        st = r.status.state.value if r.status and r.status.state else "?"
+    if st != "SUCCEEDED":
+        raise RuntimeError(f"{st}: {getattr(r.status, 'error', '')}")
+    return r
+
+have = []
+try:
+    have = [c.name for c in w.catalogs.list()]
+except Exception:
+    pass
+if CATALOG in have:
+    print(f"catalog '{CATALOG}': already exists")
+else:
+    made = False
+    try:
+        _sql(f"CREATE CATALOG IF NOT EXISTS {CATALOG}")
+        made = True
+        print(f"catalog '{CATALOG}': created (as you, not as the app)")
+    except Exception as e1:
+        try:
+            w.catalogs.create(name=CATALOG)
+            made = True
+            print(f"catalog '{CATALOG}': created over the catalogs API")
+        except Exception as e2:
+            print(f"catalog '{CATALOG}': COULD NOT CREATE — {str(e1)[:110]}")
+            print(f"  Create it yourself in Catalog Explorer, or pick a catalog you")
+            print(f"  already own under Advanced on the app's Start page. Then re-run")
+            print(f"  this notebook so the app gets its grants on it.")
 
 try:
     w.grants.update(securable_type="catalog", full_name=CATALOG,

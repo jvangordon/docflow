@@ -52,6 +52,7 @@ ROUTING = {
     "hr_document": {"extract": False, "audit": False, "secure": True},
     "shipping_manifest": {"extract": True, "audit": False, "secure": False},
     "marketing": {"extract": False, "audit": False, "secure": False},
+    "supplier_contract": {"extract": False, "audit": False, "secure": False},
 }
 DOC_TYPES = list(ROUTING.keys())
 
@@ -541,6 +542,7 @@ LANE_POLICY = {
     "safety_incident": "secure",
     "hr_document": "secure",
     "marketing": "archive",
+    "supplier_contract": "ka",
 }
 
 
