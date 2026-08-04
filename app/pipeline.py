@@ -186,13 +186,10 @@ def model_candidates() -> list[str]:
     # env default first meant a selection of Opus lost to the shipped
     # sonnet default whenever that also answered — the app then reported the
     # model it actually used, which read as the picker being ignored.
-    chosen = ""
+    push(chosen_model())                         # the user's pick leads, always
     try:
         import appconfig
-        cfg = appconfig.load_config()
-        chosen = (cfg.get("chat_endpoint") or "").strip()
-        push(chosen)
-        push(cfg.get("resolved_model"))          # last known good
+        push(appconfig.load_config().get("resolved_model"))   # last known good
     except Exception:
         pass
     push(CHAT_ENDPOINT)                          # env default, only as a fallback
@@ -268,8 +265,18 @@ def chat_model() -> str:
     return _MODEL["name"] or CHAT_ENDPOINT
 
 
+def chosen_model() -> str:
+    """The model the user picked on the Start page, if any."""
+    try:
+        import appconfig
+        return (appconfig.load_config().get("chat_endpoint") or "").strip()
+    except Exception:
+        return ""
+
+
 def resolve_chat_model(max_tries: int = 16) -> dict:
     """Probe candidates until one answers; remember it. Raises when none do."""
+    chosen = chosen_model()
     cands = model_candidates()[:max_tries]
     errs: list[str] = []
     for name in cands:
