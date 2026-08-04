@@ -58,17 +58,39 @@ def _installer() -> str:
     return os.environ.get("DOCFLOW_OWNER", "")
 
 
+# Config lives on the volume so it survives a restart — but the volume does
+# not exist until setup runs, and typing a customer name before that used to
+# vanish without a word. Memory is the fallback and is flushed to the volume
+# the moment one exists.
+_MEM: dict = {}
+
+
+def _write(cfg: dict) -> None:
+    pipeline.wc().files.upload(
+        CONFIG_PATH, io.BytesIO(json.dumps(cfg, indent=2).encode()), overwrite=True)
+
+
 def load_config() -> dict:
+    merged = dict(DEFAULT_CONFIG)
     try:
         resp = pipeline.wc().files.download(CONFIG_PATH)
-        raw = resp.contents.read()
-        cfg = json.loads(raw)
-        merged = dict(DEFAULT_CONFIG)
+        cfg = json.loads(resp.contents.read())
         merged.update({k: v for k, v in cfg.items() if v is not None})
         merged["doc_plan"] = {**DEFAULT_CONFIG["doc_plan"], **(cfg.get("doc_plan") or {})}
+        if _MEM:
+            # Anything typed before the volume existed still wins, then lands.
+            pending = {k: v for k, v in _MEM.items() if v not in (None, "")}
+            if pending:
+                merged.update(pending)
+                try:
+                    _write(merged)
+                    _MEM.clear()
+                except Exception:
+                    pass
         return merged
     except Exception:
-        return dict(DEFAULT_CONFIG)
+        merged.update({k: v for k, v in _MEM.items() if v is not None})
+        return merged
 
 
 def save_config(patch: dict) -> dict:
@@ -93,6 +115,7 @@ def save_config(patch: dict) -> dict:
                     continue
         cfg["doc_plan"] = {**cfg["doc_plan"], **clean}
     cfg["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    _MEM.update({k: v for k, v in cfg.items() if k != "doc_plan"})
     try:
         pipeline.wc().files.upload(
             CONFIG_PATH, io.BytesIO(json.dumps(cfg, indent=2).encode()), overwrite=True)
@@ -566,14 +589,24 @@ def fix_catalog() -> dict:
     cfg = load_config()
     cat, sch = cfg.get("catalog") or "workspace", cfg.get("schema") or "docflow"
     made = []
-    try:
-        pipeline.sql(f"CREATE CATALOG IF NOT EXISTS {cat}")
-        made.append(f"catalog {cat}")
-    except Exception as e:
-        return {"ok": False, "stage": "catalog", "error": str(e)[:220],
-                "human_action": f"Ask a metastore admin for CREATE CATALOG, "
-                                f"or point the app at an existing catalog.",
-                "sql": f"GRANT CREATE SCHEMA, USE CATALOG ON CATALOG {cat} TO `<app service principal>`"}
+
+    def exists(stmt):
+        try:
+            return bool(pipeline.sql(stmt))
+        except Exception:
+            return False
+
+    # IF NOT EXISTS still demands CREATE CATALOG, so an app identity fails on a
+    # catalog that is already sitting there. Look before creating.
+    if not exists(f"SHOW CATALOGS LIKE '{cat}'"):
+        try:
+            pipeline.sql(f"CREATE CATALOG IF NOT EXISTS {cat}")
+            made.append(f"catalog {cat}")
+        except Exception as e:
+            return {"ok": False, "stage": "catalog", "error": str(e)[:220],
+                    "human_action": f"Ask a metastore admin for CREATE CATALOG, "
+                                    f"or point the app at an existing catalog.",
+                    "sql": f"GRANT CREATE SCHEMA, USE CATALOG ON CATALOG {cat} TO `<app service principal>`"}
     try:
         pipeline.sql(f"CREATE SCHEMA IF NOT EXISTS {cat}.{sch}")
         made.append(f"schema {cat}.{sch}")
