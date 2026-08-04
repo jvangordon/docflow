@@ -110,9 +110,38 @@ def ensure_infra(cfg: dict) -> None:
             return False
     if not exists(f"SHOW CATALOGS LIKE '{cat}'"):
         pipeline.sql(f"CREATE CATALOG IF NOT EXISTS {cat}")
+        GO["assets"]["catalog_created_by_us"] = True
         _log("Catalog", "ok", f"created {cat}")
-    if not exists(f"SHOW SCHEMAS IN {cat} LIKE '{sch}'"):
+    schema_existed = exists(f"SHOW SCHEMAS IN {cat} LIKE '{sch}'")
+    if not schema_existed:
         pipeline.sql(f"CREATE SCHEMA IF NOT EXISTS {cat}.{sch}")
+        pipeline.claim_schema(cat, sch)
+        GO["assets"]["schema_created_by_us"] = True
+        _log("Schema", "ok", f"created {cat}.{sch} and marked it as this demo's")
+    else:
+        # A schema that already exists may be the customer's. Adopt it only when
+        # this app made it, or when it is empty; otherwise stop before writing a
+        # single table. Refusing a demo is always cheaper than touching
+        # production data.
+        marked = bool(pipeline.schema_marker(cat, sch))
+        foreign = pipeline.schema_foreign_objects(cat, sch)
+        n_foreign = len(foreign["tables"]) + len(foreign["volumes"])
+        if marked:
+            GO["assets"]["schema_created_by_us"] = True
+            _log("Schema", "ok", f"reusing {cat}.{sch}, created by this demo earlier")
+        elif n_foreign == 0:
+            pipeline.claim_schema(cat, sch)
+            GO["assets"]["schema_created_by_us"] = True
+            _log("Schema", "ok", f"adopted empty schema {cat}.{sch} and marked it")
+        else:
+            names = ", ".join((foreign["tables"] + foreign["volumes"])[:4])
+            GO["assets"]["schema_created_by_us"] = False
+            raise RuntimeError(
+                f"{cat}.{sch} already holds {n_foreign} object(s) this demo did "
+                f"not create ({names}...). Refusing to write into it. Pick a new "
+                f"schema name under Advanced on the Start page — "
+                f"{cat}.docflow_demo is a safe choice — and press go again. "
+                f"Nothing has been changed.")
     if not exists(f"SHOW VOLUMES IN {cat}.{sch} LIKE 'docs'"):
         pipeline.sql(f"CREATE VOLUME IF NOT EXISTS {cat}.{sch}.docs")
     if not exists(f"SHOW VOLUMES IN {cat}.{sch} LIKE 'secure'"):
@@ -140,6 +169,11 @@ def grant_browse_access(cat: str, sch: str, cfg: dict | None = None) -> dict:
     the result names the one that worked. The secure volume is deliberately
     left out — opening it should fail, and that denial is the compliance beat.
     """
+    if not GO["assets"].get("schema_created_by_us"):
+        _log("Browse access", "warn",
+             "skipped: this schema was not created by the demo, so its "
+             "permissions are left exactly as they were")
+        return {"granted": [], "errors": ["schema not owned by the demo"]}
     principals = ["account users", "users"]
     import appconfig
     owner = (cfg or {}).get("owner_email") or appconfig._installer()
@@ -148,10 +182,14 @@ def grant_browse_access(cat: str, sch: str, cfg: dict | None = None) -> dict:
     granted, errs = [], []
     for who in principals:
         try:
-            for g in (f"GRANT USE CATALOG ON CATALOG {cat} TO `{who}`",
-                      f"GRANT USE SCHEMA ON SCHEMA {cat}.{sch} TO `{who}`",
-                      f"GRANT SELECT ON SCHEMA {cat}.{sch} TO `{who}`",
-                      f"GRANT READ VOLUME ON VOLUME {cat}.{sch}.docs TO `{who}`"):
+            stmts = [f"GRANT USE SCHEMA ON SCHEMA {cat}.{sch} TO `{who}`",
+                     f"GRANT SELECT ON SCHEMA {cat}.{sch} TO `{who}`",
+                     f"GRANT READ VOLUME ON VOLUME {cat}.{sch}.docs TO `{who}`"]
+            # USE CATALOG widens access to a container the customer may own, so
+            # it is only granted on a catalog this demo created itself.
+            if GO["assets"].get("catalog_created_by_us"):
+                stmts.insert(0, f"GRANT USE CATALOG ON CATALOG {cat} TO `{who}`")
+            for g in stmts:
                 pipeline.sql(g)
             granted.append(who)
         except Exception as e:

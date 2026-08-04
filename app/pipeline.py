@@ -56,6 +56,65 @@ ROUTING = {
 }
 DOC_TYPES = list(ROUTING.keys())
 
+# ---------------------------------------------------------------- ownership
+# This app runs inside customer workspaces. Everything it may create is
+# enumerated here, and teardown is only ever allowed to remove things on these
+# lists. Anything else in the target schema belongs to the customer and is
+# never written to, replaced, or deleted.
+OWNED_TABLES = ("documents", "events", "extract_warranty_claims",
+                "extract_supplier_invoices", "audit_findings",
+                "parsed", "labeled", "run_metrics")
+OWNED_VOLUMES = ("docs", "secure")
+# Stamped onto the schema the app creates or adopts. Teardown refuses to touch
+# a schema that does not carry it.
+MARKER = "docflow-demo-app: created by the DocFlow demo, safe to remove"
+
+
+def schema_marker(cat: str, sch: str) -> str:
+    """The comment on a schema, empty when unreadable or unset."""
+    try:
+        rows = sql(f"DESCRIBE SCHEMA EXTENDED {cat}.{sch}")
+    except Exception:
+        return ""
+    for r in rows or []:
+        cells = [str(c) for c in r if c is not None]
+        if any(c.strip().lower() in ("comment", "comment:") for c in cells):
+            for c in cells:
+                if MARKER.split(":")[0] in c:
+                    return c
+        for c in cells:
+            if MARKER.split(":")[0] in c:
+                return c
+    return ""
+
+
+def schema_foreign_objects(cat: str, sch: str) -> dict:
+    """Objects in the schema this app did not create."""
+    out = {"tables": [], "volumes": []}
+    try:
+        for r in sql(f"SHOW TABLES IN {cat}.{sch}") or []:
+            name = str(r[1]) if len(r) > 1 else str(r[0])
+            if name and name not in OWNED_TABLES:
+                out["tables"].append(name)
+    except Exception:
+        pass
+    try:
+        for r in sql(f"SHOW VOLUMES IN {cat}.{sch}") or []:
+            name = str(r[1]) if len(r) > 1 else str(r[0])
+            if name and name not in OWNED_VOLUMES:
+                out["volumes"].append(name)
+    except Exception:
+        pass
+    return out
+
+
+def claim_schema(cat: str, sch: str) -> None:
+    """Stamp the schema so teardown can prove this app made it."""
+    try:
+        sql(f"COMMENT ON SCHEMA {cat}.{sch} IS '{MARKER}'")
+    except Exception:
+        pass
+
 # research may rename every type into the industry's own language; the
 # classifier then classifies against those labels while routing keys stay
 # structural underneath

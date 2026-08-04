@@ -2,15 +2,19 @@
 # MAGIC %md
 # MAGIC # Reset DocFlow
 # MAGIC
-# MAGIC Removes everything DocFlow created in this workspace, so the next install
-# MAGIC starts genuinely fresh. Press **Run all**.
+# MAGIC Removes what the DocFlow demo created in this workspace, and **nothing else**.
 # MAGIC
-# MAGIC **Removed:** the `docflow` app and its identity · the Knowledge Assistant and
-# MAGIC its endpoint · the Genie space · the `workspace.docflow` schema with every
-# MAGIC table, the volume, and all generated documents.
+# MAGIC This notebook is built to be safe inside a customer's production workspace:
 # MAGIC
-# MAGIC **Kept:** this Git folder (it is the installer) and the workspace's SQL
-# MAGIC warehouse. Delete those by hand if you want a truly blank slate.
+# MAGIC * It deletes objects **by exact name**, from a fixed list of what the app creates.
+# MAGIC   It never drops a schema with `CASCADE`, and never deletes by prefix or wildcard.
+# MAGIC * It refuses to touch a schema unless the app **marked it as its own** when it
+# MAGIC   created it. A schema the app merely wrote into is left alone.
+# MAGIC * It **shows you a plan first**. Nothing is deleted until you set
+# MAGIC   `CONFIRM = True` in the widget cell and re-run.
+# MAGIC * Anything it does not recognise is reported and **kept**.
+# MAGIC
+# MAGIC Run all. Read the plan. Then confirm.
 
 # COMMAND ----------
 
@@ -19,11 +23,12 @@
 
 # COMMAND ----------
 
-APP_NAME = "docflow"
+# Set these to match the app's Advanced settings if you changed them.
 CATALOG = "workspace"
 SCHEMA = "docflow"
-KA_DISPLAYS = ["docflow-ka-contracts", "docflow-ka-claims", "docflow-ka"]
-GENIE_TITLE = "DocFlow Genie"
+
+# Nothing is deleted while this is False. Read the plan, then set it True.
+CONFIRM = False
 
 # COMMAND ----------
 
@@ -31,87 +36,223 @@ import time
 
 from databricks.sdk import WorkspaceClient
 
+# The complete inventory of what DocFlow creates. Deletion is restricted to
+# exactly these names — if it is not on a list here, this notebook will not
+# remove it, no matter what it is called.
+APP_NAME = "docflow"
+OWNED_TABLES = ["documents", "events", "extract_warranty_claims",
+                "extract_supplier_invoices", "audit_findings",
+                "parsed", "labeled", "run_metrics"]
+OWNED_VOLUMES = ["docs", "secure"]
+KA_DISPLAYS = ["docflow-ka-contracts", "docflow-ka-claims", "docflow-ka"]
+GENIE_TITLE = "DocFlow Genie"
+SCHEMA_MARKER = "docflow-demo-app"
+
 w = WorkspaceClient()
 print(f"workspace : {w.config.host}")
 print(f"as        : {w.current_user.me().user_name}")
+print(f"target    : {CATALOG}.{SCHEMA}")
+print(f"confirm   : {CONFIRM}")
 
-# COMMAND ----------
 
-# MAGIC %md ## 1. The Knowledge Assistant, while its owner still exists
-# MAGIC
-# MAGIC The app's identity owns the assistant. Deleting the app first orphans it,
-# MAGIC and an orphaned assistant refuses to die. Owner outlives assistant, always.
-# COMMAND ----------
-
-try:
-    hits = [x for x in w.knowledge_assistants.list_knowledge_assistants()
-            if (x.display_name or "") in KA_DISPLAYS]
-    for x in hits:
-        w.knowledge_assistants.delete_knowledge_assistant(x.name)
-        print(f"assistant '{x.display_name}': removed ({x.name}), endpoint goes with it")
-    if not hits:
-        print("assistants: already gone")
-except Exception as e:
-    print(f"assistant: could not remove — {str(e)[:140]}")
-    print("  remove it by hand under AI/ML, Agents if it is still listed")
-
-# COMMAND ----------
-
-# MAGIC %md ## 2. The Genie space
-
-# COMMAND ----------
-
-try:
-    hits = [s for s in (w.genie.list_spaces().spaces or [])
-            if (s.title or "") == GENIE_TITLE]
-    for s in hits:
-        w.genie.trash_space(s.space_id)
-        print(f"genie space '{GENIE_TITLE}': trashed")
-    if not hits:
-        print(f"genie space '{GENIE_TITLE}': already gone")
-except Exception as e:
-    print(f"genie: could not remove — {str(e)[:140]}")
-
-# COMMAND ----------
-
-# MAGIC %md ## 3. The schema, tables, volume and documents
-
-# COMMAND ----------
-
-whs = [x for x in w.warehouses.list()
-       if getattr(x, "enable_serverless_compute", False) and x.id]
-if SCHEMA not in [s.name for s in w.schemas.list(CATALOG)]:
-    print(f"schema {CATALOG}.{SCHEMA}: already gone")
-elif not whs:
-    print("no serverless warehouse to run the DROP — remove the schema in Catalog Explorer")
-else:
+def sql(stmt):
+    whs = [x for x in w.warehouses.list()
+           if getattr(x, "enable_serverless_compute", False) and x.id]
+    if not whs:
+        raise RuntimeError("no serverless warehouse available to run SQL")
     r = w.statement_execution.execute_statement(
-        warehouse_id=whs[0].id, wait_timeout="50s",
-        statement=f"DROP SCHEMA IF EXISTS {CATALOG}.{SCHEMA} CASCADE")
-    state = r.status.state.value if r.status and r.status.state else "?"
+        warehouse_id=whs[0].id, statement=stmt, wait_timeout="50s")
+    st = r.status.state.value if r.status and r.status.state else "?"
     t0 = time.time()
-    while state in ("PENDING", "RUNNING") and time.time() - t0 < 240:
-        time.sleep(4)
+    while st in ("PENDING", "RUNNING") and time.time() - t0 < 240:
+        time.sleep(3)
         r = w.statement_execution.get_statement(r.statement_id)
-        state = r.status.state.value if r.status and r.status.state else "?"
-    print(f"schema {CATALOG}.{SCHEMA}: dropped with everything in it ({state})")
+        st = r.status.state.value if r.status and r.status.state else "?"
+    if st != "SUCCEEDED":
+        raise RuntimeError(f"{st}: {getattr(r.status, 'error', '')}")
+    return [list(row) for row in ((r.result.data_array if r.result else None) or [])]
+
+
+plan_delete, plan_keep, blocked = [], [], []
 
 # COMMAND ----------
 
-# MAGIC %md ## 4. The app, last — its identity is only safe to lose now
+# MAGIC %md
+# MAGIC ## 1. Establish ownership of the schema
+# MAGIC
+# MAGIC The app stamps a comment on any schema it creates or adopts while empty.
+# MAGIC Without that stamp this notebook will not remove a single table, because it
+# MAGIC cannot prove the contents are the demo's.
 
 # COMMAND ----------
 
-if APP_NAME in {a.name for a in w.apps.list()}:
-    w.apps.delete(name=APP_NAME)
-    for _ in range(40):
-        if APP_NAME not in {a.name for a in w.apps.list()}:
-            break
-        time.sleep(5)
-    gone = APP_NAME not in {a.name for a in w.apps.list()}
-    print(f"app '{APP_NAME}': {'removed, its identity went with it' if gone else 'delete still propagating, harmless'}")
+schema_exists, schema_is_ours = False, False
+try:
+    schema_exists = SCHEMA in [s.name for s in w.schemas.list(CATALOG)]
+except Exception as e:
+    print(f"cannot list schemas in {CATALOG}: {str(e)[:120]}")
+
+if not schema_exists:
+    print(f"schema {CATALOG}.{SCHEMA}: does not exist, nothing to do")
 else:
-    print(f"app '{APP_NAME}': already gone")
+    try:
+        info = w.schemas.get(f"{CATALOG}.{SCHEMA}")
+        comment = info.comment or ""
+        schema_is_ours = SCHEMA_MARKER in comment
+    except Exception as e:
+        print(f"cannot read the schema's comment: {str(e)[:120]}")
+    if schema_is_ours:
+        print(f"schema {CATALOG}.{SCHEMA}: carries the DocFlow marker — its "
+              f"DocFlow objects may be removed")
+    else:
+        print(f"schema {CATALOG}.{SCHEMA}: NO DocFlow marker.")
+        print("  This schema was not created by the demo, so nothing inside it "
+              "will be touched.")
+        print("  If the demo did create it and the marker is missing, remove its "
+              "objects by hand in Catalog Explorer.")
+        blocked.append(f"{CATALOG}.{SCHEMA} (no DocFlow marker)")
+
+# COMMAND ----------
+
+# MAGIC %md ## 2. Build the plan — what would be removed, and what would be kept
+
+# COMMAND ----------
+
+if schema_exists and schema_is_ours:
+    try:
+        present = {str(r[1]) for r in sql(f"SHOW TABLES IN {CATALOG}.{SCHEMA}") if len(r) > 1}
+    except Exception as e:
+        present = set()
+        print(f"cannot list tables: {str(e)[:120]}")
+    for t in sorted(present):
+        (plan_delete if t in OWNED_TABLES else plan_keep).append(f"table  {CATALOG}.{SCHEMA}.{t}")
+
+    try:
+        vols = {str(r[1]) for r in sql(f"SHOW VOLUMES IN {CATALOG}.{SCHEMA}") if len(r) > 1}
+    except Exception:
+        vols = set()
+    for v in sorted(vols):
+        (plan_delete if v in OWNED_VOLUMES else plan_keep).append(f"volume {CATALOG}.{SCHEMA}.{v}")
+
+# assistants, by exact display name only
+try:
+    for x in w.knowledge_assistants.list_knowledge_assistants():
+        if (x.display_name or "") in KA_DISPLAYS:
+            plan_delete.append(f"assistant {x.display_name}")
+except Exception as e:
+    print(f"cannot list assistants: {str(e)[:120]}")
+
+# genie space, by exact title only
+try:
+    for s in (w.genie.list_spaces().spaces or []):
+        if (s.title or "") == GENIE_TITLE:
+            plan_delete.append(f"genie space {s.title}")
+except Exception as e:
+    print(f"cannot list genie spaces: {str(e)[:120]}")
+
+# the app, by exact name only
+try:
+    if APP_NAME in {a.name for a in w.apps.list()}:
+        plan_delete.append(f"app {APP_NAME}")
+except Exception as e:
+    print(f"cannot list apps: {str(e)[:120]}")
+
+print("WILL DELETE:" if plan_delete else "WILL DELETE: nothing")
+for x in plan_delete:
+    print(f"   - {x}")
+if plan_keep:
+    print("\nWILL KEEP (not created by DocFlow):")
+    for x in plan_keep:
+        print(f"   · {x}")
+if blocked:
+    print("\nSKIPPED for safety:")
+    for x in blocked:
+        print(f"   ! {x}")
+print("\nThe schema itself is dropped only if it ends up empty.")
+print("The SQL warehouse, this Git folder, and every other workspace asset are "
+      "always left alone.")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 3. Delete
+# MAGIC
+# MAGIC Only runs when `CONFIRM = True`. Order matters: the assistants are owned by
+# MAGIC the app's identity, so they must go while that identity still exists.
+
+# COMMAND ----------
+
+if not CONFIRM:
+    print("CONFIRM is False — nothing was deleted.")
+    print("Set CONFIRM = True in the settings cell above and run this notebook "
+          "again to carry out the plan.")
+elif not plan_delete:
+    print("Nothing to delete.")
+else:
+    # 3a. assistants, while their owner still exists
+    try:
+        for x in w.knowledge_assistants.list_knowledge_assistants():
+            if (x.display_name or "") in KA_DISPLAYS:
+                w.knowledge_assistants.delete_knowledge_assistant(x.name)
+                print(f"removed assistant '{x.display_name}' (endpoint goes with it)")
+    except Exception as e:
+        print(f"assistants: {str(e)[:140]}")
+
+    # 3b. genie space
+    try:
+        for s in (w.genie.list_spaces().spaces or []):
+            if (s.title or "") == GENIE_TITLE:
+                w.genie.trash_space(s.space_id)
+                print(f"trashed genie space '{s.title}'")
+    except Exception as e:
+        print(f"genie: {str(e)[:140]}")
+
+    # 3c. tables and volumes, one at a time, by exact name
+    if schema_exists and schema_is_ours:
+        for t in OWNED_TABLES:
+            try:
+                sql(f"DROP TABLE IF EXISTS {CATALOG}.{SCHEMA}.{t}")
+            except Exception as e:
+                print(f"table {t}: {str(e)[:100]}")
+        print(f"dropped DocFlow tables in {CATALOG}.{SCHEMA}")
+        for v in OWNED_VOLUMES:
+            try:
+                sql(f"DROP VOLUME IF EXISTS {CATALOG}.{SCHEMA}.{v}")
+            except Exception as e:
+                print(f"volume {v}: {str(e)[:100]}")
+        print(f"dropped DocFlow volumes in {CATALOG}.{SCHEMA}")
+
+        # 3d. the schema, only if nothing of the customer's is left in it.
+        # RESTRICT, never CASCADE: if anything remains, the drop fails and the
+        # data survives.
+        leftover = []
+        try:
+            leftover = [str(r[1]) for r in sql(f"SHOW TABLES IN {CATALOG}.{SCHEMA}") if len(r) > 1]
+            leftover += [str(r[1]) for r in sql(f"SHOW VOLUMES IN {CATALOG}.{SCHEMA}") if len(r) > 1]
+        except Exception:
+            pass
+        if leftover:
+            print(f"schema {CATALOG}.{SCHEMA}: KEPT — it still holds "
+                  f"{len(leftover)} object(s) the demo did not create: "
+                  f"{', '.join(leftover[:5])}")
+        else:
+            try:
+                sql(f"DROP SCHEMA IF EXISTS {CATALOG}.{SCHEMA} RESTRICT")
+                print(f"schema {CATALOG}.{SCHEMA}: dropped (it was empty)")
+            except Exception as e:
+                print(f"schema kept: {str(e)[:120]}")
+
+    # 3e. the app last — its identity owns the assistants above
+    try:
+        if APP_NAME in {a.name for a in w.apps.list()}:
+            w.apps.delete(name=APP_NAME)
+            for _ in range(40):
+                if APP_NAME not in {a.name for a in w.apps.list()}:
+                    break
+                time.sleep(5)
+            print(f"app '{APP_NAME}': removed, its identity went with it")
+    except Exception as e:
+        print(f"app: {str(e)[:140]}")
 
 # COMMAND ----------
 
@@ -119,39 +260,49 @@ else:
 
 # COMMAND ----------
 
-apps = [a.name for a in w.apps.list()]
-ka_eps = []
-try:
-    ka_eps = [e.name for e in w.serving_endpoints.list() if (e.name or "").startswith("ka-")]
-except Exception:
-    pass
-spaces = [s.title for s in (w.genie.list_spaces().spaces or [])]
-schemas = [s.name for s in w.schemas.list(CATALOG)]
+if CONFIRM:
+    apps = [a.name for a in w.apps.list()]
+    try:
+        spaces = [s.title for s in (w.genie.list_spaces().spaces or [])]
+    except Exception:
+        spaces = []
+    try:
+        kas = [x.display_name for x in w.knowledge_assistants.list_knowledge_assistants()]
+    except Exception:
+        kas = []
+    try:
+        schemas = [s.name for s in w.schemas.list(CATALOG)]
+    except Exception:
+        schemas = []
 
-rows = [
-    ("apps", apps or "none"),
-    ("ka endpoints", ka_eps or "none"),
-    ("genie spaces", spaces or "none"),
-    (f"schemas in {CATALOG}", schemas),
-]
-clean = APP_NAME not in apps and not ka_eps and GENIE_TITLE not in spaces and SCHEMA not in schemas
-for k, v in rows:
-    print(f"{k:22s}: {v}")
-print()
-print("RESET COMPLETE — workspace is fresh" if clean
-      else "some items are still listed above — usually deletion still propagating; re-run this cell")
+    left = ([f"app {APP_NAME}"] if APP_NAME in apps else []) \
+        + [f"assistant {k}" for k in kas if k in KA_DISPLAYS] \
+        + ([f"genie {GENIE_TITLE}"] if GENIE_TITLE in spaces else [])
+    print("DocFlow objects still present:", left or "none")
+    if SCHEMA in schemas:
+        print(f"schema {CATALOG}.{SCHEMA}: still present (kept, or delete still "
+              f"propagating)")
+    print()
+    print("RESET COMPLETE" if not left
+          else "some items remain — usually deletion still propagating; re-run this cell")
+else:
+    print("Nothing was deleted. Set CONFIRM = True to carry out the plan above.")
 
 # COMMAND ----------
 
 displayHTML("""
 <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;padding:26px 28px;
-     border-radius:14px;background:#12161A;border:1px solid rgba(242,240,236,.15);max-width:640px">
+     border-radius:14px;background:#12161A;border:1px solid rgba(242,240,236,.15);max-width:660px">
   <div style="font:600 11px ui-monospace,monospace;letter-spacing:.2em;text-transform:uppercase;
-       color:#5C6670">DocFlow removed</div>
+       color:#5C6670">DocFlow reset</div>
   <div style="font-size:26px;font-weight:800;letter-spacing:-.02em;color:#F2F0EC;margin:12px 0 10px">
-    This workspace is fresh</div>
+    Only what the demo made</div>
   <p style="color:#98A1AB;font-size:14.5px;line-height:1.6;margin:0">
-    To install again, open <b style="color:#F2F0EC">setup_databricks.py</b> in this folder
-    and press <b style="color:#F2F0EC">Run all</b>.</p>
+    Deletion is limited to a fixed list of DocFlow object names, inside a schema the
+    demo marked as its own. Anything else is reported and kept, and the schema is
+    dropped only when it ends up empty.</p>
+  <p style="color:#5C6670;font-size:12.5px;margin:14px 0 0">
+    To install again, open <b style="color:#F2F0EC">setup_databricks.py</b> and press
+    <b style="color:#F2F0EC">Run all</b>.</p>
 </div>
 """)
