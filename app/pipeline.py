@@ -354,6 +354,36 @@ def resolve_chat_model(max_tries: int = 16) -> dict:
         f"{errs[0] if errs else 'none'}")
 
 
+def obo_client(token: str):
+    """A client that acts as the signed-in user, not the app.
+
+    Apps user-authorization (Public Preview) forwards the user's token in
+    x-forwarded-access-token once the app declares user_api_scopes. Reads that
+    run through this client honour the user's own permissions, which retires
+    the whole grant-yourself-access dance for anything viewed in the app.
+    """
+    from databricks.sdk import WorkspaceClient
+    return WorkspaceClient(host=wc().config.host, token=token, auth_type="pat")
+
+
+def sql_obo(token: str, statement: str, **kw):
+    """Run one statement as the user when a token is present, else as the app."""
+    if not token:
+        return sql(statement, **kw)
+    me = obo_client(token)
+    r = me.statement_execution.execute_statement(
+        warehouse_id=warehouse_id(), statement=statement, wait_timeout="50s")
+    t0 = time.time()
+    st = r.status.state.value if r.status and r.status.state else "?"
+    while st in ("PENDING", "RUNNING") and time.time() - t0 < 240:
+        time.sleep(3)
+        r = me.statement_execution.get_statement(r.statement_id)
+        st = r.status.state.value if r.status and r.status.state else "?"
+    if st != "SUCCEEDED":
+        raise RuntimeError(f"{st}: {getattr(r.status, 'error', '')}")
+    return [list(x) for x in ((r.result.data_array if r.result else None) or [])]
+
+
 def warehouse_id() -> str:
     global WAREHOUSE_ID
     if not WAREHOUSE_ID:
@@ -956,7 +986,7 @@ SCHEMA_HINT = (
 )
 
 
-def ask_structured(question: str) -> dict:
+def ask_structured(question: str, obo_token: str = "") -> dict:
     if not re.fullmatch(r"[A-Za-z0-9._-]{1,120}", chat_model()):
         return {"error": "invalid chat endpoint configured"}
     prompt = (
@@ -964,12 +994,12 @@ def ask_structured(question: str) -> dict:
         f"Return ONLY one SELECT statement, fully qualified table names, no markdown, "
         f"no CTEs, no WITH clause. Question: {question}"
     )
-    rows = sql(f"SELECT ai_query('{chat_model()}', :prompt)", timeout="50s",
+    rows = sql_obo(obo_token, f"SELECT ai_query('{chat_model()}', :prompt)", timeout="50s",
                params={"prompt": prompt})
     gen = rows[0][0] if rows and rows[0] else ""
     try:
         safe = guard_select(gen)
     except BadSQL as e:
         return {"error": f"rejected generated SQL: {e}", "sql": (gen or "")[:500]}
-    data = sql(safe, timeout="50s", row_limit=50)
+    data = sql_obo(obo_token, safe, timeout="50s", row_limit=50)
     return {"sql": safe, "rows": data, "engine": f"ai_query({chat_model()}) + serverless warehouse"}

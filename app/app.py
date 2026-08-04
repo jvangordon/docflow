@@ -10,7 +10,7 @@ from typing import Optional
 import tempfile
 import threading
 
-from fastapi import FastAPI
+from fastapi import Request, FastAPI
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -127,9 +127,12 @@ def api_table(name: str):
 
 
 @app.post("/api/ask")
-def api_ask(body: Ask):
+def api_ask(body: Ask, request: Request):
     try:
-        return orchestrator.ask(body.question)
+        # With user authorization on, this token makes reads run as the person
+        # asking — their permissions, their audit trail, no grants needed.
+        obo = request.headers.get("x-forwarded-access-token", "")
+        return orchestrator.ask(body.question, obo_token=obo)
     except Exception as e:
         import logging, uuid
         ref = uuid.uuid4().hex[:8]

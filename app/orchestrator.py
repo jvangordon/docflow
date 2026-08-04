@@ -827,6 +827,29 @@ def attach_assistant_sources() -> None:
     _section("Attach assistant sources", time.time() - t0)
 
 
+def sync_assistant_sources() -> None:
+    """Tell each assistant its documents changed, over the sync API.
+
+    This is the continuous-documents story in one call: a fresh corpus lands,
+    POST {assistant}/knowledge-sources:sync, and the index catches up without
+    deleting or re-attaching anything.
+    """
+    try:
+        w = _w()
+        for spec in ASSISTANTS:
+            ka = _KA_THREAD["created"].get(spec["display"])
+            if ka is None:
+                continue
+            try:
+                w.knowledge_assistants.sync_knowledge_sources(ka.name)
+                _log(f"Assistant · {spec['about']}", "run",
+                     "re-indexing the fresh documents (sync API)")
+            except Exception:
+                pass                     # brand-new sources are already indexing
+    except Exception:
+        pass
+
+
 def seed_assistant_examples() -> None:
     """Write the wording questions onto the assistants as platform examples.
 
@@ -978,6 +1001,60 @@ def watch_assistants() -> None:
     _KA_THREAD["watch"] = t
 
 
+WATCHER_JOB = "DocFlow · process new documents"
+
+
+def ensure_watcher(cfg: dict) -> None:
+    """A file-arrival Job on the inbox: drop a PDF in, the pipeline runs.
+
+    This is what makes the demo a process rather than a one-off: Agent Bricks
+    set up once, then every document that lands in the volume flows through
+    the same lanes with no one pressing anything.
+    """
+    t0 = time.time()
+    try:
+        from databricks.sdk.service import jobs as J
+        w = _w()
+        for j in w.jobs.list(name=WATCHER_JOB):
+            _log("Continuous mode", "ok",
+                 f"watching {pipeline.VOL_ROOT}/inbox · new documents process "
+                 f"themselves (job {j.job_id})")
+            _section("Continuous mode", time.time() - t0)
+            return
+        me = ""
+        try:
+            me = w.current_user.me().user_name
+        except Exception:
+            pass
+        nb = f"/Users/{me}/docflow/process_on_arrival" if me else ""
+        try:
+            w.workspace.get_status(nb)
+        except Exception:
+            _log("Continuous mode", "warn",
+                 "not armed: process_on_arrival notebook not found in the Git "
+                 "folder — pull the repo and press Go to arm it")
+            _section("Continuous mode", time.time() - t0)
+            return
+        job = w.jobs.create(
+            name=WATCHER_JOB,
+            tags={"docflow-demo-app": "true"},
+            trigger=J.TriggerSettings(
+                file_arrival=J.FileArrivalTriggerConfiguration(
+                    url=f"{pipeline.VOL_ROOT}/inbox/",
+                    min_time_between_triggers_seconds=60),
+                pause_status=J.PauseStatus.UNPAUSED),
+            tasks=[J.Task(task_key="process",
+                          notebook_task=J.NotebookTask(notebook_path=nb),
+                          timeout_seconds=1800)])
+        _log("Continuous mode", "ok",
+             f"armed · any PDF dropped into {pipeline.VOL_ROOT}/inbox now "
+             f"processes itself (job {job.job_id})")
+    except Exception as e:
+        _log("Continuous mode", "warn",
+             f"not armed · {str(e)[:120]} · the demo runs fine without it")
+    _section("Continuous mode", time.time() - t0)
+
+
 def report_ka() -> None:
     """Close the run with each assistant's true state instead of a guess."""
     for spec in ASSISTANTS:
@@ -1087,6 +1164,7 @@ def go(cfg: dict, stage: str = "all") -> None:
             research_company(cfg)
             build_corpus(cfg)
             attach_assistant_sources()  # scoped folders now exist
+            sync_assistant_sources()    # fresh corpus -> re-index on demand
             seed_assistant_examples()   # questions live on the platform objects
         if stage == "prepare":
             docs = GO["assets"].get("documents", {})
@@ -1099,6 +1177,7 @@ def go(cfg: dict, stage: str = "all") -> None:
             return
         run_documents()
         ensure_genie()               # after tables exist
+        ensure_watcher(cfg)          # continuous mode: files in -> lanes run
         report_ka()                  # honest status, never a wait
         with _glock:
             GO["phase"] = "done"
@@ -1351,8 +1430,24 @@ def ask_assistant(question: str) -> dict:
             f"governed tables. ({msg[:80]})")
 
 
-def ask(question: str) -> dict:
+def ask(question: str, obo_token: str = "") -> dict:
     route = route_question(question)
+    if route == "tables" and obo_token:
+        # Structured answers run as the person asking, under their own
+        # permissions — the app's identity never touches their data path.
+        try:
+            t0 = time.time()
+            out = pipeline.ask_structured(question, obo_token=obo_token)
+            out["engine"] = "sql"
+            out["seconds"] = round(time.time() - t0, 1)
+            out["as_user"] = True
+            if not out.get("error") and not out.get("text"):
+                out["text"] = "Answered from the extracted tables, as you."
+            if not out.get("error"):
+                out["route"] = route
+                return out
+        except Exception:
+            pass                        # fall through to the app-identity path
     out = ask_genie(question) if route == "tables" else ask_assistant(question)
     out["route"] = route
     return out
