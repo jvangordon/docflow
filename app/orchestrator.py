@@ -709,6 +709,51 @@ def platform_questions() -> dict:
     return out
 
 
+def watch_assistants() -> None:
+    """Keep the log honest about assistant progress until they can answer.
+
+    Assistants are the slowest thing in the run — minutes of endpoint
+    provisioning, then background indexing — so their rows stay live and
+    self-updating rather than going quiet after 'created'. Everything else
+    proceeds in parallel; nothing waits on this.
+    """
+    about = {spec["display"]: spec["about"] for spec in ASSISTANTS}
+
+    def _run():
+        deadline = time.time() + 1800          # 30 min ceiling, then stop asking
+        pending = set(about)
+        last = {}
+        while pending and time.time() < deadline:
+            for disp in sorted(pending):
+                try:
+                    st = ka_state(disp)
+                except Exception:
+                    continue
+                name = f"Assistant · {about[disp]}"
+                if st.get("ready") and st.get("indexed"):
+                    _log(name, "ok", "ready · answering with page citations")
+                    pending.discard(disp)
+                    continue
+                if st.get("endpoint") and st.get("sources"):
+                    msg = "endpoint live · indexing its documents"
+                elif st.get("endpoint"):
+                    msg = "endpoint live · waiting for documents to attach"
+                else:
+                    msg = "provisioning its endpoint, this is the slow part"
+                if last.get(disp) != msg:
+                    _log(name, "run", msg)
+                    last[disp] = msg
+            time.sleep(12)
+        for disp in pending:
+            _log(f"Assistant · {about[disp]}", "warn",
+                 "still indexing in the background · Ask falls back to governed "
+                 "SQL until it is ready, then switches on its own")
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+    _KA_THREAD["watch"] = t
+
+
 def report_ka() -> None:
     """Close the run with each assistant's true state instead of a guess."""
     for spec in ASSISTANTS:
@@ -813,6 +858,7 @@ def go(cfg: dict, stage: str = "all") -> None:
             resolve_model()          # fail in second ten, not minute six
             create_assistants_early()   # endpoint provisioning is the slow
                                         # part; overlap it with everything else
+            watch_assistants()          # and report its progress live
             research_company(cfg)
             build_corpus(cfg)
             attach_assistant_sources()  # scoped folders now exist

@@ -654,7 +654,12 @@ function pollGo(){
       } else if(el){ el.innerHTML=renderGolog(); }
       const gb=$("#gobtn"); if(gb){ gb.disabled = S.golog && S.golog.phase==="running";
         gb.textContent = S.golog&&S.golog.phase==="running"?"Running":"Go"; } }
-    if(S.golog && (S.golog.phase==="done"||S.golog.phase==="error"||S.golog.phase==="prepared")){
+    // Assistants keep provisioning after the run reaches 'prepared', so polling
+    // continues while any step is still live — their rows must go green on
+    // screen, not silently.
+    const live = S.golog && (S.golog.steps||[]).some(x=>x.status==="run");
+    if(S.golog && !live &&
+       (S.golog.phase==="done"||S.golog.phase==="error"||S.golog.phase==="prepared")){
       stopPollers();
       // Re-render fully so the header stops saying "working" and the button
       // becomes whatever the phase calls for.
