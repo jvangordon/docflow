@@ -124,7 +124,7 @@ def ensure_infra(cfg: dict) -> None:
         # single table. Refusing a demo is always cheaper than touching
         # production data.
         marked = bool(pipeline.schema_marker(cat, sch))
-        foreign = pipeline.schema_foreign_objects(cat, sch)
+        foreign = pipeline.schema_contents(cat, sch)
         n_foreign = len(foreign["tables"]) + len(foreign["volumes"])
         if marked:
             GO["assets"]["schema_created_by_us"] = True
@@ -132,9 +132,12 @@ def ensure_infra(cfg: dict) -> None:
         elif n_foreign == 0:
             pipeline.claim_schema(cat, sch)
             GO["assets"]["schema_created_by_us"] = True
-            _log("Schema", "ok", f"adopted empty schema {cat}.{sch} and marked it")
+            _log("Schema", "ok",
+                 f"adopted {cat}.{sch}, which held nothing at all, and marked it")
         else:
             names = ", ".join((foreign["tables"] + foreign["volumes"])[:4])
+            # Named explicitly: a collision on 'docs' or 'documents' is the
+            # dangerous case, not a harmless one.
             GO["assets"]["schema_created_by_us"] = False
             raise RuntimeError(
                 f"{cat}.{sch} already holds {n_foreign} object(s) this demo did "
@@ -392,6 +395,7 @@ def research_company(cfg: dict) -> None:
 def build_corpus(cfg: dict) -> None:
     """Inventory customer volume, generate the standard pack into generated/."""
     t0 = time.time()
+    _log("Generated documents", "run", "writing and uploading 24 PDFs")
     import corpus
     w = _w()
     customer_n = 0
@@ -461,12 +465,20 @@ def create_assistants_early() -> None:
             for spec in ASSISTANTS:
                 try:
                     ka = existing.get(spec["display"])
+                    if ka is not None and pipeline.FINGERPRINT not in (ka.description or ""):
+                        # Same name, not our object. Never mutate or later delete
+                        # something the customer created.
+                        _log(f"Assistant · {spec['about']}", "warn",
+                             f"'{spec['display']}' already exists here and was not "
+                             f"created by this demo — leaving it untouched. Rename "
+                             f"it or remove it to let the demo build its own.")
+                        continue
                     if ka is None:
                         ka = w.knowledge_assistants.create_knowledge_assistant(
                             K.KnowledgeAssistant(
                                 display_name=spec["display"],
-                                description=f"Answers questions about {spec['about']} "
-                                            f"with citations.",
+                                description=f"{pipeline.FINGERPRINT} Answers questions "
+                                            f"about {spec['about']} with citations.",
                                 instructions=spec["instructions"]))
                         _log(f"Assistant · {spec['about']}", "ok",
                              f"created · endpoint {ka.endpoint_name} · provisioning "
@@ -658,6 +670,15 @@ def ensure_genie() -> None:
         sid = None
         for sp in w.genie.list_spaces().spaces or []:
             if (sp.title or "") == GENIE_TITLE:
+                # Only adopt a space this demo made; a customer space that
+                # happens to share the title is left exactly as it is.
+                desc = getattr(sp, "description", "") or ""
+                if desc and pipeline.FINGERPRINT not in desc:
+                    _log("Genie space", "warn",
+                         f"a space titled '{GENIE_TITLE}' exists here and was not "
+                         f"created by this demo — leaving it untouched")
+                    sid = None
+                    break
                 sid = sp.space_id
                 break
         if sid:
@@ -749,11 +770,17 @@ def go(cfg: dict, stage: str = "all") -> None:
         _log("Ready", "ok", "ask a question on the Ask page")
         _section("Total, go to ready", GO["finished"] - GO["started"])
     except Exception as e:
+        # Name the step that was in flight, so "it stopped" is never the whole
+        # story the presenter gets.
         with _glock:
+            inflight = next((x["name"] for x in reversed(GO["steps"])
+                             if x["status"] == "run"), "")
             GO["phase"] = "error"
             GO["error"] = str(e)[:400]
+            GO["failed_step"] = inflight
             GO["finished"] = time.time()
-        _log("Stopped", "err", str(e)[:200])
+        _log(inflight or "Stopped", "err",
+             f"{str(e)[:220]} · press Go to retry — completed steps are reused")
 
 
 def start(cfg: dict, stage: str = "all") -> bool:

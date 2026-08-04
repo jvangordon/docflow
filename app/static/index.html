@@ -327,6 +327,11 @@ function formComplete(){
 function gateMsg(){
   const rd=S.ready||{}, blockers=rd.blockers||[];
   const phase = S.golog && S.golog.phase;
+  if(phase==="error"){
+    const g=S.golog||{};
+    const where = g.failed_step ? `${g.failed_step} failed. ` : "The run stopped. ";
+    return where + (g.error || "") + " — press Go to retry; finished steps are reused.";
+  }
   if(phase==="running") return "Working. The right column is live.";
   if(phase==="prepared") return "Everything is staged and nothing has moved. Open Flow so the room is watching, then press.";
   if(blockers.length) return `Step 1 first — ${blockers.length} check${blockers.length>1?"s":""} still red.`;
@@ -442,10 +447,18 @@ function renderStart(){
         <span class="mstat">${S.golog&&S.golog.phase==="done"&&ranSecs?`ran in ${ranSecs}s`
           :S.golog&&S.golog.phase==="prepared"?"staged · your cue":"~2 min"}</span>
       </div>
+      ${S.golog&&S.golog.phase==="error"?`
+        <div class="setupcard" style="border-color:rgba(245,165,36,.45)">
+          <div class="sc-t">${esc(S.golog.failed_step||"The run")} stopped</div>
+          <div class="sc-s">${esc(S.golog.error||"")}</div>
+          <div class="sc-s" style="margin-bottom:0">Press <b>Try again</b>. Steps that
+            already finished are reused, so a retry picks up where it left off.</div>
+        </div>`:""}
       <div class="gobar">
         <button class="btn hot" id="gobtn" ${goAllowed()||S.golog&&S.golog.phase==="prepared"?"":"disabled"}>${
           S.golog&&S.golog.phase==="running"?"Running"
-          :S.golog&&S.golog.phase==="prepared"?"Process documents":"Go"}</button>
+          :S.golog&&S.golog.phase==="prepared"?"Process documents"
+          :S.golog&&S.golog.phase==="error"?"Try again":"Go"}</button>
         <span class="msg" id="gomsg">${esc(gateMsg())}</span>
       </div>
     </div>

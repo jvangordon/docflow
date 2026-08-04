@@ -88,24 +88,37 @@ def schema_marker(cat: str, sch: str) -> str:
     return ""
 
 
-def schema_foreign_objects(cat: str, sch: str) -> dict:
-    """Objects in the schema this app did not create."""
+def schema_contents(cat: str, sch: str) -> dict:
+    """EVERY object in the schema, whatever it is called.
+
+    Adoption is only safe when a schema is genuinely empty. Filtering this by
+    our own allowlist was a serious bug: a customer schema holding one volume
+    named 'docs' looked empty, got adopted and marked, and teardown would then
+    have deleted their files. Name collisions are exactly the case that must
+    block adoption, so nothing here is filtered.
+    """
     out = {"tables": [], "volumes": []}
     try:
         for r in sql(f"SHOW TABLES IN {cat}.{sch}") or []:
             name = str(r[1]) if len(r) > 1 else str(r[0])
-            if name and name not in OWNED_TABLES:
+            if name:
                 out["tables"].append(name)
     except Exception:
         pass
     try:
         for r in sql(f"SHOW VOLUMES IN {cat}.{sch}") or []:
             name = str(r[1]) if len(r) > 1 else str(r[0])
-            if name and name not in OWNED_VOLUMES:
+            if name:
                 out["volumes"].append(name)
     except Exception:
         pass
     return out
+
+
+# Stamped into the description of every non-UC object the app creates (the app
+# itself, assistants, the Genie space) so teardown can prove ownership instead
+# of trusting a name.
+FINGERPRINT = "[docflow-demo-app]"
 
 
 def claim_schema(cat: str, sch: str) -> None:
@@ -148,7 +161,7 @@ def wc() -> WorkspaceClient:
 # different names and the classic endpoints 404. The app therefore never
 # trusts a configured name: it probes candidates with a one-token ai_query
 # and uses the first one that actually answers on this warehouse.
-_MODEL = {"name": "", "note": "", "tried": 0}
+_MODEL = {"name": "", "note": "", "tried": 0, "asked": ""}
 
 # quality-ordered families; each is tried under every spelling a workspace
 # might serve it as
@@ -169,12 +182,20 @@ def model_candidates() -> list[str]:
         if n and n not in out and re.fullmatch(r"[A-Za-z0-9._-]{1,120}", n):
             out.append(n)
 
-    push(CHAT_ENDPOINT)                      # the configured choice always leads
+    # The model the user picked on the Start page leads, always. Pushing the
+    # env default first meant a selection of Opus lost to the shipped
+    # sonnet default whenever that also answered — the app then reported the
+    # model it actually used, which read as the picker being ignored.
+    chosen = ""
     try:
         import appconfig
-        push(appconfig.load_config().get("resolved_model"))   # last known good
+        cfg = appconfig.load_config()
+        chosen = (cfg.get("chat_endpoint") or "").strip()
+        push(chosen)
+        push(cfg.get("resolved_model"))          # last known good
     except Exception:
         pass
+    push(CHAT_ENDPOINT)                          # env default, only as a fallback
     try:                                     # enterprise path: real endpoints
         for e in wc().serving_endpoints.list():
             n = e.name or ""
@@ -254,9 +275,11 @@ def resolve_chat_model(max_tries: int = 16) -> dict:
     for name in cands:
         try:
             sql(f"SELECT ai_query('{name}', 'Reply with exactly: OK')", timeout="50s")
+            asked = chosen or CHAT_ENDPOINT
             _MODEL.update({"name": name, "tried": len(errs) + 1,
-                           "note": "" if name == CHAT_ENDPOINT else
-                           f"'{CHAT_ENDPOINT}' is not served here · using {name}"})
+                           "asked": asked,
+                           "note": "" if name == asked else
+                           f"'{asked}' did not answer here · using {name}"})
             try:
                 import appconfig
                 appconfig.save_config({"resolved_model": name})
