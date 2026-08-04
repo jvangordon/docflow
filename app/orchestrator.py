@@ -14,6 +14,7 @@ import threading
 import time
 from typing import Any, Optional
 
+import cases as casework
 import pipeline
 
 # One assistant per document domain, each indexing only its own folder.
@@ -303,6 +304,29 @@ def resolve_model() -> None:
     _section("Resolve the language model", time.time() - t0)
 
 
+def _unwrap_json(x, depth: int = 0):
+    """Undo model double-encoding: any string that IS a JSON object/array
+    becomes that object, recursively. A live run hit exactly this — 'world'
+    arrived as a JSON string and .get() on it killed the whole research."""
+    if depth > 4:
+        return x
+    if isinstance(x, str):
+        t = x.strip()
+        if (t.startswith("{") and t.endswith("}")) or \
+           (t.startswith("[") and t.endswith("]")) or \
+           (t.startswith('"') and t.endswith('"')):
+            try:
+                return _unwrap_json(json.loads(t), depth + 1)
+            except Exception:
+                return x
+        return x
+    if isinstance(x, dict):
+        return {k: _unwrap_json(v, depth + 1) for k, v in x.items()}
+    if isinstance(x, list):
+        return [_unwrap_json(v, depth + 1) for v in x]
+    return x
+
+
 def research_company(cfg: dict) -> None:
     """One structured AI Gateway call: vocabulary + questions + use-case copy."""
     t0 = time.time()
@@ -526,7 +550,7 @@ def research_company(cfg: dict) -> None:
         "insurance prefer something like 'Loss Run Review'; for healthcare "
         "'Prior Authorisation Desk'; for manufacturing 'Warranty Recovery Desk'.\n"
         "story: a 5-beat presenter script, one per page in order documents, flow, "
-        "ask, claims, suppliers. Each line states the business value on screen in "
+        "ask, recover. Each line states the business value on screen in "
         "at most 20 words, spoken plainly. Each cue is the single next click, and "
         "the ask beat must name the exact question to click."
     )
@@ -534,12 +558,16 @@ def research_company(cfg: dict) -> None:
         rows = pipeline.sql(
             f"SELECT ai_query('{pipeline.chat_model()}', :p, responseFormat => '{schema.replace(chr(39), chr(39)*2)}')",
             params={"p": prompt}, timeout="50s")
-        theme = json.loads(rows[0][0])
+        theme = _unwrap_json(rows[0][0])
+        if not isinstance(theme, dict):
+            raise ValueError("model returned a non-object theme")
         theme["source"] = "researched"
         with _glock:
             GO["theme"] = theme
-        world = theme.get("world") or {}
-        pipeline.set_labels(world.get("type_labels"))
+        world = theme.get("world")
+        world = world if isinstance(world, dict) else {}
+        labels = world.get("type_labels")
+        pipeline.set_labels(labels if isinstance(labels, dict) else None)
         _log("Company research", "ok",
              (theme.get("tagline", "")[:90] + " · documents written in this "
               "industry's language"))
@@ -554,8 +582,7 @@ def research_company(cfg: dict) -> None:
                 {"page": "documents", "line": "Every document here was just written, watermarked, and classified with a reason.", "cue": "Open Flow"},
                 {"page": "flow", "line": "Each document takes the lane it needs — extraction, assistant, both, or sealed.", "cue": "Press Process documents, then open Ask"},
                 {"page": "ask", "line": "Ask in plain language; answers arrive with SQL or a page citation.", "cue": "Click the first suggested question"},
-                {"page": "claims", "line": "This is recovered money, computed from the documents you just watched.", "cue": "Open Suppliers"},
-                {"page": "suppliers", "line": "Every supplier total traces back to a governed document.", "cue": "Open the secure volume — the denial is the governance story"}]}
+                {"page": "recover", "line": "This is recovered money — decide a case and the decision lands as a database row.", "cue": "Press Suggest next step on the top case, then Approve"}]}
         _log("Company research", "warn",
              f"using generic wording · research failed: {str(e)[:90]}")
     _section("Research the company", time.time() - t0)
@@ -1194,6 +1221,39 @@ def _genie_instructions() -> str:
             "Knowledge Assistant:\n\n" + "\n\n".join(entries) + "\n\n" + tail)
 
 
+def ensure_lakebase() -> None:
+    """The operational store for the recovery desk. Lakebase provisions in
+    seconds — worth saying out loud while it happens."""
+    t0 = time.time()
+    _log("Lakebase", "run", "starting the operational database for write-backs")
+    st = casework.ensure_instance()
+    GO["assets"]["lakebase"] = {"instance": casework.INSTANCE,
+                                "created_by_us": bool(st.get("created_by_us"))}
+    if st.get("state") == "AVAILABLE":
+        _log("Lakebase", "ok",
+             f"instance {casework.INSTANCE} available · Postgres, provisioned in "
+             f"{time.time() - t0:.0f}s · decisions on the Recover page land here")
+    else:
+        _log("Lakebase", "warn",
+             f"not available here ({(st.get('detail') or st.get('state') or '')[:120]}) "
+             f"· the Recover page writes to Delta tables instead, same story")
+    _section("Start Lakebase", time.time() - t0)
+
+
+def seed_cases() -> None:
+    t0 = time.time()
+    _log("Recovery desk", "run", "opening a case for every audit finding")
+    try:
+        out = casework.seed_from_findings()
+        where = ("Lakebase (Postgres)" if out.get("store") == "lakebase"
+                 else "Delta tables (Lakebase unavailable here)")
+        _log("Recovery desk", "ok",
+             f"{out.get('cases', 0)} cases open · decisions write back to {where}")
+    except Exception as e:
+        _log("Recovery desk", "warn", str(e)[:180])
+    _section("Open the case desk", time.time() - t0)
+
+
 def ensure_genie() -> None:
     """Create or adopt the Genie space over the extracted tables."""
     t0 = time.time()
@@ -1252,6 +1312,7 @@ def run_documents() -> None:
     _log("Process documents", "ok",
          f"{len(snap['docs'])} documents · caught ${snap['money'].get('caught_usd', 0):,.0f}")
     route_to_assistants()
+    seed_cases()
     for st in pipeline.STATE.stage_timings():
         _section(f"stage:{st['name']}", st["seconds"])
     _section("Process the documents", time.time() - t0)
@@ -1292,6 +1353,7 @@ def go(cfg: dict, stage: str = "all") -> None:
             watch_assistants()          # and report its progress live
             watch_stalls()              # and never let a step sit silent
             research_company(cfg)
+            ensure_lakebase()
             build_corpus(cfg)
             attach_assistant_sources()  # sources point at empty scoped folders;
                                         # the classifier fills them in act two

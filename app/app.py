@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import appconfig
+import cases
 import orchestrator
 import pipeline
 
@@ -426,35 +427,41 @@ def api_ka():
     return out
 
 
-@app.get("/api/uc/claims")
-def api_uc_claims():
+@app.get("/api/cases")
+def api_cases():
     try:
-        claims = pipeline.sql(
-            f"SELECT doc_id, unit_serial, purchase_date, failure_date, "
-            f"warranty_term_months, claim_amount, production_line, claim_status "
-            f"FROM {pipeline.FQ}.extract_warranty_claims ORDER BY claim_status, claim_amount DESC")
-        findings = pipeline.sql(
-            f"SELECT doc_id, finding, severity, detail FROM {pipeline.FQ}.audit_findings")
-        return {"claims": claims, "findings": findings}
+        return cases.list_cases()
     except Exception as e:
         return JSONResponse({"error": str(e)[:250]}, status_code=500)
 
 
-@app.get("/api/uc/suppliers")
-def api_uc_suppliers():
+class CaseAdvise(BaseModel):
+    model: str = ""
+
+
+class CaseAct(BaseModel):
+    action: str
+    note: str = ""
+
+
+@app.post("/api/cases/{case_id}/advise")
+def api_case_advise(case_id: str, body: CaseAdvise | None = None):
     try:
-        # Vendors normalize on the name before any appended address fragment,
-        # so extraction variants group as one supplier.
-        spend = pipeline.sql(
-            f"SELECT trim(split(vendor, ' - ')[0]) AS vendor, "
-            f"count(*) AS invoices, coalesce(sum(total),0) AS total "
-            f"FROM {pipeline.FQ}.extract_supplier_invoices "
-            f"GROUP BY trim(split(vendor, ' - ')[0]) ORDER BY total DESC")
-        flagged = pipeline.sql(
-            f"SELECT f.doc_id, f.finding, f.severity, c.claim_amount, c.production_line "
-            f"FROM {pipeline.FQ}.audit_findings f "
-            f"LEFT JOIN {pipeline.FQ}.extract_warranty_claims c USING (doc_id)")
-        return {"spend": spend, "flagged": flagged}
+        return cases.advise(case_id, model=(body.model if body else ""))
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:250]}, status_code=500)
+
+
+@app.post("/api/cases/{case_id}/act")
+def api_case_act(case_id: str, body: CaseAct, request: Request):
+    try:
+        actor = request.headers.get("x-forwarded-email") or \
+                request.headers.get("x-forwarded-user") or "the app"
+        return cases.act(case_id, body.action, note=body.note, actor=actor)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
     except Exception as e:
         return JSONResponse({"error": str(e)[:250]}, status_code=500)
 

@@ -118,9 +118,10 @@ rec("marks a schema it adopts while empty",
 here = os.path.dirname(os.path.abspath(__file__))
 ddl = " ".join(pipeline._ddl())
 created = set(re.findall(r"CREATE (?:OR REPLACE )?TABLE (?:IF NOT EXISTS )?[\w.]*\.(\w+)", ddl, re.I))
-for src in ("pipeline.py",):
+for src in ("pipeline.py", "cases.py"):
     body = open(os.path.join(here, src)).read()
     created |= set(re.findall(r"CREATE OR REPLACE TABLE \{FQ\}\.(\w+)", body))
+    created |= set(re.findall(r"CREATE TABLE IF NOT EXISTS \{pipeline\.FQ\}\.(\w+)", body))
 missing = sorted(created - set(pipeline.OWNED_TABLES))
 rec("every table the app creates is on the teardown inventory", not missing,
     f"orphans: {missing}" if missing else f"{len(created)} tables covered")
@@ -224,6 +225,21 @@ rec("app default catalog follows the install, not a literal",
     "pipeline.CATALOG")
 rec("frontend carries no hardcoded catalog target",
     "workspace.docflow" not in spa_src, "picker is config-driven")
+
+# --- 10. the lakebase instance is deleted only on the app's own record -------
+rcode10 = "\n".join(l for l in open(os.path.join(os.path.dirname(here2), "reset_databricks.py")).read().split("\n")
+                     if not l.startswith("# MAGIC"))
+rec("lakebase deletion requires the app's creation record",
+    'rec_lb.get("instance") == LAKEBASE and rec_lb.get("created_by_us")' in rcode10,
+    "record required")
+rec("an unrecorded lakebase instance is left alone",
+    "no creation record" in rcode10, "blocked, not deleted")
+rec("lakebase deletion is exact-name, from a constant",
+    'LAKEBASE = "docflow-lakebase"' in rcode10
+    and "delete_database_instance(LAKEBASE" in rcode10, "constant name")
+csrc = open(os.path.join(here2, "cases.py")).read()
+rec("the app never deletes a database instance itself",
+    "delete_database_instance" not in csrc, "create/adopt only")
 
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

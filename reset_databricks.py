@@ -261,6 +261,25 @@ try:
 except Exception as e:
     print(f"cannot list genie spaces: {str(e)[:120]}")
 
+# Lakebase instance. Deleted ONLY when the app's own run record says it created
+# it — an instance that merely shares the name is a customer's, and stays.
+LAKEBASE = "docflow-lakebase"
+lakebase_ours = False
+try:
+    have_lb = any((i.as_dict().get("name") == LAKEBASE)
+                  for i in w.database.list_database_instances())
+    rec_lb = RECORDED.get("lakebase") or {}
+    if have_lb:
+        if rec_lb.get("instance") == LAKEBASE and rec_lb.get("created_by_us"):
+            lakebase_ours = True
+            plan_delete.append(f"lakebase instance {LAKEBASE} (and its tables)")
+        else:
+            print(f"lakebase instance '{LAKEBASE}' exists but this demo's record "
+                  f"does not claim it — leaving it alone.")
+            blocked.append(f"lakebase instance {LAKEBASE} (no creation record)")
+except Exception as e:
+    print(f"cannot list database instances: {str(e)[:120]}")
+
 # the app, by exact name only
 app_is_ours = False
 try:
@@ -337,6 +356,14 @@ else:
             pass
     except Exception as e:
         print(f"genie: {str(e)[:140]}")
+
+    # 3b2. lakebase instance — the record proved it above
+    try:
+        if lakebase_ours:
+            w.database.delete_database_instance(LAKEBASE, purge=True)
+            print(f"deleted lakebase instance '{LAKEBASE}'")
+    except Exception as e:
+        print(f"lakebase: {str(e)[:140]}")
 
     # 3c. tables and volumes, one at a time, by exact name
     if schema_exists and schema_is_ours:

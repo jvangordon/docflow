@@ -58,6 +58,19 @@ class FakeFiles:
         return Obj()
 
 
+class FakeDatabase:
+    def __init__(self):
+        self.made = []
+
+    def list_database_instances(self):
+        return [Obj(as_dict=lambda n=n: {"name": n, "state": "AVAILABLE",
+                                         "read_write_dns": "fake.host"})
+                for n in self.made]
+
+    def create_database_instance(self, inst):
+        self.made.append(inst.name)
+
+
 class FakeKA:
     def __init__(self):
         self.made, self.sources, self.examples = {}, {}, {}
@@ -117,6 +130,7 @@ class FakeW:
     def __init__(self):
         self.files = FakeFiles()
         self.knowledge_assistants = FakeKA()
+        self.database = FakeDatabase()
         self.genie = FakeGenie()
         self.warehouses = Obj(list=lambda: [
             Obj(id="wh1", name="Serverless Starter Warehouse",
@@ -236,6 +250,11 @@ rec("assistants were told their documents changed",
     f"{len(getattr(fakew.knowledge_assistants, 'synced', []))} sync calls")
 rec("assistants were created", len(fakew.knowledge_assistants.made) == 2,
     f"{len(fakew.knowledge_assistants.made)} made")
+lb = orchestrator.GO["assets"].get("lakebase") or {}
+rec("lakebase instance created and recorded for teardown",
+    "docflow-lakebase" in fakew.database.made
+    and lb.get("instance") == "docflow-lakebase" and lb.get("created_by_us") is True,
+    f"made={fakew.database.made} recorded={lb}")
 # The research world must actually reach the rendered PDFs, not just the theme.
 try:
     from test_corpus import pdf_text

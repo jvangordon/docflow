@@ -286,8 +286,7 @@ body[data-prompter="1"] main{padding-bottom:150px}
     <button data-go="docs">Documents</button>
     <button data-go="flow">Flow</button>
     <button data-go="ask">Ask</button>
-    <button data-go="claims">Claims</button>
-    <button data-go="suppliers">Suppliers</button>
+    <button data-go="recover">Recover</button>
     <button data-go="built">Built</button>
     <span id="custompages" style="display:contents"></span>
     <button data-go="newpage" title="Add a page for this audience" style="opacity:.55">+ Page</button>
@@ -1022,90 +1021,109 @@ async function doAsk(){
 }
 
 /* ---------------- CLAIMS ---------------- */
-async function loadClaims(){
-  let d; try{ d=await j("/api/uc/claims"); }catch(e){ d={error:e.message}; }
+async function loadRecover(){
+  let d; try{ d=await j("/api/cases"); }catch(e){ d={error:e.message}; }
   const theme=(S.golog&&S.golog.theme)||{};
-  const rows=d.claims||[];
-  if(d.error||!rows.length){
-    stage.innerHTML=`<div class="over">Claims operations</div><h1>${esc(theme.claims_page_title||"Warranty claims desk")}</h1>
-    <div class="rule"></div><div class="empty"><b>No claims yet</b>${d.error?esc(d.error):"Run the pipeline from the Start page first."}</div>`;
+  const cs=d.cases||[];
+  if(d.error||!cs.length){
+    stage.innerHTML=`<div class="over">Recovery desk</div>
+    <h1>${esc(theme.claims_page_title||"Money is sitting in these documents.")}</h1>
+    <div class="rule"></div><div class="empty"><b>No cases yet</b>
+    ${d.error?esc(d.error):"Press Process documents on the Flow page — every audit finding opens a case here."}</div>`;
     return;
   }
-  const outside=rows.filter(r=>r[7]==="outside window");
-  const within=rows.filter(r=>r[7]==="within warranty");
-  const review=rows.filter(r=>r[7]==="needs review");
-  // Sum exactly and show cents, so a cross-check against Genie's own total
-  // reconciles to the penny.
-  const sum=a=>a.reduce((s,r)=>s+(parseFloat(r[5])||0),0);
-  const covText=r=>{
-    const p=Date.parse(r[2]), f=Date.parse(r[3]), m=parseInt(r[4]);
-    if(!p||!f||!m) return r[7]||"";
-    const end=new Date(p); end.setMonth(end.getMonth()+m);
-    const days=Math.round((f-end)/86400000);
-    return days>0?`${days} days past term`:`${-days} days inside term`;
-  };
+  const open=cs.filter(c=>c.status==="open");
+  const money=cs.filter(c=>c.severity==="HIGH").reduce((s,c)=>s+(c.amount_usd||0),0);
+  const decided=cs.length-open.length;
+  const store=d.store==="lakebase"
+    ?`decisions write to <b>Lakebase</b> · instance <span class="mono">${esc(d.instance)}</span> · Postgres, provisioned by this app`
+    :`decisions write to Delta tables — Lakebase is not available in this workspace`;
   stage.innerHTML=`
-  <div class="over">Claims operations${theme.source==="generic"?' · generic wording':''}</div>
-  <h1>${esc(theme.claims_page_title||"Warranty claims desk")}</h1>
-  ${theme.source==="generic"?`<p class="hint" style="margin:0 0 10px">This page is using default wording because company research did not run for this run.</p>`:""}
-  <p class="dek">${runProvenance()} Coverage is computed from the extracted dates and terms.</p>
+  <div class="over">Recovery desk</div>
+  <h1>${esc(theme.claims_page_title||"Money is sitting in these documents.")}</h1>
+  <p class="dek">${runProvenance()} Every audit finding opened a case. The model suggests the move;
+    you decide; the decision lands as a database row while the room watches.</p>
   <div class="rule"></div>
   <div class="figs">
-    <div class="fig"><div class="v num hot">${moneyExact(sum(outside))}</div><div class="k">deny candidates</div>
-      <div class="n">${outside.length} claims outside their coverage window</div></div>
-    <div class="fig"><div class="v num">${moneyExact(sum(within))}</div><div class="k">approve candidates</div>
-      <div class="n">${within.length} claims within coverage</div></div>
-    <div class="fig"><div class="v num">${review.length}</div><div class="k">need a person</div>
-      <div class="n">fields unreadable, routed to review</div></div>
+    <div class="fig"><div class="v num hot">${moneyExact(money)}</div><div class="k">flagged for recovery</div>
+      <div class="n">${cs.filter(c=>c.severity==="HIGH").length} high-severity findings</div></div>
+    <div class="fig"><div class="v num">${open.length}</div><div class="k">open cases</div>
+      <div class="n">waiting on a decision</div></div>
+    <div class="fig"><div class="v num">${decided}</div><div class="k">decided</div>
+      <div class="n">written back this run</div></div>
   </div>
-  <div class="sect">Queue</div>
-  <table><thead><tr><th>Claim</th><th>Unit</th><th>Purchased</th><th>Failed</th><th class="r">Amount</th><th class="r">Coverage</th></tr></thead>
-  <tbody>${rows.map(r=>`<tr>
-    <td class="mono" style="color:var(--ink)">${esc(r[0])}</td><td class="mono">${esc(r[1]||"")}</td>
-    <td class="mono num">${esc(r[2]||"")}</td><td class="mono num">${esc(r[3]||"")}</td>
-    <td class="mono num r">${moneyExact(r[5])}</td>
-    <td class="r" style="color:${r[7]==="outside window"?"var(--warn)":r[7]==="needs review"?"var(--ka)":"var(--faint)"}">${esc(covText(r))}</td></tr>`).join("")}
-  </tbody></table>
-  <div class="callout"><b>From documents to decisions</b>
-  <p>Coverage status is date arithmetic on extracted fields, reproducible from the source document. The audit lane recorded ${ (d.findings||[]).length } findings for this run.</p></div>`;
+  <p class="hint" style="margin:10px 0 0">${store}</p>
+  <div class="sect">Cases</div>
+  <div id="caselist">${cs.map(renderCase).join("")}</div>`;
+  cs.forEach(bindCase);
 }
-
-/* ---------------- SUPPLIERS ---------------- */
-async function loadSuppliers(){
-  let d; try{ d=await j("/api/uc/suppliers"); }catch(e){ d={error:e.message}; }
-  const theme=(S.golog&&S.golog.theme)||{};
-  const spend=d.spend||[];
-  if(d.error||!spend.length){
-    stage.innerHTML=`<div class="over">Supplier operations</div><h1>${esc(theme.suppliers_page_title||"Supplier spend watch")}</h1>
-    <div class="rule"></div><div class="empty"><b>No supplier data yet</b>${d.error?esc(d.error):"Run the pipeline from the Start page first."}</div>`;
-    return;
-  }
-  const max=Math.max(...spend.map(r=>parseFloat(r[2])||0),1);
-  stage.innerHTML=`
-  <div class="over">Supplier operations${theme.source==="generic"?' · generic wording':''}</div>
-  <h1>${esc(theme.suppliers_page_title||"Supplier spend watch")}</h1>
-  <p class="dek">${runProvenance()} Invoices grouped by vendor and joined to the audit findings.</p>
-  <div class="rule"></div>
-  <div class="split">
-    <div>
-      <div class="sect" style="margin-top:0">Spend by vendor · extracted this run</div>
-      ${spend.map(r=>`<div class="trend"><span class="d">${esc(r[0]||"unknown")}</span>
-        <div class="bar"><i style="width:${(parseFloat(r[2])||0)/max*100}%;background:linear-gradient(90deg,var(--ghost),var(--lava2))"></i></div>
-        <span class="v num">${moneyExact(r[2])}</span></div>`).join("")}
-      <p class="hint" style="margin-top:12px">${spend.reduce((s,r)=>s+(parseInt(r[1])||0),0)} invoices extracted to Delta by Document Intelligence.</p>
+function renderCase(c){
+  const sev=c.severity==="HIGH"?"var(--lava)":"var(--warn)";
+  const st={"open":"var(--dim)","recovery approved":"var(--ie)","escalated":"var(--warn)","dismissed":"var(--faint)"}[c.status]||"var(--dim)";
+  const a=c.advice;
+  return `
+  <div class="ccard" id="case-${esc(c.case_id)}" style="border:1px solid var(--hair);border-radius:14px;background:var(--bg2);padding:18px 20px;margin-bottom:14px">
+    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+      <b style="font-size:15px">${esc(c.kind)}</b>
+      <span class="mono" style="font-size:11px;color:var(--faint)">${esc(c.doc_id)}</span>
+      <span class="mono" style="font-size:11px;color:${sev}">${esc(c.severity)}</span>
+      ${c.amount_usd?`<span class="mono num" style="font-size:13px">${moneyExact(c.amount_usd)}</span>`:""}
+      <span class="mono" style="margin-left:auto;font-size:11px;color:${st}">${esc(c.status)}</span>
     </div>
-    <div>
-      <div class="sect" style="margin-top:0">Findings on file</div>
-      ${(d.flagged||[]).length?(d.flagged||[]).map(f=>`
-        <div style="padding:12px 0;border-bottom:1px solid var(--hair)">
-          <div style="display:flex;gap:10px;align-items:baseline">
-            <span class="mono" style="color:var(--ink)">${esc(f[0])}</span>
-            <span class="tag warn" style="font-size:9.5px">${esc(f[2]||"")}</span>
-            <span class="mono num" style="margin-left:auto">${moneyFmt(f[3])}</span></div>
-          <p class="hint" style="margin-top:4px">${esc(f[1]||"")}</p>
-        </div>`).join(""):`<p class="hint">No findings recorded.</p>`}
+    <p style="font-size:12.5px;color:var(--dim);margin:8px 0 0">${esc(c.detail||"")}</p>
+    <div class="cadv" style="margin-top:10px">${a?adviceHtml(a):""}</div>
+    <div class="ctrail" style="margin-top:6px">${(c.trail||[]).map(t=>
+      `<div class="hint">↳ ${esc(t.action)} · ${esc(t.actor)} · ${esc((t.at||"").slice(0,19))}${t.note?` — ${esc(t.note)}`:""}</div>`).join("")}</div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center">
+      <button class="btn" data-adv="${esc(c.case_id)}" style="padding:6px 14px;font-size:12px">${a?"Re-advise":"Suggest next step"}</button>
+      <button class="btn" data-act="approve" data-cid="${esc(c.case_id)}" style="padding:6px 14px;font-size:12px">Approve recovery</button>
+      <button class="btn" data-act="escalate" data-cid="${esc(c.case_id)}" style="padding:6px 14px;font-size:12px">Escalate</button>
+      <button class="btn" data-act="dismiss" data-cid="${esc(c.case_id)}" style="padding:6px 14px;font-size:12px">Dismiss</button>
+      <input class="ctl" data-note="${esc(c.case_id)}" placeholder="note (optional)"
+        style="flex:1;min-width:140px;padding:6px 10px;font-size:12px">
+      <span class="msg" data-msg="${esc(c.case_id)}"></span>
     </div>
   </div>`;
+}
+function adviceHtml(a){
+  return `<div style="border-left:2px solid var(--ka);padding:8px 12px;background:var(--surf);border-radius:0 10px 10px 0">
+    <div style="font-size:12.5px"><b>Diagnosis</b> · ${esc(a.diagnosis||"")}</div>
+    <div style="font-size:12.5px;margin-top:4px"><b>Next step</b> · ${esc(a.next_step||"")}</div>
+    <div style="font-size:12.5px;margin-top:4px"><b>Escalate to</b> · ${esc(a.escalate_to||"")}
+      <span class="mono" style="color:var(--warn);font-size:11px;margin-left:6px">${esc(a.urgency||"")}</span></div>
+    ${a.draft_note?`<div class="hint" style="margin-top:5px">draft note: "${esc(a.draft_note)}"</div>`:""}
+    ${a.model?`<div class="hint" style="margin-top:5px">by ${esc(a.model)}</div>`:""}
+  </div>`;
+}
+function bindCase(c){
+  const card=document.getElementById(`case-${c.case_id}`); if(!card) return;
+  const msg=card.querySelector(`[data-msg]`);
+  const adv=card.querySelector(`[data-adv]`);
+  if(adv) adv.onclick=async()=>{
+    adv.disabled=true; adv.innerHTML=`<span class="spin"></span>`;
+    msg.textContent="The model is reading the finding…";
+    try{
+      const out=await post(`/api/cases/${encodeURIComponent(c.case_id)}/advise`,
+        {model:(S.cfg&&S.cfg.chat_endpoint)||""});
+      card.querySelector(".cadv").innerHTML=adviceHtml(out.advice);
+      msg.textContent="";
+      adv.textContent="Re-advise";
+    }catch(e){ msg.textContent=e.message; adv.textContent="Suggest next step"; }
+    adv.disabled=false;
+  };
+  card.querySelectorAll("[data-act]").forEach(b=>b.onclick=async()=>{
+    b.disabled=true; msg.textContent="Writing the decision…";
+    try{
+      const out=await post(`/api/cases/${encodeURIComponent(c.case_id)}/act`,
+        {action:b.dataset.act, note:(card.querySelector("[data-note]")||{}).value||""});
+      msg.innerHTML=`<span style="color:var(--ie)">row written to ${esc(out.store==="lakebase"?out.instance+" (Postgres)":"Delta")} at ${esc((out.written_at||"").slice(11,19))}</span>`;
+      const d2=await j("/api/cases").catch(()=>null);
+      const c2=d2&&(d2.cases||[]).find(x=>x.case_id===c.case_id);
+      if(c2){ card.outerHTML=renderCase(c2); bindCase(c2);
+        const m2=document.querySelector(`#case-${CSS.escape(c.case_id)} [data-msg]`);
+        if(m2) m2.innerHTML=`<span style="color:var(--ie)">written · ${esc(out.store==="lakebase"?"Lakebase":"Delta")}</span>`; }
+    }catch(e){ msg.textContent=e.message; b.disabled=false; }
+  });
 }
 
 /* ---------------- BUILT ---------------- */
@@ -1295,7 +1313,8 @@ function renderPrompter(page){
   document.body.dataset.prompter="";
   if(S.prompterOff) return;
   const beats=(S.golog&&S.golog.theme&&S.golog.theme.story)||[];
-  const beat=beats.find(b=>b&&b.page===page);
+  const want=page==="recover"?["recover","claims","suppliers"]:[page];
+  const beat=beats.find(b=>b&&want.includes(b.page));
   if(!beat||!beat.line) return;
   const el=document.createElement("div");
   el.className="prompter";
@@ -1310,9 +1329,10 @@ function renderPrompter(page){
 }
 
 /* ---------------- router ---------------- */
-const LOADERS={start:loadStart,docs:loadDocs,flow:loadFlow,ask:loadAsk,claims:loadClaims,suppliers:loadSuppliers,built:loadBuilt,newpage:loadPageBuilder};
+const LOADERS={start:loadStart,docs:loadDocs,flow:loadFlow,ask:loadAsk,recover:loadRecover,built:loadBuilt,newpage:loadPageBuilder};
 async function go(page, push){
   if(page && page.startsWith("p-")){ return goCustom(page.slice(2), push); }
+  if(page==="claims"||page==="suppliers") page="recover";
   if(!LOADERS[page]) page="start";
   stopPollers(); S.page=page;
   if(push!==false && location.hash.slice(1)!==page) location.hash=page;

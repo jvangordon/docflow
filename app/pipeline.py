@@ -63,7 +63,8 @@ DOC_TYPES = list(ROUTING.keys())
 # never written to, replaced, or deleted.
 OWNED_TABLES = ("documents", "events", "extract_warranty_claims",
                 "extract_supplier_invoices", "audit_findings",
-                "parsed", "labeled", "run_metrics")
+                "parsed", "labeled", "run_metrics",
+                "docflow_cases", "docflow_case_actions")
 OWNED_VOLUMES = ("docs", "secure")
 # Stamped onto the schema the app creates or adopts. Teardown refuses to touch
 # a schema that does not carry it.
