@@ -178,9 +178,22 @@ def ensure_infra(cfg: dict) -> None:
         marked = bool(pipeline.schema_marker(cat, sch))
         foreign = pipeline.schema_contents(cat, sch)
         n_foreign = len(foreign["tables"]) + len(foreign["volumes"])
-        if marked:
+        # A schema an earlier version of this app built carries no marker but is
+        # unmistakably ours: it holds tables only this demo names. Same proof
+        # standard the teardown uses — two distinctive names and no strays.
+        distinctive = {"extract_warranty_claims", "extract_supplier_invoices",
+                       "audit_findings"}
+        strays = ([t for t in foreign["tables"] if t not in pipeline.OWNED_TABLES]
+                  + [v for v in foreign["volumes"] if v not in pipeline.OWNED_VOLUMES])
+        provable = (not strays
+                    and len(distinctive & set(foreign["tables"])) >= 2)
+        if marked or provable:
+            if not marked:
+                pipeline.claim_schema(cat, sch)
             GO["assets"]["schema_created_by_us"] = True
-            _log("Schema", "ok", f"reusing {cat}.{sch}, created by this demo earlier")
+            _log("Schema", "ok",
+                 f"reusing {cat}.{sch}" + ("" if marked else
+                 ", which holds only this demo's tables — now marked"))
         elif n_foreign == 0:
             pipeline.claim_schema(cat, sch)
             GO["assets"]["schema_created_by_us"] = True

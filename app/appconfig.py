@@ -609,6 +609,9 @@ def fix_catalog() -> dict:
                     "sql": f"GRANT CREATE SCHEMA, USE CATALOG ON CATALOG {cat} TO `<app service principal>`"}
     try:
         pipeline.sql(f"CREATE SCHEMA IF NOT EXISTS {cat}.{sch}")
+        # Claim it here too: the run refuses to write into an unmarked schema,
+        # and a schema this button created is unmistakably the demo's.
+        pipeline.claim_schema(cat, sch)
         made.append(f"schema {cat}.{sch}")
     except Exception as e:
         return {"ok": False, "stage": "schema", "error": str(e)[:220],
