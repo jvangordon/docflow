@@ -564,6 +564,25 @@ def build_corpus(cfg: dict) -> None:
     t0 = time.time()
     _log("Generated documents", "run", "checking the volume is writable")
     preflight_volume()
+    # A fresh corpus replaces the old one entirely. Leaving the previous run's
+    # documents in the inbox meant a second company's run processed a mixed
+    # pile — 36 documents, two industries, one confused demo. These folders are
+    # the app's own staging areas, created by it, so clearing them is safe.
+    cleared = 0
+    for sub in ("inbox", "generated", "ka_contracts", "ka_claims", "ka_all"):
+        try:
+            for f in _w().files.list_directory_contents(f"{pipeline.VOL_ROOT}/{sub}"):
+                if f.name and not f.is_directory:
+                    try:
+                        _w().files.delete(f"{pipeline.VOL_ROOT}/{sub}/{f.name}")
+                        cleared += 1
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+    if cleared:
+        _log("Generated documents", "run",
+             f"cleared {cleared} files from the previous run first")
     _log("Generated documents", "run", "writing and uploading 24 PDFs")
     import corpus
     w = _w()
