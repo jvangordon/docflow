@@ -186,7 +186,8 @@ def model_candidates() -> list[str]:
     # env default first meant a selection of Opus lost to the shipped
     # sonnet default whenever that also answered — the app then reported the
     # model it actually used, which read as the picker being ignored.
-    push(chosen_model())                         # the user's pick leads, always
+    for v in name_variants(chosen_model()):      # the pick, in every spelling
+        push(v)
     try:
         import appconfig
         push(appconfig.load_config().get("resolved_model"))   # last known good
@@ -265,6 +266,31 @@ def chat_model() -> str:
     return _MODEL["name"] or CHAT_ENDPOINT
 
 
+def name_variants(name: str) -> list[str]:
+    """The same model under every namespace a workspace might serve it as.
+
+    Enterprise serves 'databricks-claude-opus-5'; Free Edition serves the same
+    family as the UC model 'system.ai.claude-opus-5'. Picking one spelling and
+    getting 'did not answer' — while the model plainly works in the Playground —
+    is a naming difference, not a missing model, so a pick is always tried under
+    all of them before anything else is considered.
+    """
+    n = (name or "").strip()
+    if not n:
+        return []
+    base = n.split(".")[-1]
+    if base.startswith("databricks-"):
+        base = base[len("databricks-"):]
+    out = [n, f"system.ai.{base}", f"databricks-{base}",
+           f"workspace.default.{base}", base]
+    seen, uniq = set(), []
+    for x in out:
+        if x and x not in seen and re.fullmatch(r"[A-Za-z0-9._-]{1,120}", x):
+            seen.add(x)
+            uniq.append(x)
+    return uniq
+
+
 def chosen_model() -> str:
     """The model the user picked on the Start page, if any."""
     try:
@@ -283,10 +309,16 @@ def resolve_chat_model(max_tries: int = 16) -> dict:
         try:
             sql(f"SELECT ai_query('{name}', 'Reply with exactly: OK')", timeout="50s")
             asked = chosen or CHAT_ENDPOINT
+            if name == asked:
+                note = ""
+            elif name in name_variants(asked):
+                # Same model, different namespace — say that, rather than
+                # implying the pick was wrong.
+                note = f"{asked} is served here as {name}"
+            else:
+                note = f"'{asked}' did not answer here · using {name}"
             _MODEL.update({"name": name, "tried": len(errs) + 1,
-                           "asked": asked,
-                           "note": "" if name == asked else
-                           f"'{asked}' did not answer here · using {name}"})
+                           "asked": asked, "note": note})
             try:
                 import appconfig
                 appconfig.save_config({"resolved_model": name})

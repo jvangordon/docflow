@@ -510,6 +510,18 @@ def build_corpus(cfg: dict) -> None:
     _section("Build the document set", time.time() - t0)
 
 
+def _ka_hint(e: Exception) -> str:
+    """Turn a preview-gated failure into the one action that fixes it."""
+    msg = str(e)
+    low = msg.lower()
+    if any(k in low for k in ("not enabled", "not available", "preview",
+                             "feature", "permission_denied", "403")):
+        return ("Agent Bricks is turned off in this workspace, so the assistant "
+                "lane is skipped. Settings, Previews, search 'Agent Bricks', "
+                "turn it on, then press Go again. Everything else runs without it.")
+    return msg[:180]
+
+
 _KA_THREAD: dict = {"thread": None, "created": {}}
 
 
@@ -559,9 +571,9 @@ def create_assistants_early() -> None:
                         "name": ka.name, "endpoint": ka.endpoint_name,
                         "about": spec["about"]}
                 except Exception as e:
-                    _log(f"Assistant · {spec['about']}", "warn", str(e)[:160])
+                    _log(f"Assistant · {spec['about']}", "warn", _ka_hint(e))
         except Exception as e:
-            _log("Assistants", "warn", str(e)[:160])
+            _log("Assistants", "warn", _ka_hint(e))
     th = threading.Thread(target=_run, daemon=True)
     th.start()
     _KA_THREAD["thread"] = th

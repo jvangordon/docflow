@@ -350,6 +350,39 @@ def readiness(deep: bool = False) -> dict:
             human="Runs with the warehouse check above.",
             untested=True, depends_on="warehouse")
 
+    # ---- Agent Bricks preview: the one gate that silently kills the assistant
+    # lane. The API answers differently when the workspace preview is off, and
+    # a presenter must learn that here, not mid-demo.
+    ab_state, ab_err = "", ""
+    try:
+        w.knowledge_assistants.list_knowledge_assistants()
+        ab_state = "on"
+    except Exception as e:
+        ab_err = str(e)
+        low = ab_err.lower()
+        if any(k in low for k in ("not enabled", "not available", "preview",
+                                  "feature", "permission_denied", "403")):
+            ab_state = "off"
+        else:
+            ab_state = "unknown"
+    if ab_state == "on":
+        add("agent_bricks", "Agent Bricks enabled", True,
+            "the Knowledge Assistant API answers in this workspace")
+    else:
+        add("agent_bricks", "Agent Bricks enabled", False,
+            ("This workspace has Agent Bricks turned off, so the Knowledge "
+             "Assistant lane cannot be built. Everything else still runs."
+             if ab_state == "off" else
+             f"Could not confirm Agent Bricks here: {_clean(ab_err, 110)}"),
+            link=f"{host}/settings/workspace/previews" if host else None,
+            link_label="Open Previews",
+            human="A workspace admin turns this on, and it takes about a minute:",
+            steps=["Settings, then Previews (Admin Console, Workspace Settings)",
+                   "Search for 'Agent Bricks'",
+                   "Turn on 'Mosaic AI Agent Bricks'",
+                   "Re-check here — no redeploy needed"],
+            optional=True)
+
     custom = [n for n in names if not n.startswith("databricks-")]
     ka = [n for n in custom if n.startswith("ka-") or "knowledge" in n.lower()]
     add("knowledge_assistant", "Knowledge Assistant · built at go", bool(ka),
