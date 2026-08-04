@@ -219,12 +219,44 @@ def research_company(cfg: dict) -> None:
                         "filing_days": {"type": "string"}},
                         "required": ["supplier", "penalty_pct", "cap_pct",
                                      "warranty_months", "filing_days"]},
+                    "narratives": {"type": "object", "properties": {
+                        "component_names": {"type": "array", "items": {"type": "string"}},
+                        "claim_failures": {"type": "array", "items": {"type": "string"}},
+                        "claim_resolution": {"type": "string"},
+                        "inspection_method": {"type": "string"},
+                        "incident_areas": {"type": "array", "items": {"type": "string"}},
+                        "incident_roles": {"type": "array", "items": {"type": "string"}},
+                        "incident_narratives": {"type": "array", "items": {"type": "string"}},
+                        "incident_actions": {"type": "array", "items": {"type": "string"}},
+                        "hr_from_title": {"type": "string"},
+                        "hr_to_title": {"type": "string"},
+                        "hr_note": {"type": "string"},
+                        "marketing_headline": {"type": "string"},
+                        "marketing_body": {"type": "string"},
+                        "marketing_bullets": {"type": "string"},
+                        "contract_scope": {"type": "string"}},
+                        "required": ["component_names", "claim_failures",
+                                     "claim_resolution", "inspection_method",
+                                     "incident_areas", "incident_roles",
+                                     "incident_narratives", "incident_actions",
+                                     "hr_from_title", "hr_to_title", "hr_note",
+                                     "marketing_headline", "marketing_body",
+                                     "marketing_bullets", "contract_scope"]},
                 }, "required": ["site", "vendors", "line_items", "carriers",
-                                "destinations", "type_labels", "contract"]},
+                                "destinations", "type_labels", "contract",
+                                "narratives"]},
+                "story": {"type": "array", "items": {"type": "object",
+                    "properties": {
+                        "page": {"type": "string",
+                                 "enum": ["documents", "flow", "ask",
+                                          "claims", "suppliers"]},
+                        "line": {"type": "string"},
+                        "cue": {"type": "string"}},
+                    "required": ["page", "line", "cue"]}},
             },
             "required": ["tagline", "vocabulary", "genie_questions",
                          "assistant_questions", "claims_page_title",
-                         "suppliers_page_title", "world"],
+                         "suppliers_page_title", "world", "story"],
         }, "strict": True},
     })
     # The questions are shown as one-click suggestions, so they must be
@@ -264,6 +296,23 @@ def research_company(cfg: dict) -> None:
         "CT-7701 and a Warranty Terms policy CT-7702, so at least one wording "
         "question MUST quote the exact number you chose (e.g. the late-delivery "
         "penalty or the claim filing deadline), giving it a citable answer. "
+        "narratives: prose the documents print verbatim, all in this industry's "
+        "voice. component_names: 5 things this company buys or services that "
+        "could fail. claim_failures: 5 failure descriptions, 20-40 words each, "
+        "matching those components in order. claim_resolution: one line. "
+        "inspection_method: one line naming an industry-plausible QA method. "
+        "incident_areas/roles/narratives/actions: 2 each, minor workplace safety "
+        "events at the site, 25-45 words per narrative. hr_from_title/to_title: "
+        "a promotion between two real job titles here. hr_note: 15-25 words. "
+        "marketing: a vendor's junk-mail headline, 25-40 word body, and 3 "
+        "bullet lines separated by <br/>. contract_scope: one sentence of what "
+        "the supplier delivers. "
+        "story: a 5-beat presenter script, one beat per page in order "
+        "documents, flow, ask, claims, suppliers. Each line is the business "
+        "value on screen in at most 20 words, spoken language. Each cue is the "
+        "single click to make next (name the exact question to click on the "
+        "ask beat). The arc: documents exist, they route themselves, answers "
+        "cite sources, money is recovered, suppliers are accountable. "
         "and titles for two operations screens. The titles must name the work this "
         "industry actually does, not generic labels: never return 'Claims "
         "Operations' or 'Supplier Operations'. For insurance prefer wording like "
@@ -289,7 +338,13 @@ def research_company(cfg: dict) -> None:
         with _glock:
             GO["theme"] = {"tagline": f"Document intelligence for {cfg['company']}",
                            "source": "generic",
-                           "why": f"Company research did not run: {str(e)[:120]}"}
+                           "why": f"Company research did not run: {str(e)[:120]}",
+                           "story": [
+                {"page": "documents", "line": "Every document here was just written, watermarked, and classified with a reason.", "cue": "Open Flow"},
+                {"page": "flow", "line": "Each document takes the lane it needs — extraction, assistant, both, or sealed.", "cue": "Press Process documents, then open Ask"},
+                {"page": "ask", "line": "Ask in plain language; answers arrive with SQL or a page citation.", "cue": "Click the first suggested question"},
+                {"page": "claims", "line": "This is recovered money, computed from the documents you just watched.", "cue": "Open Suppliers"},
+                {"page": "suppliers", "line": "Every supplier total traces back to a governed document.", "cue": "Open the secure volume — the denial is the governance story"}]}
         _log("Company research", "warn",
              f"using generic wording · research failed: {str(e)[:90]}")
     _section("Research the company", time.time() - t0)

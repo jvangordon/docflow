@@ -110,6 +110,54 @@ FAILURE_NOTES = {
                "event on the drive log.",
 }
 
+# Narrative prose the research LLM may rewrite per industry. Keys map 1:1 to
+# slots in the builders; defaults are the shipped manufacturing voice, so a
+# failed research call still yields complete documents.
+NARR = {
+    "component_names": list(CLAIM_PRODUCTS.values()),
+    "claim_failures": list(FAILURE_NOTES.values()),
+    "claim_resolution": "Credit or replacement under the supplier warranty terms.",
+    "inspection_method": "AQL sampling per QP-104, visual + gauge",
+    "incident_areas": ["Line 3 guarding, west end", "Receiving dock, bay 2"],
+    "incident_roles": ["Maintenance Mechanic", "Material Handler"],
+    "incident_narratives": [
+        "While adjusting the Line 3 infeed guard, the employee pinched the left index "
+        "finger between the guard frame and its bracket. First aid on site; returned same shift.",
+        "Employee slipped on hydraulic fluid residue near bay 2 while staging inbound "
+        "pallets. Minor bruising only; area cordoned and cleaned."],
+    "incident_actions": [
+        "Guard adjustment procedure updated; two-person rule reinforced for guard work.",
+        "Spill kit restocked at the dock; anti-slip floor coating scheduled."],
+    "hr_from_title": "Quality Technician II",
+    "hr_to_title": "Senior Quality Technician",
+    "hr_note": "Promotion recognizes sustained inspection accuracy and audit "
+               "leadership. Payroll change effective with the April cycle.",
+    "marketing_headline": "SPRING 2026 ALLOY STOCK CATALOG",
+    "marketing_body": "New season, sharper prices on the alloys your floor runs on. Vexler "
+                      "Steel now stocks over 400 certified grades, same-week delivery.",
+    "marketing_bullets": "- 4140 and 4340 pre-hardened bar, cut to length<br/>- Stainless plate "
+                         "304/316 with mill certs<br/>- Volume pricing on orders over 5 tons",
+    "contract_scope": "Supplier will manufacture and deliver the components listed in each "
+                      "purchase order issued under this agreement.",
+}
+_DEFAULT_NARR = {k: (list(v) if isinstance(v, list) else v) for k, v in NARR.items()}
+
+
+def _narr(key, i=None):
+    v = NARR.get(key, _DEFAULT_NARR.get(key))
+    if i is None:
+        return v
+    d = _DEFAULT_NARR[key]
+    try:
+        return (v[i] if i < len(v) and str(v[i]).strip() else d[i % len(d)])
+    except Exception:
+        return d[i % len(d)]
+
+
+def _title(t):
+    return TAXONOMY[t]["title"].upper()
+
+
 # report id, inspection date, per-line defect rate percent (Line 3 drifts upward)
 QIR_SCHEDULE = [
     ("QIR-0781", date(2026, 2, 10), {"Line 1": 0.9, "Line 2": 1.1, "Line 3": 1.2, "Line 4": 0.8}),
@@ -290,21 +338,21 @@ def _build_pos(company, rng):
 
 def _build_claims(company, rng):
     docs = []
-    for cid, serial, purchased, term, failed, cents, line, planted in WARRANTY_SPEC:
+    for k, (cid, serial, purchased, term, failed, cents, line, planted) in enumerate(WARRANTY_SPEC):
         expires, contact = _add_months(purchased, term), rng.choice(PEOPLE)
-        proof = "Invoice INV-88213, Miller Tooling LLC" if cid == "WC-2214" else "On file"
-        story = (_form("WARRANTY CLAIM FORM",
+        proof = f"Invoice INV-88213, {CONTRACT['supplier']}" if cid == "WC-2214" else "On file"
+        component = _narr("component_names", k)
+        story = (_form(_title("warranty_claim"),
                        f"Supplier warranty recovery claim submitted by {_esc(company)}",
                        [("Claim ID", cid), ("Claimant", f"{company}, {FICTIONAL_SITE}"),
-                        ("Component", CLAIM_PRODUCTS[cid]), ("Serial number", serial),
+                        ("Component", component), ("Serial number", serial),
                         ("Purchase date", purchased.isoformat()), ("Warranty term", f"{term} months"),
                         ("Failure date", failed.isoformat()), ("Claim amount", _usd(cents)),
                         ("Production line", line), ("Proof of purchase", proof),
                         ("Filed by", f"{contact} - {_email(contact)} - {_phone(rng)}")])
-                 + _sec("Failure description", FAILURE_NOTES[cid])
-                 + _sec("Requested resolution",
-                        "Credit or replacement under the supplier warranty terms."))
-        gt = {"claim_id": cid, "serial_number": serial, "component": CLAIM_PRODUCTS[cid],
+                 + _sec("Failure description", _narr("claim_failures", k))
+                 + _sec("Requested resolution", _narr("claim_resolution")))
+        gt = {"claim_id": cid, "serial_number": serial, "component": component,
               "purchase_date": purchased.isoformat(), "warranty_term_months": term,
               "failure_date": failed.isoformat(), "warranty_expires": expires.isoformat(),
               "within_warranty": failed <= expires, "claim_amount": _d2(cents),
@@ -325,11 +373,11 @@ def _build_qirs(company, rng):
             gt_rows.append({"line": line, "units_inspected": units, "defects": defects,
                             "defect_rate_pct": rate})
         rows.append(["All lines", f"{tu:,}", str(td), f"{td / tu * 100:.2f}%"])
-        story = (_form("QUALITY INSPECTION REPORT",
+        story = (_form(_title("quality_inspection"),
                        f"Final assembly audit - {_esc(company)}, {FICTIONAL_SITE}",
                        [("Report ID", qid), ("Inspection date", d.isoformat()),
                         ("Shift", shifts[i]), ("Inspector", f"{inspector} - {_email(inspector)}"),
-                        ("Method", "AQL sampling per QP-104, visual + gauge")],
+                        ("Method", _narr("inspection_method"))],
                        Spacer(0, 14),
                        _grid(["Production line", "Units inspected", "Defects", "Defect rate"],
                              rows, [1.9 * inch, 1.8 * inch, 1.5 * inch, 1.8 * inch]))
@@ -340,19 +388,14 @@ def _build_qirs(company, rng):
     return docs
 
 def _build_incidents(company, rng):
-    specs = [("SI-0112", date(2026, 4, 21), "09:40", "Line 3 guarding, west end",
-              "Maintenance Mechanic",
-              "While adjusting the Line 3 infeed guard, the employee pinched the left index "
-              "finger between the guard frame and its bracket. First aid on site; returned same shift.",
-              "Guard adjustment procedure updated; two-person rule reinforced for guard work."),
-             ("SI-0113", date(2026, 5, 30), "14:15", "Receiving dock, bay 2", "Material Handler",
-              "Employee slipped on hydraulic fluid residue near bay 2 while staging inbound "
-              "pallets. Minor bruising only; area cordoned and cleaned.",
-              "Spill kit restocked at the dock; anti-slip floor coating scheduled.")]
+    specs = [("SI-0112", date(2026, 4, 21), "09:40"),
+             ("SI-0113", date(2026, 5, 30), "14:15")]
     docs = []
-    for sid, d, t, area, role, narrative, action in specs:
+    for k, (sid, d, t) in enumerate(specs):
+        area, role = _narr("incident_areas", k), _narr("incident_roles", k)
+        narrative, action = _narr("incident_narratives", k), _narr("incident_actions", k)
         employee, reporter = rng.sample(PEOPLE, 2)
-        story = (_form("SAFETY INCIDENT REPORT", f"Internal EHS record - {_esc(company)}",
+        story = (_form(_title("safety_incident"), f"Internal EHS record - {_esc(company)}",
                        [("Incident ID", sid), ("Date", d.isoformat()), ("Time", t),
                         ("Site", FICTIONAL_SITE), ("Area", area), ("Employee", f"{employee} ({role})"),
                         ("Reported by", f"{reporter} - {_email(reporter)} - {_phone(rng)}"),
@@ -367,17 +410,16 @@ def _build_incidents(company, rng):
 
 def _build_hr(company, rng):
     employee, approver = "Dana Whitfield", rng.choice(PEOPLE[1:])
-    story = (_form("EMPLOYEE STATUS CHANGE NOTICE",
+    story = (_form(_title("hr_document"),
                    f"Human Resources - {_esc(company)} - CONFIDENTIAL",
                    [("Document ID", "HR-0007"), ("Employee", employee),
                     ("Employee ID", "EMP-0042"), ("SSN", FAKE_SSN),
                     ("Contact", f"{_email(employee)} - {_phone(rng)}"),
                     ("Work site", FICTIONAL_SITE), ("Effective date", "2026-04-01"),
-                    ("Change", "Promotion"), ("From title", "Quality Technician II"),
-                    ("To title", "Senior Quality Technician"), ("New annual salary", "$68,400.00"),
+                    ("Change", "Promotion"), ("From title", _narr("hr_from_title")),
+                    ("To title", _narr("hr_to_title")), ("New annual salary", "$68,400.00"),
                     ("Approved by", approver)])
-             + _sec("Notes", "Promotion recognizes sustained inspection accuracy and audit "
-                             "leadership. Payroll change effective with the April cycle."))
+             + _sec("Notes", _narr("hr_note")))
     gt = {"document_id": "HR-0007", "document_type": "Employee status change",
           "employee": employee, "ssn": FAKE_SSN, "effective_date": "2026-04-01",
           "new_title": "Senior Quality Technician"}
@@ -412,16 +454,16 @@ def _build_manifests(company, rng):
 
 def _build_marketing(company, rng):
     del company, rng  # junk mail is vendor-authored; nothing random needed
-    story = [Paragraph("SPRING 2026 ALLOY STOCK CATALOG", S_TITLE),
-             Paragraph("Vexler Steel Co - 88 Ingot Ave, Demoville", S_SUB),
-             Paragraph("New season, sharper prices on the alloys your floor runs on. Vexler "
-                       "Steel now stocks over 400 certified grades, same-week delivery.", S_BODY),
+    # sender + copy come from the world so the junk reads native to the industry
+    sender = VENDOR_NAMES[-1] if VENDOR_NAMES else "Vexler Steel Co"
+    story = [Paragraph(_esc(_narr("marketing_headline")).upper(), S_TITLE),
+             Paragraph(f"{_esc(sender)} - 88 Ingot Ave, Demoville", S_SUB),
+             Paragraph(_esc(_narr("marketing_body")), S_BODY),
              Spacer(0, 8),
-             Paragraph("- 4140 and 4340 pre-hardened bar, cut to length<br/>- Stainless plate "
-                       "304/316 with mill certs<br/>- Volume pricing on orders over 5 tons", S_BODY),
+             Paragraph(_narr("marketing_bullets"), S_BODY),
              Spacer(0, 10), Paragraph("Request the catalog: sales@example.com - 555-0100 - "
-                                      "www.example.com/vexler-catalog", S_BODY)]
-    gt = {"title": "Spring 2026 Alloy Stock Catalog", "sender": "Vexler Steel Co",
+                                      "www.example.com/catalog", S_BODY)]
+    gt = {"title": _narr("marketing_headline"), "sender": sender,
           "contact_email": "sales@example.com"}
     return [("MKT-001", story, gt, False)]
 
@@ -434,9 +476,8 @@ def _build_contracts(company, rng):
                      f"effective 1 March 2024", S_SUB),
            Spacer(0, 8),
            Paragraph("1. Scope", S_H2),
-           Paragraph("Supplier will manufacture and deliver the components listed in each "
-                     "purchase order issued under this agreement. Each purchase order "
-                     "references these terms unless it states otherwise in writing.", S_BODY),
+           Paragraph(f"{_esc(_narr('contract_scope'))} Each purchase order "
+                     f"references these terms unless it states otherwise in writing.", S_BODY),
            Spacer(0, 6),
            Paragraph("2. Delivery and late-delivery penalty", S_H2),
            Paragraph(f"Time is of the essence. Where delivery arrives after the need-by date "
@@ -524,6 +565,14 @@ def apply_world(world: dict | None) -> dict:
     labels = w.get("type_labels") or {}
     for t, meta in TAXONOMY.items():
         meta["title"] = str(labels.get(t) or _DEFAULT_TITLES[t])[:48]
+    n = w.get("narratives") or {}
+    for k, dflt in _DEFAULT_NARR.items():
+        v = n.get(k)
+        if isinstance(dflt, list):
+            vv = [str(x).strip()[:400] for x in (v or []) if str(x).strip()]
+            NARR[k] = vv if vv else list(dflt)
+        else:
+            NARR[k] = (str(v).strip()[:400] or dflt) if v else dflt
     c = w.get("contract") or {}
     CONTRACT.update({
         "supplier": str(c.get("supplier") or VENDOR_NAMES[0])[:60],

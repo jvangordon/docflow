@@ -258,6 +258,19 @@ select.ctl{appearance:none}
 .callout p{font-size:13.5px;color:var(--dim);line-height:1.65}
 .empty{padding:52px 20px;text-align:center;border:1px dashed var(--hair2);border-radius:14px;color:var(--dim)}
 .empty b{display:block;font-size:16px;color:var(--ink);margin-bottom:6px}
+.prompter{position:fixed;left:0;right:0;bottom:0;z-index:9;display:flex;align-items:center;
+  gap:14px;padding:9px clamp(20px,4vw,48px);background:rgba(14,17,20,.92);
+  border-top:1px solid var(--hair);backdrop-filter:blur(8px);font:500 12.5px var(--sans)}
+.prompter .plab{font:700 9px var(--mono);letter-spacing:.18em;color:var(--lava2);
+  text-transform:uppercase;flex:none}
+.prompter .pline{color:var(--ink2)}
+.prompter .pcue{margin-left:auto;font:600 11px var(--mono);color:var(--faint);
+  white-space:nowrap}
+.prompter .pcue b{color:var(--dim);font-weight:600}
+.prompter .px{flex:none;background:none;border:0;color:var(--faint);cursor:pointer;
+  font-size:14px;padding:2px 6px}
+.prompter .px:hover{color:var(--ink)}
+body[data-prompter="1"] main{padding-bottom:150px}
 .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--hair2);
   border-top-color:var(--lava);border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important}}
@@ -1082,6 +1095,29 @@ async function loadBuilt(){
   <p>A Databricks App, agents governed by Unity Catalog, a Genie space over Delta tables, deployed from one bundle. Everything on this page works the same way in your own workspace.</p></div>`;
 }
 
+/* ---------------- presenter prompter ----------------
+   A one-line teleprompter for whoever is presenting: the value on screen and
+   the next click, written by the run's own research. Dismiss hides it for the
+   session; the audience-facing pages stay untouched. */
+function renderPrompter(page){
+  const old=document.querySelector(".prompter"); if(old) old.remove();
+  document.body.dataset.prompter="";
+  if(S.prompterOff) return;
+  const beats=(S.golog&&S.golog.theme&&S.golog.theme.story)||[];
+  const beat=beats.find(b=>b&&b.page===page);
+  if(!beat||!beat.line) return;
+  const el=document.createElement("div");
+  el.className="prompter";
+  el.innerHTML=`<span class="plab">Story</span>
+    <span class="pline">${esc(beat.line)}</span>
+    <span class="pcue">next · <b>${esc(beat.cue||"")}</b></span>
+    <button class="px" title="Hide for this session">×</button>`;
+  el.querySelector(".px").onclick=()=>{ S.prompterOff=true; el.remove();
+    document.body.dataset.prompter=""; };
+  document.body.appendChild(el);
+  document.body.dataset.prompter="1";
+}
+
 /* ---------------- router ---------------- */
 const LOADERS={start:loadStart,docs:loadDocs,flow:loadFlow,ask:loadAsk,claims:loadClaims,suppliers:loadSuppliers,built:loadBuilt};
 async function go(page, push){
@@ -1092,6 +1128,7 @@ async function go(page, push){
   stage.innerHTML=`<div class="empty"><span class="spin"></span></div>`;
   try{ if(!S.golog) S.golog=await j("/api/golog").catch(()=>null); await LOADERS[page](); }
   catch(e){ stage.innerHTML=`<div class="empty"><b>This page could not load</b>${esc(e.message)}</div>`; }
+  renderPrompter(page);
   if(page==="start" && S.golog && S.golog.phase==="running") pollGo();
   document.body.dataset.ready="1";
 }
