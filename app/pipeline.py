@@ -737,9 +737,19 @@ def stage_label() -> None:
     display = {t: label_of(t) for t in DOC_TYPES}
     types = ", ".join("'" + display[t].replace("'", "''") + "'" for t in DOC_TYPES)
     back = {v: k for k, v in display.items()}
+    # The classifier answers in the industry's own words, but every downstream
+    # stage filters on the structural key. Translating in Python only fixed the
+    # in-memory board — the table kept the spoken label, so extraction matched
+    # nothing and the money story read $0. Map it here, where SQL can see it.
+    whens = " ".join(
+        "WHEN '" + display[t].replace("'", "''") + "' THEN '" + t + "'"
+        for t in DOC_TYPES)
     sql(f"""CREATE OR REPLACE TABLE {FQ}.labeled AS
-        SELECT doc_id,
-               ai_classify(substr(to_json(doc), 1, 3000), ARRAY({types})) AS doc_type,
+        SELECT doc_id, doc_label,
+               CASE doc_label {whens} ELSE 'unknown' END AS doc_type,
+               routing
+        FROM (SELECT doc_id,
+               ai_classify(substr(to_json(doc), 1, 3000), ARRAY({types})) AS doc_label,
                ai_query('{chat_model()}',
                  concat('This document has already been classified. Decide how it ',
                         'should be routed and explain the decision. ',
@@ -752,9 +762,9 @@ def stage_label() -> None:
                         'Explain the routing in one sentence in the why field. Text: ',
                         substr(to_json(doc), 1, 3000)),
                  responseFormat => '{ROUTING_SCHEMA.replace("'", "''")}') AS routing
-        FROM {FQ}.parsed""", timeout="50s")
-    for doc_id, doc_type, routing in sql(
-            f"SELECT doc_id, doc_type, routing FROM {FQ}.labeled"):
+        FROM {FQ}.parsed)""", timeout="50s")
+    for doc_id, doc_label, doc_type, routing in sql(
+            f"SELECT doc_id, doc_label, doc_type, routing FROM {FQ}.labeled"):
         try:
             rec = json.loads(routing)
         except Exception:
@@ -763,8 +773,9 @@ def stage_label() -> None:
                    "retention_class": "unclassified", "why": "routing record unparseable"}
         # ai_classify decides the type; the model's own guess never overrides it.
         # It answered in the industry's label; routing runs on the structural key.
-        rec["label"] = doc_type or ""
-        rec["doc_type"] = back.get(doc_type, doc_type) or rec.get("doc_type") or "unknown"
+        rec["label"] = doc_label or label_of(doc_type or "")
+        rec["doc_type"] = doc_type if doc_type and doc_type != "unknown" else (
+            back.get(doc_label, "") or rec.get("doc_type") or "unknown")
         with _lock:
             if doc_id in STATE.docs:
                 STATE.docs[doc_id].update({
