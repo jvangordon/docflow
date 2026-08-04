@@ -8,6 +8,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import tempfile
 import threading
 import time
@@ -507,6 +508,89 @@ def attach_assistant_sources() -> None:
     _section("Attach assistant sources", time.time() - t0)
 
 
+def seed_assistant_examples() -> None:
+    """Write the wording questions onto the assistants as platform examples.
+
+    Questions belong on the Databricks objects, not in the app: an assistant
+    opened in the workspace should show its own example questions. The app's
+    Ask page then surfaces what the platform holds rather than owning a copy.
+    """
+    theme = GO.get("theme") or {}
+    qs = [q for q in (theme.get("assistant_questions") or []) if q]
+    if not qs:
+        return
+    contract_kw = ("contract", "agreement", "clause", "penalt", "policy",
+                   "terms", "deadline", "notice", "filing")
+    split = {"docflow-ka-contracts": [], "docflow-ka-claims": []}
+    for q in qs:
+        key = ("docflow-ka-contracts" if any(k in q.lower() for k in contract_kw)
+               else "docflow-ka-claims")
+        split[key].append(q)
+    # neither assistant should sit empty when questions exist
+    for k in split:
+        if not split[k]:
+            split[k] = qs[:1]
+    try:
+        from databricks.sdk.service import knowledgeassistants as K
+        w = _w()
+        for spec in ASSISTANTS:
+            ka = _KA_THREAD["created"].get(spec["display"])
+            if ka is None:
+                continue
+            try:
+                have = list(w.knowledge_assistants.list_examples(ka.name))
+            except Exception:
+                have = []
+            if have:
+                continue
+            n = 0
+            for q in split.get(spec["display"], [])[:3]:
+                try:
+                    w.knowledge_assistants.create_example(
+                        ka.name, K.Example(question=q))
+                    n += 1
+                except Exception:
+                    break
+            if n:
+                _log(f"Assistant · {spec['about']}", "ok",
+                     f"{n} example question{'s' if n > 1 else ''} written onto "
+                     f"the assistant · visible when it is opened in Databricks")
+    except Exception:
+        pass
+
+
+def platform_questions() -> dict:
+    """Questions as Databricks holds them; the app is a mirror, not the owner."""
+    out = {"assistant": [], "genie": [], "source": "app"}
+    w = _w()
+    try:
+        for spec in ASSISTANTS:
+            st = ka_state(spec["display"])
+            if st.get("name"):
+                for ex in w.knowledge_assistants.list_examples(st["name"]):
+                    if ex.question:
+                        out["assistant"].append(ex.question)
+    except Exception:
+        pass
+    try:
+        sid = GO["assets"].get("genie_space_id")
+        if sid:
+            sp = w.genie.get_space(sid)
+            raw = getattr(sp, "serialized_space", "") or ""
+            found = re.findall(r'"question"\s*:\s*"([^"]{8,160})"', raw)
+            out["genie"].extend(found[:4])
+    except Exception:
+        pass
+    theme = GO.get("theme") or {}
+    if out["assistant"] or out["genie"]:
+        out["source"] = "databricks"
+    if not out["assistant"]:
+        out["assistant"] = list(theme.get("assistant_questions") or [])[:3]
+    if not out["genie"]:
+        out["genie"] = list(theme.get("genie_questions") or [])[:3]
+    return out
+
+
 def report_ka() -> None:
     """Close the run with each assistant's true state instead of a guess."""
     for spec in ASSISTANTS:
@@ -605,6 +689,7 @@ def go(cfg: dict, stage: str = "all") -> None:
             research_company(cfg)
             build_corpus(cfg)
             attach_assistant_sources()  # scoped folders now exist
+            seed_assistant_examples()   # questions live on the platform objects
         if stage == "prepare":
             docs = GO["assets"].get("documents", {})
             n = int(docs.get("generated", 0)) + int(docs.get("customer", 0))

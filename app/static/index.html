@@ -918,13 +918,20 @@ function loadAsk(){
   <div class="chips" id="suggest" style="margin-top:14px"></div>
   <div class="callout"><b>Every answer shows its work</b>
   <p>Genie includes the SQL it ran. The assistant cites the document it read. Both live in this workspace and keep answering after the demo ends.</p></div>`;
+  // Questions come from the platform objects — assistant examples and the
+  // Genie space — so what the app shows and what Databricks shows are the
+  // same list. Theme is only the fallback while nothing is seeded yet.
+  const pq = await j("/api/questions").catch(()=>null);
   const theme=(S.golog&&S.golog.theme)||{};
-  const sugg=[...(theme.genie_questions||[]),...(theme.assistant_questions||[])].slice(0,4);
+  const sugg=[...((pq&&pq.genie)||theme.genie_questions||[]),
+              ...((pq&&pq.assistant)||theme.assistant_questions||[])].slice(0,4);
   $("#suggest").innerHTML = (sugg.length?sugg:[
     "How many warranty claims are outside their coverage window and what is the total?",
     "Which vendor billed the most across the invoices?",
     "What does the warranty claim for unit SN-44781 say about the failure?"])
-    .map(q=>`<span class="tag pick" data-q="${esc(q)}">${esc(q)}</span>`).join("");
+    .map(q=>`<span class="tag pick" data-q="${esc(q)}">${esc(q)}</span>`).join("")
+    + (pq&&pq.source==="databricks"
+       ? `<span class="tag mut" style="font-size:9px" title="Assistant examples and the Genie space">from Databricks</span>` : "");
   document.querySelectorAll("#suggest .pick").forEach(t=>t.onclick=()=>{$("#q").value=t.dataset.q;});
   $("#askbtn").onclick=doAsk; $("#q").onkeydown=e=>{ if(e.key==="Enter") doAsk(); };
   // Prepared question link: /?q=...#ask asks on load, so a rehearsed question

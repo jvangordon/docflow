@@ -360,6 +360,17 @@ def api_golog():
     return out
 
 
+@app.get("/api/questions")
+def api_questions():
+    """Suggestion chips come from Databricks (assistant examples, the Genie
+    space) with the run's theme as fallback — the platform owns the questions."""
+    try:
+        return orchestrator.platform_questions()
+    except Exception as e:
+        return JSONResponse({"assistant": [], "genie": [], "source": "app",
+                             "error": str(e)[:120]}, status_code=200)
+
+
 @app.get("/api/ka")
 def api_ka():
     out = orchestrator.ka_state()
