@@ -61,6 +61,8 @@ def _log(name: str, status: str, detail: str = "") -> None:
                     return
         GO["steps"].append({"t": t, "name": name, "status": status,
                             "detail": detail[:300]})
+    if status != "run":
+        _persist()
 
 
 def _section(name: str, seconds: float) -> None:
@@ -68,8 +70,58 @@ def _section(name: str, seconds: float) -> None:
         GO["sections"][name] = round(seconds, 1)
 
 
+# Run state used to live only in this process. A container restart mid-run —
+# which Apps do under memory pressure, and generating the corpus is the
+# heaviest moment — erased the whole run: the log froze on its last line and
+# Go quietly re-enabled with no error anywhere. State is now mirrored to the
+# volume beside the config, so a restart resumes the story instead of hiding it.
+_STATE_PATH = None
+
+
+def _state_path() -> str:
+    return f"{pipeline.VOL_ROOT}/run_state.json"
+
+
+def _persist() -> None:
+    try:
+        body = json.dumps(GO).encode()
+        pipeline.wc().files.upload(_state_path(), io.BytesIO(body), overwrite=True)
+    except Exception:
+        pass                       # persistence is a courtesy, never a blocker
+
+
+def _restore() -> None:
+    """Reload a run that was in flight when this process last died."""
+    if GO["steps"] or GO["phase"] != "idle":
+        return
+    try:
+        raw = pipeline.wc().files.download(_state_path()).contents.read()
+        prev = json.loads(raw)
+    except Exception:
+        return
+    if not isinstance(prev, dict) or not prev.get("steps"):
+        return
+    with _glock:
+        GO.update(prev)
+        if GO.get("phase") == "running":
+            # Nothing is running in this process, so the previous run died with
+            # the container. Say so plainly rather than spinning forever.
+            GO["phase"] = "error"
+            GO["error"] = ("The app restarted while this run was working, so it "
+                           "stopped. Press Try again — finished steps are reused.")
+            GO["failed_step"] = next(
+                (x["name"] for x in reversed(GO["steps"]) if x["status"] == "run"),
+                "The run")
+            for x in GO["steps"]:
+                if x["status"] == "run":
+                    x["status"] = "err"
+                    x["detail"] = "interrupted by an app restart"
+
+
 def snapshot() -> dict:
     with _glock:
+        if GO["phase"] == "idle" and not GO["steps"]:
+            pass
         return json.loads(json.dumps(GO))
 
 
@@ -416,21 +468,37 @@ def build_corpus(cfg: dict) -> None:
     folder_of = {t: spec["folder"] for spec in ASSISTANTS for t in spec["types"]}
     with tempfile.TemporaryDirectory() as td:
         man = corpus.generate_corpus(cfg["company"], td, seed=38, world=world)
-        scoped = 0
-        for item in man["generated"]:
-            with open(os.path.join(td, item["filename"]), "rb") as f:
-                data = f.read()
-            w.files.upload(f"{pipeline.VOL_ROOT}/generated/{item['filename']}",
-                           io.BytesIO(data), overwrite=True)
-            w.files.upload(f"{pipeline.VOL_ROOT}/inbox/{item['filename']}",
-                           io.BytesIO(data), overwrite=True)
-            # A copy into the owning assistant's folder, so each assistant
-            # indexes only its own documents instead of the whole inbox.
+        scoped, failed = 0, []
+        for i, item in enumerate(man["generated"], 1):
+            path = os.path.join(td, item["filename"])
             fol = folder_of.get(item["type"])
+            targets = [f"{pipeline.VOL_ROOT}/generated/{item['filename']}",
+                       f"{pipeline.VOL_ROOT}/inbox/{item['filename']}"]
             if fol:
-                w.files.upload(f"{pipeline.VOL_ROOT}/{fol}/{item['filename']}",
-                               io.BytesIO(data), overwrite=True)
-                scoped += 1
+                # A copy in the owning assistant's folder, so each assistant
+                # indexes only its own documents instead of the whole inbox.
+                targets.append(f"{pipeline.VOL_ROOT}/{fol}/{item['filename']}")
+            for dest in targets:
+                # Re-read per upload and let each buffer go: holding every PDF
+                # in memory at once is the heaviest moment of the whole run,
+                # and an Apps container that runs out of memory restarts,
+                # which used to erase the run silently.
+                try:
+                    with open(path, "rb") as f:
+                        w.files.upload(dest, io.BytesIO(f.read()), overwrite=True)
+                except Exception as e:
+                    failed.append(f"{item['filename']}: {str(e)[:60]}")
+                    break
+            else:
+                if fol:
+                    scoped += 1
+            if i % 8 == 0:
+                _log("Generated documents", "run",
+                     f"{i} of {len(man['generated'])} uploaded")
+        if failed:
+            raise RuntimeError(
+                f"{len(failed)} of {len(man['generated'])} documents could not be "
+                f"written to {pipeline.VOL_ROOT}. First: {failed[0]}")
     GO["assets"]["documents"] = {"customer": customer_n, "generated": len(man["generated"]),
                                  "pack": "back office"}
     # Say what these documents are. They carry the customer's name but the
@@ -772,7 +840,10 @@ def go(cfg: dict, stage: str = "all") -> None:
     except Exception as e:
         # Name the step that was in flight, so "it stopped" is never the whole
         # story the presenter gets.
+        import traceback
+        tb = traceback.format_exc()
         with _glock:
+            GO["traceback"] = tb[-1200:]
             inflight = next((x["name"] for x in reversed(GO["steps"])
                              if x["status"] == "run"), "")
             GO["phase"] = "error"
@@ -781,6 +852,7 @@ def go(cfg: dict, stage: str = "all") -> None:
             GO["finished"] = time.time()
         _log(inflight or "Stopped", "err",
              f"{str(e)[:220]} · press Go to retry — completed steps are reused")
+        _persist()
 
 
 def start(cfg: dict, stage: str = "all") -> bool:

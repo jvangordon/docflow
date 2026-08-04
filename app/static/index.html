@@ -453,6 +453,10 @@ function renderStart(){
           <div class="sc-s">${esc(S.golog.error||"")}</div>
           <div class="sc-s" style="margin-bottom:0">Press <b>Try again</b>. Steps that
             already finished are reused, so a retry picks up where it left off.</div>
+          ${S.golog.traceback?`<details class="said" style="margin-top:10px">
+            <summary>technical detail</summary><pre style="white-space:pre-wrap;
+            font:11px var(--mono);color:var(--faint);margin-top:6px">${esc(S.golog.traceback)}</pre>
+          </details>`:""}
         </div>`:""}
       <div class="gobar">
         <button class="btn hot" id="gobtn" ${goAllowed()||S.golog&&S.golog.phase==="prepared"?"":"disabled"}>${

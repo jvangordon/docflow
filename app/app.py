@@ -355,6 +355,7 @@ def api_go(body: GoBody | None = None):
 
 @app.get("/api/golog")
 def api_golog():
+    orchestrator._restore()          # a run that died with the container
     out = orchestrator.snapshot()
     out["pipeline"] = pipeline.STATE.snapshot()
     return out
