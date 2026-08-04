@@ -140,5 +140,33 @@ prefix = re.findall(r"startswith\([\"'](?!.*exact)", code)
 rec("teardown matches names exactly, never by prefix", not prefix,
     f"{len(danger)} delete sites, all exact-name")
 
+# --- 7. the SPA must actually parse ------------------------------------------
+# A syntax error in this file is total: the script never runs, every page stays
+# on its loading spinner, and no error is shown. It reached a user once.
+import json
+import shutil
+import subprocess
+import tempfile
+
+idx = os.path.join(here, "static", "index.html")
+html = open(idx).read()
+m = re.search(r"<script>(.*)</script>", html, re.S)
+if not m:
+    rec("frontend script block found", False, "no <script> in index.html")
+else:
+    js = m.group(1)
+    node = shutil.which("node")
+    if not node:
+        print("  [WARN] node not found — install node so this gate can run")
+        rec("frontend JavaScript parses", True, "skipped, node unavailable")
+    else:
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
+            fh.write(js)
+            tmp = fh.name
+        pr = subprocess.run([node, "--check", tmp], capture_output=True, text=True)
+        os.unlink(tmp)
+        first = (pr.stderr.strip().split("\n") or [""])[-3:]
+        rec("frontend JavaScript parses", pr.returncode == 0,
+            "clean" if pr.returncode == 0 else " ".join(x.strip() for x in first)[:120])
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)
