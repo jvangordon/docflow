@@ -11,6 +11,7 @@ from __future__ import annotations
 import io
 import json
 import re
+import threading
 import time
 
 import pipeline
@@ -65,6 +66,12 @@ def list_pages() -> list[dict]:
                 continue
     except Exception:
         pass
+    with _JLOCK:
+        have = {r["slug"] for r in out}
+        for slug, j in _JOBS.items():
+            if slug not in have and j["status"] == "working":
+                out.append({"slug": slug, "title": j["stub"]["title"],
+                            "updated": "", "working": True})
     return sorted(out, key=lambda r: r.get("updated") or "")
 
 
@@ -115,9 +122,34 @@ _SYSTEM = (
 )
 
 
-def generate(instruction: str, slug: str = "", title: str = "",
-             model: str = "") -> dict:
-    """Create or refine a page from one instruction, keeping the conversation."""
+_JOBS: dict[str, dict] = {}     # slug -> {"status", "error", "stub"}
+_JLOCK = threading.Lock()
+
+
+def job_state(slug: str) -> dict | None:
+    with _JLOCK:
+        j = _JOBS.get(slug)
+        return dict(j) if j else None
+
+
+def view(slug: str) -> dict | None:
+    """The page as the builder sees it: saved record merged with job state."""
+    rec = get_page(slug)
+    j = job_state(slug)
+    if rec is None and j is None:
+        return None
+    if rec is None:                       # first build still in flight
+        rec = {"slug": slug, "title": j["stub"]["title"], "html": "",
+               "chat": j["stub"]["chat"], "created": ""}
+    out = dict(rec)
+    if j:
+        out["job"] = {"status": j["status"], "error": j.get("error", "")}
+    return out
+
+
+def start(instruction: str, slug: str = "", title: str = "",
+          model: str = "") -> dict:
+    """Kick off one generation in the background and return at once."""
     instruction = (instruction or "").strip()
     if not instruction:
         raise ValueError("say what the page should show")
@@ -129,7 +161,29 @@ def generate(instruction: str, slug: str = "", title: str = "",
     use_model = (model or "").strip() or pipeline.chat_model()
     if not re.fullmatch(r"[A-Za-z0-9._-]{1,120}", use_model):
         raise ValueError("that model name is not valid")
+    with _JLOCK:
+        j = _JOBS.get(rec["slug"])
+        if j and j["status"] == "working":
+            raise RuntimeError("still writing this page — give it a moment")
+        _JOBS[rec["slug"]] = {"status": "working", "error": "", "stub": {
+            "title": rec["title"],
+            "chat": rec["chat"] + [{"role": "instruction", "content": instruction}]}}
 
+    def _run():
+        try:
+            generate(rec, instruction, use_model)
+            with _JLOCK:
+                _JOBS[rec["slug"]]["status"] = "done"
+        except Exception as e:
+            with _JLOCK:
+                _JOBS[rec["slug"]].update(status="error", error=str(e)[:300])
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"slug": rec["slug"], "title": rec["title"], "status": "working"}
+
+
+def generate(rec: dict, instruction: str, use_model: str) -> dict:
+    """Create or refine a page from one instruction, keeping the conversation."""
     convo = ""
     for turn in rec["chat"][-6:]:
         convo += f"\n[{turn['role']}]\n{turn['content'][:4000]}\n"

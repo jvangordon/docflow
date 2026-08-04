@@ -762,22 +762,25 @@ async function renderFlow(){
   $("#flowover").textContent = `Run ${st.run_id||""} · ${phaseWord}`;
   const pb=$("#procbar");
   if(pb){
-    if(g.phase==="prepared"){
-      if(!pb.innerHTML) pb.innerHTML = `
+    if(g.phase==="prepared" || g.phase==="done"){
+      const again = g.phase==="done";
+      if(pb.dataset.phase!==g.phase){ pb.dataset.phase=g.phase; pb.innerHTML = `
         <div class="gobar" style="margin-bottom:18px">
-          <button class="btn hot" id="procbtn">Process documents</button>
-          <span class="msg">Everything is staged. Press, and watch each document take its lane.</span>
-        </div>`;
+          <button class="btn hot" id="procbtn">${again?"Process them again":"Process documents"}</button>
+          <span class="msg">${again
+            ?"The board clears and every document takes its lane again — faster now, the assistants are already built."
+            :"Everything is staged. Press, and watch each document take its lane."}</span>
+        </div>`; }
       const b2=$("#procbtn");
       if(b2 && !b2._wired){ b2._wired=true; b2.onclick=async()=>{
         b2.disabled=true; b2.innerHTML=`<span class="spin"></span> Processing`;
         const msg=b2.parentElement && b2.parentElement.querySelector(".msg");
         if(msg) msg.textContent="Documents are entering the lanes.";
         try{ await post("/api/go", {stage:"process"}); }
-        catch(e){ b2.disabled=false; b2.textContent="Process documents";
+        catch(e){ b2.disabled=false; b2.textContent=again?"Process them again":"Process documents";
                   if(msg) msg.textContent=e.message; }
       }; }
-    } else if(pb.innerHTML && g.phase!=="prepared"){ pb.innerHTML=""; }
+    } else if(pb.innerHTML){ pb.innerHTML=""; pb.dataset.phase=""; }
   }
   // Structure renders once; polls only touch text and classes. Rebuilding the
   // SVG every poll restarts its animations, which is why nothing ever visibly
@@ -1151,7 +1154,7 @@ async function refreshCustomNav(){
   const d=await j("/api/pages").catch(()=>({pages:[]}));
   S.custom=(d.pages||[]);
   holder.innerHTML=S.custom.map(pg=>
-    `<button data-go="p-${esc(pg.slug)}">${esc(pg.title)}</button>`).join("");
+    `<button data-go="p-${esc(pg.slug)}">${esc(pg.title)}${pg.working?" ·&hairsp;writing":""}</button>`).join("");
   holder.querySelectorAll("button").forEach(b=>b.onclick=()=>go(b.dataset.go));
 }
 async function goCustom(slug, push){
@@ -1161,6 +1164,13 @@ async function goCustom(slug, push){
   stage.innerHTML=`<div class="empty"><span class="spin"></span></div>`;
   const rec=await j("/api/pages/"+encodeURIComponent(slug)).catch(()=>null);
   if(!rec||rec.error){ stage.innerHTML=`<div class="empty"><b>That page is gone</b></div>`; return; }
+  if(!rec.html && rec.job && rec.job.status==="working"){
+    stage.innerHTML=`<div class="empty"><span class="spin"></span>
+      <b style="margin-top:10px">Still being written</b>
+      <p class="hint">Follow it in the builder — it keeps going wherever you are in the app.</p></div>`;
+    poll(async()=>{ const v=await j("/api/pages/"+encodeURIComponent(slug)).catch(()=>null);
+      if(v&&v.html){ goCustom(slug,false); } }, 2500);
+    return; }
   stage.innerHTML=`
     <div style="display:flex;align-items:baseline;gap:12px">
       <div class="over">Added for this audience</div>
@@ -1178,63 +1188,101 @@ async function goCustom(slug, push){
   renderPrompter("");
 }
 async function loadPageBuilder(){
-  const slug=S.editSlug||""; S.editSlug="";
-  const rec=slug?await j("/api/pages/"+encodeURIComponent(slug)).catch(()=>null):null;
+  if(S.editSlug){ S.pageBuild={slug:S.editSlug, inst:""}; S.editSlug=""; }
+  S.pageBuild = S.pageBuild || {slug:"", inst:""};
+  const slug=S.pageBuild.slug;
+  let rec=slug?await j("/api/pages/"+encodeURIComponent(slug)).catch(()=>null):null;
+  if(slug && (!rec || rec.error)){
+    S.pageBuild.note="The app restarted while writing — send the instruction again.";
+    S.pageBuild.slug=""; rec=null;
+  }
   const scan=S.scan||await j("/api/scan").catch(()=>({}));
   S.scan=scan;
   const models=(scan.models||[]);
+  const working=!!(rec&&rec.job&&rec.job.status==="working");
   stage.innerHTML=`
   <div class="over">Add a page</div>
-  <h1>${rec?`Editing “${esc(rec.title)}”`:"A page for this audience."}</h1>
-  <p class="dek">Describe the page — the topic, the two or three things it should land,
-    the visual you want. It renders in the app's own design. Keep talking to refine it.</p>
+  <h1>${rec?esc(rec.title):"A page for this audience."}</h1>
+  <p class="dek">${rec
+    ? "Keep the conversation going — each message reshapes the page. Leave and come back any time; the writing continues."
+    : "Describe the page — the topic, the two or three things it should land, the visual you want. It renders in the app's own design."}</p>
   <div class="rule"></div>
   <div class="split">
     <div>
-      <div class="f"><label>${rec?"Refine it":"What should this page show?"}</label>
-        <textarea class="ctl" id="pg-inst" rows="5" style="resize:vertical;font:500 14px var(--sans)"
-          placeholder="A page that introduces Lakebase: what it is in one line, two features — instant databases and branching — and a simple visual showing a database branching like git."></textarea>
-      </div>
+      <div id="pg-thread" style="max-height:300px;overflow-y:auto;margin-bottom:14px"></div>
       ${rec?"":`<div class="f"><label>Page title · shows in the top nav</label>
         <input class="ctl" id="pg-title" placeholder="Lakebase"></div>`}
+      <div class="f"><label>${rec?"Refine it":"What should this page show?"}</label>
+        <textarea class="ctl" id="pg-inst" rows="${rec?5:10}"
+          style="resize:vertical;font:500 14px var(--sans);line-height:1.55;min-height:${rec?110:210}px"
+          placeholder="A page that introduces Lakebase: what it is in one line, two features — instant databases and branching — and a simple visual showing a database branching like git.">${esc(S.pageBuild.inst||"")}</textarea></div>
       <div class="f" style="border-bottom:0"><label>Model · from this workspace</label>
         <select class="ctl mono" id="pg-model" style="font-size:13px">
           ${models.map(m=>`<option ${m===(rec&&rec.model)?"selected":""}>${esc(m)}</option>`).join("")||"<option>databricks-claude-sonnet-4-6</option>"}
         </select></div>
       <div class="gobar">
-        <button class="btn hot" id="pg-gen">${rec?"Apply":"Create the page"}</button>
-        <span class="msg" id="pg-msg">${rec?"The result replaces the page; the conversation is kept.":"Takes ten to thirty seconds."}</span>
+        <button class="btn hot" id="pg-gen" ${working?"disabled":""}>${rec?"Send":"Create the page"}</button>
+        <span class="msg" id="pg-msg">${S.pageBuild.note||(rec?"⌘↵ sends. You can browse other pages while it writes.":"Takes ten to thirty seconds — feel free to browse meanwhile.")}</span>
       </div>
-      ${rec&&rec.chat?`<details style="margin-top:18px"><summary style="cursor:pointer;font:600 10px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint)">Conversation so far</summary>
-        <div style="margin-top:10px">${rec.chat.filter(c=>c.role==="instruction").map(c=>
-          `<div class="snode"><span class="st">›</span>${esc(c.content.slice(0,160))}</div>`).join("")}</div></details>`:""}
     </div>
     <div>
-      <div class="over">Preview</div>
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <div class="over">Preview</div>
+        ${rec?`<a class="dlink" style="margin-left:auto" href="#p-${esc(rec.slug)}">Open the page →</a>`:""}
+      </div>
       <div id="pg-preview" style="margin-top:12px;border:1px dashed var(--hair2);border-radius:14px;
-        padding:18px;min-height:220px">${rec?rec.html:`<p class="hint">The page appears here.</p>`}</div>
+        padding:18px;min-height:220px">${rec&&rec.html?rec.html:`<p class="hint">The page appears here.</p>`}</div>
     </div>
   </div>`;
-  document.getElementById("pg-gen").onclick=async(ev)=>{
-    const b=ev.currentTarget, inst=document.getElementById("pg-inst").value.trim();
-    const msg=document.getElementById("pg-msg");
-    if(!inst){ msg.textContent="Describe the page first."; return; }
-    b.disabled=true; b.innerHTML=`<span class="spin"></span> Writing`;
-    msg.textContent="The model is writing the page…";
-    const body={instruction:inst, slug:(rec&&rec.slug)||"",
-      title:(document.getElementById("pg-title")||{}).value||"",
-      model:document.getElementById("pg-model").value};
-    let out=null;
-    try{ out=await post("/api/pages/generate", body); }
-    catch(e){ out={error:e.message}; }
-    b.disabled=false; b.textContent=rec?"Apply":"Create the page";
-    if(!out||out.error){ msg.textContent=out&&out.error||"That did not work — try again."; return; }
-    document.getElementById("pg-preview").innerHTML=out.html;
-    msg.textContent="Saved. It is in the top nav now — keep refining or open it.";
-    S.editSlug=out.slug;
-    await refreshCustomNav();
-  };
+  S.pageBuild.note="";
+  renderThread(rec);
+  const inst=$("#pg-inst");
+  inst.oninput=()=>{ S.pageBuild.inst=inst.value; };
+  inst.onkeydown=e=>{ if((e.metaKey||e.ctrlKey)&&e.key==="Enter") sendPage(); };
+  $("#pg-gen").onclick=sendPage;
+  if(working) watchPage(slug);
   renderPrompter("");
+}
+function renderThread(rec){
+  const t=$("#pg-thread"); if(!t) return;
+  const working=!!(rec&&rec.job&&rec.job.status==="working");
+  const err=rec&&rec.job&&rec.job.status==="error"?rec.job.error:"";
+  const rows=[];
+  (rec&&rec.chat||[]).forEach(c=>{
+    if(c.role==="instruction") rows.push(
+      `<div class="snode"><span class="st">›</span>${esc(c.content)}</div>`);
+    else rows.push(
+      `<div class="hint" style="margin:2px 0 10px 18px">— page updated</div>`);
+  });
+  if(working) rows.push(
+    `<div class="snode"><span class="spin"></span><span class="hint" style="margin-left:8px">writing the page…</span></div>`);
+  if(err) rows.push(
+    `<div class="snode" style="color:var(--lava)">${esc(err)}</div>`);
+  t.innerHTML=rows.join("");
+  t.scrollTop=t.scrollHeight;
+}
+async function sendPage(){
+  const inst=$("#pg-inst"), btn=$("#pg-gen"), msg=$("#pg-msg");
+  const text=(inst.value||"").trim();
+  if(!text){ msg.textContent="Describe the page first."; return; }
+  btn.disabled=true; msg.textContent="Starting…";
+  const body={instruction:text, slug:S.pageBuild.slug,
+    title:($("#pg-title")||{}).value||"", model:$("#pg-model").value};
+  let out=null;
+  try{ out=await post("/api/pages/generate", body); }catch(e){ out={error:e.message}; }
+  if(!out||out.error){ btn.disabled=false; msg.textContent=(out&&out.error)||"That did not work — try again."; return; }
+  S.pageBuild={slug:out.slug, inst:""};
+  refreshCustomNav();
+  loadPageBuilder();
+}
+function watchPage(slug){
+  poll(async()=>{
+    if(S.page!=="newpage") return;
+    const v=await j("/api/pages/"+encodeURIComponent(slug)).catch(()=>null);
+    if(!v) return;
+    if(v.job&&v.job.status==="working"){ return; }
+    stopPollers(); refreshCustomNav(); loadPageBuilder();
+  }, 2500);
 }
 
 /* ---------------- presenter prompter ----------------

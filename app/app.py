@@ -384,7 +384,7 @@ def api_pages():
 @app.get("/api/pages/{slug}")
 def api_page(slug: str):
     import pages
-    rec = pages.get_page(slug)
+    rec = pages.view(slug)
     if not rec:
         return JSONResponse({"error": "no such page"}, status_code=404)
     return rec
@@ -394,7 +394,7 @@ def api_page(slug: str):
 def api_page_generate(body: PageGen):
     import pages
     try:
-        return pages.generate(body.instruction, slug=body.slug,
+        return pages.start(body.instruction, slug=body.slug,
                               title=body.title, model=body.model)
     except ValueError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
