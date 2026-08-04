@@ -954,7 +954,7 @@ function buildRiver(){
      chips:`<div class="fchip cmut"><span class="ct">RETAINED</span><span class="cs">kept with lineage · nothing runs</span></div>`},
   ];
   const FILED=[
-    {p:`${cfg.catalog||"workspace"}.${cfg.schema||"docflow"}.extract_*`, o:"typed rows you can query · Genie answers from these"},
+    {p:`${cfg.catalog||"workspace"}.${cfg.schema||"docflow"}.extract_*`, o:"typed rows you can query · audit findings open cases on Recover"},
     {p:"/docs/ka_contracts · /docs/ka_claims", o:"indexed after classification · cited answers"},
     {p:"tables + index", o:"both destinations, one document"},
     {p:"secure volume · sec", o:"access controlled · never sent to a model"},
@@ -1260,6 +1260,11 @@ async function loadBuilt(){
     ["Knowledge Assistant", esc(ka.endpoint||"docflow-ka"), ka.ready?"ready":(ka.sources||[]).join(", ")||"—", ka.ready?"ok":"warn"],
     ["Q&A over tables", a.assets&&a.assets.genie_space_id?("Genie space · "+a.assets.genie_space_id.slice(0,8)+"…"):"Genie space", a.assets&&a.assets.genie_space_id?"created":"—", a.assets&&a.assets.genie_space_id?"ok":"warn"],
     ["Secure filing","ai_mask + restricted volume path", sec["stage:secure"]!=null?`${Number(sec["stage:secure"]).toFixed(1)}s`:"", "ok"],
+    ["Write-back", (a.assets&&a.assets.lakebase&&a.assets.lakebase.instance)
+       ? `Lakebase · ${esc(a.assets.lakebase.instance)} · Postgres for case decisions`
+       : "Lakebase (falls back to Delta here)",
+     a.assets&&a.assets.lakebase&&a.assets.lakebase.instance?"provisioned":"—",
+     a.assets&&a.assets.lakebase&&a.assets.lakebase.instance?"ok":"warn"],
   ];
   stage.innerHTML=`
   <div class="over">This workspace · this run</div>
