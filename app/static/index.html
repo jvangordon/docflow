@@ -656,17 +656,28 @@ async function loadDocs(){
     <div class="fig"><div class="v num">${docs.length}</div><div class="k">in this run</div></div>
   </div>
   <div class="sect">Documents</div>
-  <table><thead><tr><th>Document</th><th>Type</th><th>Confidence</th><th>Sensitivity</th><th>Lane</th><th class="r">Stage</th></tr></thead>
+  <table><thead><tr><th>Document</th><th>Labels applied</th><th>Confidence</th><th>Lane</th><th class="r">Stage</th></tr></thead>
   <tbody>${docs.sort((x,y)=>String(x.doc_id).localeCompare(String(y.doc_id))).map(d=>`<tr>
     <td class="mono" style="font-size:12px;color:var(--ink)">${esc(d.filename||d.doc_id)}</td>
-    <td>${esc(d.doc_type||"—")}</td>
+    <td>${docLabels(d)}</td>
     <td class="mono num">${d.confidence!=null?Number(d.confidence).toFixed(2):"—"}</td>
-    <td>${esc(d.sensitivity||"—")}</td>
     <td>${laneTag(d.lane)}</td>
     <td class="r"><span class="tag mut" style="font-size:9.5px">${esc(d.stage||"")}</span></td></tr>`).join("")}
   </tbody></table>
   <div class="callout"><b>Document policy</b><p>Generated documents use fictional vendors and people and carry a visible watermark on every page. Customer files are read-only and never leave this workspace.</p></div>`
   : `<div class="empty"><b>No documents yet</b>Press go on the Start page. The set appears here as it is built.</div>`}`;
+}
+function docLabels(d){
+  // Every chip is a label something actually applied: ai_classify's type in
+  // the industry's own words, the sensitivity read, the retention class, and
+  // a disagreement flag when the agent and the policy differed.
+  const chips=[];
+  const t = d.label || d.doc_type;
+  if(t) chips.push(`<span class="tag ie" style="font-size:9px">${esc(t)}</span>`);
+  if(d.sensitivity) chips.push(`<span class="tag ${d.sensitivity==="sensitive"?"warn":"mut"}" style="font-size:9px">${esc(d.sensitivity)}</span>`);
+  if(d.retention_class) chips.push(`<span class="tag sec" style="font-size:9px">${esc(d.retention_class)}</span>`);
+  if(d.policy_agrees===false) chips.push(`<span class="tag warn" style="font-size:9px">agent disagreed</span>`);
+  return chips.length? `<div style="display:flex;gap:5px;flex-wrap:wrap">${chips.join("")}</div>` : "—";
 }
 function laneTag(l){
   const m={ie:["IE","ie"],ka:["KA","ka"],ie_ka:["IE + KA","ie"],secure:["SECURE","sec"],archive:["ARCHIVE","mut"]};

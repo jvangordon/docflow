@@ -185,10 +185,29 @@ def research_company(cfg: dict) -> None:
                 "assistant_questions": {"type": "array", "items": {"type": "string"}},
                 "claims_page_title": {"type": "string"},
                 "suppliers_page_title": {"type": "string"},
+                "world": {"type": "object", "properties": {
+                    "site": {"type": "string"},
+                    "vendors": {"type": "array", "items": {"type": "string"}},
+                    "line_items": {"type": "array", "items": {"type": "string"}},
+                    "carriers": {"type": "array", "items": {"type": "string"}},
+                    "destinations": {"type": "array", "items": {"type": "string"}},
+                    "type_labels": {"type": "object", "properties": {
+                        t: {"type": "string"} for t in pipeline.DOC_TYPES},
+                        "required": list(pipeline.DOC_TYPES)},
+                    "contract": {"type": "object", "properties": {
+                        "supplier": {"type": "string"},
+                        "penalty_pct": {"type": "string"},
+                        "cap_pct": {"type": "string"},
+                        "warranty_months": {"type": "string"},
+                        "filing_days": {"type": "string"}},
+                        "required": ["supplier", "penalty_pct", "cap_pct",
+                                     "warranty_months", "filing_days"]},
+                }, "required": ["site", "vendors", "line_items", "carriers",
+                                "destinations", "type_labels", "contract"]},
             },
             "required": ["tagline", "vocabulary", "genie_questions",
                          "assistant_questions", "claims_page_title",
-                         "suppliers_page_title"],
+                         "suppliers_page_title", "world"],
         }, "strict": True},
     })
     # The questions are shown as one-click suggestions, so they must be
@@ -212,12 +231,22 @@ def research_company(cfg: dict) -> None:
         f"{schema_note} "
         "Produce: a one-line tagline for their demo, 6 industry vocabulary terms, "
         "3 questions an executive would ask about the TABLES above, "
-        "3 questions they would ask about document WORDING. The corpus includes "
-        "a Master Supply Agreement CT-7701 (late-delivery penalty of 5% per week "
-        "capped at 15%, 24-month component warranty pass-through) and a Warranty "
-        "Terms and Service Policy CT-7702 (30-day claim filing deadline, coverage "
-        "window, out-of-window goodwill) - aim the wording questions at those "
-        "documents so every suggestion has a citable answer. "
+        "3 questions they would ask about document WORDING, and a world object "
+        "that the document generator renders directly. World rules: everything "
+        "fictional but authentic to this industry. site: one facility name. "
+        "vendors: 4 supplier company names. line_items: 8 short line-item "
+        "descriptions in the industry's own language (these appear on invoices "
+        "and purchase orders). carriers: 2 freight carriers. destinations: 2 "
+        "delivery destinations. type_labels: a short display label in industry "
+        "language for every document type key, keeping the meaning (the "
+        "supplier_invoice label must still mean an invoice; warranty_claim can "
+        "become e.g. a loss claim or off-spec batch claim if that is what the "
+        "industry calls it). contract: supplier (one of your vendors), "
+        "penalty_pct, cap_pct, warranty_months, filing_days as bare numbers in "
+        "strings - these are printed verbatim inside a Master Supply Agreement "
+        "CT-7701 and a Warranty Terms policy CT-7702, so at least one wording "
+        "question MUST quote the exact number you chose (e.g. the late-delivery "
+        "penalty or the claim filing deadline), giving it a citable answer. "
         "and titles for two operations screens. The titles must name the work this "
         "industry actually does, not generic labels: never return 'Claims "
         "Operations' or 'Supplier Operations'. For insurance prefer wording like "
@@ -232,7 +261,11 @@ def research_company(cfg: dict) -> None:
         theme["source"] = "researched"
         with _glock:
             GO["theme"] = theme
-        _log("Company research", "ok", theme.get("tagline", "")[:120])
+        world = theme.get("world") or {}
+        pipeline.set_labels(world.get("type_labels"))
+        _log("Company research", "ok",
+             (theme.get("tagline", "")[:90] + " · documents written in this "
+              "industry's language"))
     except Exception as e:
         # The run continues, but the demo is no longer personalised. Say so
         # rather than letting generic pages pass as tailored ones.
@@ -264,8 +297,9 @@ def build_corpus(cfg: dict) -> None:
             _log("Customer documents", "ok", f"{customer_n} PDFs copied to the inbox")
         except Exception as e:
             _log("Customer documents", "warn", str(e)[:160])
+    world = (GO.get("theme") or {}).get("world")
     with tempfile.TemporaryDirectory() as td:
-        man = corpus.generate_corpus(cfg["company"], td, seed=38)
+        man = corpus.generate_corpus(cfg["company"], td, seed=38, world=world)
         for item in man["generated"]:
             with open(os.path.join(td, item["filename"]), "rb") as f:
                 data = f.read()
@@ -277,9 +311,10 @@ def build_corpus(cfg: dict) -> None:
                                  "pack": "back office"}
     # Say what these documents are. They carry the customer's name but the
     # document types are the standard back-office pack, not industry specific.
+    skin = "in this industry's own language" if world else "standard pack"
     _log("Generated documents", "ok",
-         f"{len(man['generated'])} documents named for {cfg['company']}, watermarked, "
-         f"in their own volume folder")
+         f"{len(man['generated'])} documents named for {cfg['company']}, {skin}, "
+         f"watermarked, in their own volume folder")
     _section("Build the document set", time.time() - t0)
 
 

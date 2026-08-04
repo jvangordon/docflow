@@ -56,6 +56,22 @@ ROUTING = {
 }
 DOC_TYPES = list(ROUTING.keys())
 
+# research may rename every type into the industry's own language; the
+# classifier then classifies against those labels while routing keys stay
+# structural underneath
+LABELS: dict[str, str] = {}
+
+
+def set_labels(mapping: dict | None) -> None:
+    LABELS.clear()
+    for k, v in (mapping or {}).items():
+        if k in ROUTING and str(v).strip():
+            LABELS[k] = str(v).strip()[:48]
+
+
+def label_of(t: str) -> str:
+    return LABELS.get(t, t)
+
 _w: Optional[WorkspaceClient] = None
 
 
@@ -576,7 +592,9 @@ def stage_label() -> None:
     opinion on extraction and Q&A, which the deterministic policy then either
     confirms or overrules on screen.
     """
-    types = ", ".join(f"'{t}'" for t in DOC_TYPES)
+    display = {t: label_of(t) for t in DOC_TYPES}
+    types = ", ".join("'" + display[t].replace("'", "''") + "'" for t in DOC_TYPES)
+    back = {v: k for k, v in display.items()}
     sql(f"""CREATE OR REPLACE TABLE {FQ}.labeled AS
         SELECT doc_id,
                ai_classify(substr(to_json(doc), 1, 3000), ARRAY({types})) AS doc_type,
@@ -602,11 +620,14 @@ def stage_label() -> None:
                    "needs_extraction": False, "needs_qa": False,
                    "retention_class": "unclassified", "why": "routing record unparseable"}
         # ai_classify decides the type; the model's own guess never overrides it.
-        rec["doc_type"] = doc_type or rec.get("doc_type") or "unknown"
+        # It answered in the industry's label; routing runs on the structural key.
+        rec["label"] = doc_type or ""
+        rec["doc_type"] = back.get(doc_type, doc_type) or rec.get("doc_type") or "unknown"
         with _lock:
             if doc_id in STATE.docs:
                 STATE.docs[doc_id].update({
                     "doc_type": rec.get("doc_type"),
+                    "label": rec.get("label") or label_of(rec.get("doc_type") or ""),
                     "confidence": rec.get("confidence"),
                     "sensitivity": rec.get("sensitivity"),
                     "needs_extraction": rec.get("needs_extraction"),
@@ -615,7 +636,8 @@ def stage_label() -> None:
                     "why": rec.get("why"),
                 })
         _ev(doc_id, "labeled",
-            f"{rec.get('doc_type')} · {rec.get('confidence')} · {rec.get('sensitivity')}")
+            f"{rec.get('label') or rec.get('doc_type')} · {rec.get('confidence')} · "
+            f"{rec.get('sensitivity')}")
 
 
 def stage_route() -> None:
