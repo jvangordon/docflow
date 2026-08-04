@@ -176,6 +176,9 @@ rec("app deletion requires the DocFlow fingerprint",
     "fingerprint required")
 rec("genie deletion requires the space to reference this demo's tables",
     "genie_ours" in rcode and "serialized_space" in rcode, "content proof required")
+rec("assistant deletion requires fingerprint or volume-source proof",
+    "assistants_ours" in rcode and "list_knowledge_sources" in rcode,
+    "proof required")
 rec("an unmarked schema needs distinctive tables, not generic names",
     "DISTINCTIVE" in rcode and "len(distinctive_found) >= 2" in rcode,
     "two distinctive tables required")

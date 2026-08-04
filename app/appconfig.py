@@ -400,38 +400,58 @@ def readiness(deep: bool = False) -> dict:
             human="Runs with the warehouse check above.",
             untested=True, depends_on="warehouse")
 
-    # ---- Agent Bricks preview: the one gate that silently kills the assistant
-    # lane. The API answers differently when the workspace preview is off, and
-    # a presenter must learn that here, not mid-demo.
-    ab_state, ab_err = "", ""
+    # ---- Agents API access, tested as the APP's identity. Agent Bricks is GA
+    # (the product surface is Agents), so an error here is almost never the
+    # feature being off — it is usually this app's service principal being
+    # denied while the human user has full access. Say which, never guess.
+    ab_ok, ab_err = False, ""
     try:
         w.knowledge_assistants.list_knowledge_assistants()
-        ab_state = "on"
+        ab_ok = True
     except Exception as e:
         ab_err = str(e)
-        low = ab_err.lower()
-        if any(k in low for k in ("not enabled", "not available", "preview",
-                                  "feature", "permission_denied", "403")):
-            ab_state = "off"
-        else:
-            ab_state = "unknown"
-    if ab_state == "on":
-        add("agent_bricks", "Agent Bricks enabled", True,
-            "the Knowledge Assistant API answers in this workspace")
+    if ab_ok:
+        add("agent_bricks", "Agents API (Agent Bricks)", True,
+            "the Knowledge Assistant API answers for the app's identity")
     else:
-        add("agent_bricks", "Agent Bricks enabled", False,
-            ("This workspace has Agent Bricks turned off, so the Knowledge "
-             "Assistant lane cannot be built. Everything else still runs."
-             if ab_state == "off" else
-             f"Could not confirm Agent Bricks here: {_clean(ab_err, 110)}"),
-            link=f"{host}/settings/workspace/previews" if host else None,
-            link_label="Open Previews",
-            human="A workspace admin turns this on, and it takes about a minute:",
-            steps=["Settings, then Previews (Admin Console, Workspace Settings)",
-                   "Search for 'Agent Bricks'",
-                   "Turn on 'Mosaic AI Agent Bricks'",
-                   "Re-check here — no redeploy needed"],
-            optional=True)
+        low = ab_err.lower()
+        sp = ""
+        try:
+            sp = w.current_user.me().user_name or ""
+        except Exception:
+            pass
+        if any(k in low for k in ("permission", "403", "forbidden", "access denied")):
+            add("agent_bricks", "Agents API (Agent Bricks)", False,
+                f"The app's identity ({sp or 'its service principal'}) is not "
+                f"allowed to call the Agents API in this workspace. If the "
+                f"Create Agent page works for you, the feature is on — this is "
+                f"about the app's identity, not the workspace.",
+                link=f"{host}/ml/agents" if host else None,
+                link_label="Open Agents",
+                human="Everything except the assistant lane runs regardless. To "
+                      "get cited answers anyway:",
+                steps=["Create a Knowledge Assistant yourself in Agents, named "
+                       "docflow-ka-contracts",
+                       "Point it at the volume folder ending /docs/ka_contracts "
+                       "(or /docs/ka_all)",
+                       "Press Go again — the run adopts it"],
+                optional=True)
+        elif any(k in low for k in ("not enabled", "not available", "disabled")):
+            add("agent_bricks", "Agents API (Agent Bricks)", False,
+                f"The Agents API reports itself unavailable here: "
+                f"{_clean(ab_err, 110)} Agent Bricks is GA, so this usually "
+                f"means the workspace's region or tier, not a toggle.",
+                link=f"{host}/ml/agents" if host else None,
+                link_label="Open Agents",
+                human="If the Create Agent page works for you in the UI, ignore "
+                      "this row — the run will say precisely what failed if "
+                      "anything does.",
+                optional=True)
+        else:
+            add("agent_bricks", "Agents API (Agent Bricks)", False,
+                _clean(ab_err, 160),
+                link=f"{host}/ml/agents" if host else None,
+                link_label="Open Agents", optional=True)
 
     custom = [n for n in names if not n.startswith("databricks-")]
     ka = [n for n in custom if n.startswith("ka-") or "knowledge" in n.lower()]

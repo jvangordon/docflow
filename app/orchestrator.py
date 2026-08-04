@@ -651,14 +651,20 @@ def build_corpus(cfg: dict) -> None:
 
 
 def _ka_hint(e: Exception) -> str:
-    """Turn a preview-gated failure into the one action that fixes it."""
+    """Name the actual failure. Guessing 'the feature is off' when the human
+    can see every tile in Agents reads as the app being wrong — because it is."""
     msg = str(e)
     low = msg.lower()
-    if any(k in low for k in ("not enabled", "not available", "preview",
-                             "feature", "permission_denied", "403")):
-        return ("Agent Bricks is turned off in this workspace, so the assistant "
-                "lane is skipped. Settings, Previews, search 'Agent Bricks', "
-                "turn it on, then press Go again. Everything else runs without it.")
+    if any(k in low for k in ("permission", "403", "forbidden", "access denied")):
+        return ("the app's identity is not allowed to use the Agents API here — "
+                "the feature itself is on if the Create Agent page works for "
+                "you. Create a Knowledge Assistant named docflow-ka-contracts "
+                "pointed at the /docs/ka_contracts folder and press Go again to "
+                "adopt it. Everything else runs regardless.")
+    if any(k in low for k in ("not enabled", "not available", "disabled")):
+        return (f"the Agents API reports itself unavailable in this workspace "
+                f"({msg[:80]}). Agent Bricks is GA, so this is usually region "
+                f"or tier. Everything else runs without the assistant lane.")
     return msg[:180]
 
 
@@ -709,6 +715,23 @@ def create_assistants_early() -> None:
             for spec in ASSISTANTS:
                 try:
                     ka = existing.get(spec["display"])
+                    if ka is not None and pipeline.FINGERPRINT not in (ka.description or ""):
+                        # No fingerprint — a hand-made assistant still counts as
+                        # ours if its sources point into our volume, which is
+                        # exactly what the permission-denied remedy tells the
+                        # user to set up.
+                        try:
+                            srcs = w.knowledge_assistants.list_knowledge_sources(ka.name)
+                            if any(str(getattr(getattr(x, "files", None), "path", ""))
+                                   .startswith(pipeline.VOL_ROOT) for x in srcs):
+                                _log(f"Assistant · {spec['about']}", "ok",
+                                     f"adopting '{spec['display']}' — it reads this "
+                                     f"demo's documents")
+                                _KA_THREAD["created"][spec["display"]] = ka
+                                made += 1
+                                continue
+                        except Exception:
+                            pass
                     if ka is not None and pipeline.FINGERPRINT not in (ka.description or ""):
                         # Same name, not our object. Never mutate or later delete
                         # something the customer created.

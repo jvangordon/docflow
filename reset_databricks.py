@@ -180,10 +180,27 @@ if schema_exists and schema_is_ours:
         (plan_delete if v in OWNED_VOLUMES else plan_keep).append(f"volume {CATALOG}.{SCHEMA}.{v}")
 
 # assistants, by exact display name only
+assistants_ours = []
 try:
     for x in w.knowledge_assistants.list_knowledge_assistants():
-        if (x.display_name or "") in KA_DISPLAYS:
+        if (x.display_name or "") not in KA_DISPLAYS:
+            continue
+        # Proof, not a name: the fingerprint, or sources inside this demo's
+        # volume. A customer assistant that merely shares the name is kept.
+        ours = FINGERPRINT in (x.description or "")
+        if not ours:
+            try:
+                ours = any(str(getattr(getattr(sx, "files", None), "path", ""))
+                           .startswith(f"/Volumes/{CATALOG}/{SCHEMA}/")
+                           for sx in w.knowledge_assistants.list_knowledge_sources(x.name))
+            except Exception:
+                ours = False
+        if ours:
+            assistants_ours.append(x)
             plan_delete.append(f"assistant {x.display_name}")
+        else:
+            print(f"assistant '{x.display_name}' shows no link to this demo — left alone.")
+            blocked.append(f"assistant {x.display_name} (no proof it is this demo's)")
 except Exception as e:
     print(f"cannot list assistants: {str(e)[:120]}")
 
@@ -260,10 +277,9 @@ elif not plan_delete:
 else:
     # 3a. assistants, while their owner still exists
     try:
-        for x in w.knowledge_assistants.list_knowledge_assistants():
-            if (x.display_name or "") in KA_DISPLAYS:
-                w.knowledge_assistants.delete_knowledge_assistant(x.name)
-                print(f"removed assistant '{x.display_name}' (endpoint goes with it)")
+        for x in assistants_ours:
+            w.knowledge_assistants.delete_knowledge_assistant(x.name)
+            print(f"removed assistant '{x.display_name}' (endpoint goes with it)")
     except Exception as e:
         print(f"assistants: {str(e)[:140]}")
 
