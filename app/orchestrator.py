@@ -1145,6 +1145,55 @@ def report_ka() -> None:
             pass
 
 
+_KA_BLURB = {
+    "docflow-ka-contracts": (
+        "Answers questions about contract terms, supplier obligations, return "
+        "authorization procedures, Master Supply Agreements, and policy wording. "
+        "Use this when the user asks \"what does the contract say about…\", who "
+        "signs off on something, or what a party must provide under an agreement."),
+    "docflow-ka-claims": (
+        "Answers questions about individual claim inspection wording, defect "
+        "descriptions, and detailed claim narratives with citations. Use this "
+        "when the user asks about the specifics of what was found during an "
+        "inspection, the exact wording on a claim form, or failure mode "
+        "descriptions beyond what is captured in the extracted fields."),
+}
+
+
+def _genie_instructions() -> str:
+    """General Instructions for the space: SQL here, prose goes to the KAs.
+
+    Endpoint names are this install's own, read from the live assistants, so
+    the text survives being run in any workspace. Kept under 20 lines — Genie
+    reads longer instruction blocks unreliably.
+    """
+    head = ("This space answers structured data questions about warranty "
+            "claims, supplier invoices, and audit findings using SQL.")
+    tail = ("The structured tables here contain extracted fields (amounts, "
+            "dates, serial numbers, statuses). The KAs have access to the full "
+            "unstructured source documents and can cite specific passages.")
+    entries = []
+    for spec in ASSISTANTS:
+        try:
+            st = ka_state(spec["display"])
+        except Exception:
+            continue
+        ep = (st or {}).get("endpoint")
+        if ep:
+            entries.append(f"• {spec['display']} (endpoint: {ep}) — "
+                           f"{_KA_BLURB.get(spec['display'], spec['about'])}")
+    if not entries:
+        return head + "\n\n" + ("The extracted tables are the only source "
+                                  "available to this space in this workspace.")
+    if len(entries) == 1 and len(ASSISTANTS) > 1:
+        entries.append("(This workspace runs a single assistant; it covers "
+                       "both contract and claim wording.)")
+    return (head + "\n\nFor questions that require unstructured document "
+            "content — full contract language, policy wording, or prose that "
+            "isn't captured in these tables — route to the appropriate "
+            "Knowledge Assistant:\n\n" + "\n\n".join(entries) + "\n\n" + tail)
+
+
 def ensure_genie() -> None:
     """Create or adopt the Genie space over the extracted tables."""
     t0 = time.time()
@@ -1152,8 +1201,12 @@ def ensure_genie() -> None:
     tables = sorted([f"{pipeline.FQ}.extract_warranty_claims",
                      f"{pipeline.FQ}.extract_supplier_invoices",
                      f"{pipeline.FQ}.audit_findings"])
+    # Schema probed live against the API and read back: text_instructions
+    # entries carry their prose as a list of strings under "content".
     ser = json.dumps({"version": 2,
-                      "data_sources": {"tables": [{"identifier": t} for t in tables]}})
+                      "data_sources": {"tables": [{"identifier": t} for t in tables]},
+                      "instructions": {"text_instructions": [
+                          {"content": [_genie_instructions()]}]}})
     try:
         sid = None
         for sp in w.genie.list_spaces().spaces or []:
@@ -1172,12 +1225,16 @@ def ensure_genie() -> None:
         if sid:
             w.genie.update_space(sid, serialized_space=ser,
                                  warehouse_id=pipeline.warehouse_id())
-            _log("Genie space", "ok", "updated with the extracted tables")
+            _log("Genie space", "ok", "updated · tables and general instructions "
+                 "refreshed, prose questions route to the assistants")
         else:
             sp = w.genie.create_space(warehouse_id=pipeline.warehouse_id(),
-                                      serialized_space=ser, title=GENIE_TITLE)
+                                      serialized_space=ser, title=GENIE_TITLE,
+                                      description=("Structured answers over the "
+                                                   f"extracted tables. {pipeline.FINGERPRINT}"))
             sid = sp.space_id
-            _log("Genie space", "ok", "created over the extracted tables")
+            _log("Genie space", "ok", "created over the extracted tables · general "
+                 "instructions route prose questions to the assistants")
         GO["assets"]["genie_space_id"] = sid
     except Exception as e:
         _log("Genie space", "warn", str(e)[:200])
