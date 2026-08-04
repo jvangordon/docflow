@@ -444,9 +444,52 @@ def research_company(cfg: dict) -> None:
     _section("Research the company", time.time() - t0)
 
 
+def _call(fn, seconds: float, what: str):
+    """Run a platform call with a real deadline.
+
+    The SDK retries some failures for minutes before raising, which turns a
+    permission problem into a step that just sits there. A bounded wait makes
+    the same problem a sentence the presenter can act on.
+    """
+    box: dict = {}
+
+    def _run():
+        try:
+            box["v"] = fn()
+        except Exception as e:                       # noqa: BLE001
+            box["e"] = e
+    th = threading.Thread(target=_run, daemon=True)
+    th.start()
+    th.join(seconds)
+    if th.is_alive():
+        raise TimeoutError(
+            f"{what} did not return within {int(seconds)}s. This is almost always "
+            f"the app's identity lacking write access to the volume — the SDK "
+            f"retries silently instead of failing. Grant the app WRITE VOLUME on "
+            f"{pipeline.VOL_ROOT}, or point Advanced at a schema the app created "
+            f"itself, then press Go again.")
+    if "e" in box:
+        raise box["e"]
+    return box.get("v")
+
+
+def preflight_volume() -> None:
+    """Prove the volume is writable before generating anything into it."""
+    probe = f"{pipeline.VOL_ROOT}/generated/.docflow-write-test"
+    _call(lambda: pipeline.wc().files.upload(
+        probe, io.BytesIO(b"docflow write probe"), overwrite=True),
+        45, "writing a test file to the document volume")
+    try:
+        pipeline.wc().files.delete(probe)
+    except Exception:
+        pass
+
+
 def build_corpus(cfg: dict) -> None:
     """Inventory customer volume, generate the standard pack into generated/."""
     t0 = time.time()
+    _log("Generated documents", "run", "checking the volume is writable")
+    preflight_volume()
     _log("Generated documents", "run", "writing and uploading 24 PDFs")
     import corpus
     w = _w()
@@ -485,7 +528,9 @@ def build_corpus(cfg: dict) -> None:
                 # which used to erase the run silently.
                 try:
                     with open(path, "rb") as f:
-                        w.files.upload(dest, io.BytesIO(f.read()), overwrite=True)
+                        blob = f.read()
+                    _call(lambda d=dest, b=blob: w.files.upload(
+                        d, io.BytesIO(b), overwrite=True), 45, f"uploading {os.path.basename(dest)}")
                 except Exception as e:
                     failed.append(f"{item['filename']}: {str(e)[:60]}")
                     break
@@ -721,6 +766,29 @@ def platform_questions() -> dict:
     return out
 
 
+def watch_stalls() -> None:
+    """Say something when a step has been running an unreasonably long time."""
+    def _run():
+        warned = set()
+        while GO.get("phase") == "running":
+            now = time.time() - (GO.get("started") or now_fallback())
+            with _glock:
+                live = [(x["name"], x["t"]) for x in GO["steps"] if x["status"] == "run"]
+            for name, started_at in live:
+                if name in warned or name.startswith("Assistant"):
+                    continue          # assistants report their own progress
+                if now - started_at > 100:
+                    warned.add(name)
+                    _log(name, "run",
+                         f"still working after {int(now - started_at)}s — if this "
+                         f"does not move, the app's identity probably cannot write "
+                         f"to {pipeline.VOL_ROOT}")
+            time.sleep(10)
+    def now_fallback():
+        return time.time()
+    threading.Thread(target=_run, daemon=True).start()
+
+
 def watch_assistants() -> None:
     """Keep the log honest about assistant progress until they can answer.
 
@@ -871,6 +939,7 @@ def go(cfg: dict, stage: str = "all") -> None:
             create_assistants_early()   # endpoint provisioning is the slow
                                         # part; overlap it with everything else
             watch_assistants()          # and report its progress live
+            watch_stalls()              # and never let a step sit silent
             research_company(cfg)
             build_corpus(cfg)
             attach_assistant_sources()  # scoped folders now exist
