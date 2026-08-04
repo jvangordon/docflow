@@ -73,6 +73,10 @@ class FakeKA:
         self.made[ka.display_name] = obj
         return obj
 
+    def sync_knowledge_sources(self, parent):
+        self.synced = getattr(self, "synced", [])
+        self.synced.append(parent)
+
     def list_knowledge_sources(self, parent):
         return self.sources.get(parent, [])
 
@@ -207,8 +211,29 @@ pdfs = [p for p in fakew.files.written if p.endswith(".pdf")]
 inbox = [p for p in pdfs if "/inbox/" in p]
 scoped = [p for p in pdfs if "/ka_contracts/" in p or "/ka_claims/" in p]
 rec("24 documents reached the inbox", len(inbox) == 24, f"{len(inbox)} files")
-rec("documents were also scoped to assistant folders", len(scoped) > 0,
-    f"{len(scoped)} scoped")
+rec("nothing was pre-sorted into assistant folders at prepare", len(scoped) == 0,
+    f"{len(scoped)} pre-sorted — routing belongs to the classifier, not setup")
+
+# --- act two: the classifier's verdicts drive the copies -------------------
+inbox_files = sorted(os.path.basename(p) for p in inbox)
+contract_f, claim_f, hr_f = inbox_files[0], inbox_files[1], inbox_files[2]
+with orchestrator.pipeline._lock:
+    orchestrator.pipeline.STATE.docs = {
+        "d1": {"filename": contract_f, "lane": "ka", "doc_type": "supplier_contract"},
+        "d2": {"filename": claim_f, "lane": "ie_ka", "doc_type": "warranty_claim"},
+        "d3": {"filename": hr_f, "lane": "secure", "doc_type": "hr_record"},
+    }
+orchestrator.route_to_assistants()
+routed = {p for p in fakew.files.written if "/ka_contracts/" in p or "/ka_claims/" in p}
+rec("classifier verdicts routed documents to their assistants",
+    any(contract_f in p and "/ka_contracts/" in p for p in routed)
+    and any(claim_f in p and "/ka_claims/" in p for p in routed),
+    f"{len(routed)} routed by label")
+rec("secure-lane documents never reach an assistant folder",
+    not any(hr_f in p for p in routed), "HR file stayed out")
+rec("assistants were told their documents changed",
+    len(getattr(fakew.knowledge_assistants, "synced", [])) >= 1,
+    f"{len(getattr(fakew.knowledge_assistants, 'synced', []))} sync calls")
 rec("assistants were created", len(fakew.knowledge_assistants.made) == 2,
     f"{len(fakew.knowledge_assistants.made)} made")
 # The research world must actually reach the rendered PDFs, not just the theme.

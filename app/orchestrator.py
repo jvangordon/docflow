@@ -53,14 +53,18 @@ def _log(name: str, status: str, detail: str = "") -> None:
     one, so a completed run never leaves a stale in-progress marker behind."""
     with _glock:
         t = round(time.time() - GO["started"], 1) if GO["started"] else 0
-        if status != "run":
-            for step in reversed(GO["steps"]):
-                if step["name"] == name and step["status"] == "run":
-                    step.update({"status": status, "detail": detail[:300],
-                                 "t": t, "started_at": step["t"]})
-                    return
-        GO["steps"].append({"t": t, "name": name, "status": status,
-                            "detail": detail[:300]})
+        for step in reversed(GO["steps"]):
+            if step["name"] == name and step["status"] == "run":
+                # One live line per step. Heartbeats move it; the close settles
+                # it. Appending each heartbeat left earlier ones open forever —
+                # they rendered as failures and tripped the stall watchdog
+                # about steps that had already finished.
+                step.update({"status": status, "detail": detail[:300], "t": t,
+                             "started_at": step.get("started_at", step["t"])})
+                break
+        else:
+            GO["steps"].append({"t": t, "name": name, "status": status,
+                                "detail": detail[:300], "started_at": t})
     if status != "run":
         _persist()
 
@@ -640,21 +644,17 @@ def build_corpus(cfg: dict) -> None:
         except Exception as e:
             _log("Customer documents", "warn", str(e)[:160])
     world = (GO.get("theme") or {}).get("world")
-    folder_of = {t: spec["folder"] for spec in ASSISTANTS for t in spec["types"]}
     with tempfile.TemporaryDirectory() as td:
         man = corpus.generate_corpus(cfg["company"], td, seed=38, world=world)
-        scoped, failed = 0, []
+        failed = []
         for i, item in enumerate(man["generated"], 1):
             path = os.path.join(td, item["filename"])
-            fol = folder_of.get(item["type"])
+            # Inbox and archive copies only. The assistant folders stay empty
+            # until the classifier has spoken: routing documents to agents is
+            # the classifier's job in this demo, and pre-sorting here by the
+            # manifest would quietly do that job for it.
             targets = [f"{pipeline.VOL_ROOT}/generated/{item['filename']}",
                        f"{pipeline.VOL_ROOT}/inbox/{item['filename']}"]
-            if fol:
-                # A copy in the owning assistant's folder, so each assistant
-                # indexes only its own documents instead of the whole inbox,
-                # plus a pooled copy for tiers that allow only one assistant.
-                targets.append(f"{pipeline.VOL_ROOT}/{fol}/{item['filename']}")
-                targets.append(f"{pipeline.VOL_ROOT}/ka_all/{item['filename']}")
             for dest in targets:
                 # Re-read per upload and let each buffer go: holding every PDF
                 # in memory at once is the heaviest moment of the whole run,
@@ -668,9 +668,6 @@ def build_corpus(cfg: dict) -> None:
                 except Exception as e:
                     failed.append(f"{item['filename']}: {str(e)[:60]}")
                     break
-            else:
-                if fol:
-                    scoped += 1
             if i % 8 == 0:
                 _log("Generated documents", "run",
                      f"{i} of {len(man['generated'])} uploaded")
@@ -878,8 +875,8 @@ def attach_assistant_sources() -> None:
                      f"{spec['folder']}, not the inbox")
             elif outcome and outcome[0] == "ok":
                 _log(f"Assistant · {spec['about']}", "ok",
-                     f"indexing {spec['folder']} only · a fraction of the corpus, "
-                     f"so it is ready sooner")
+                     f"scoped to {spec['folder']} · empty until the classifier "
+                     f"routes documents to it, never the inbox")
             else:
                 _log(f"Assistant · {spec['about']}", "warn",
                      f"source not attached yet, a rerun retries · "
@@ -887,6 +884,57 @@ def attach_assistant_sources() -> None:
     except Exception as e:
         _log("Assistants", "warn", str(e)[:180])
     _section("Attach assistant sources", time.time() - t0)
+
+
+def route_to_assistants() -> None:
+    """Copy each document into its assistant's folder — by classifier verdict.
+
+    This runs in act two, after ai_classify has labeled the inbox. The label
+    decides which assistant indexes which document; nothing was pre-sorted at
+    setup time. Folders are cleared first so a re-run reflects this run's
+    verdicts, not a mix of runs. The HR file routes to secure filing, so it
+    never lands in any assistant folder.
+    """
+    t0 = time.time()
+    _log("Routed to assistants", "run", "the classifier's labels decide which "
+         "assistant indexes each document")
+    folder_of = {t: spec["folder"] for spec in ASSISTANTS for t in spec["types"]}
+    lone = len(_KA_THREAD.get("created") or {}) == 1 and len(ASSISTANTS) > 1
+    w = pipeline.wc()
+    for sub in ("ka_contracts", "ka_claims", "ka_all"):
+        try:
+            for f in w.files.list_directory_contents(f"{pipeline.VOL_ROOT}/{sub}"):
+                if not f.is_directory:
+                    w.files.delete(f"{pipeline.VOL_ROOT}/{sub}/{f.name}")
+        except Exception:
+            pass
+    sent: dict[str, int] = {}
+    with pipeline._lock:
+        docs = {k: dict(v) for k, v in pipeline.STATE.docs.items()}
+    for doc_id, d in docs.items():
+        if d.get("lane") not in ("ka", "ie_ka"):
+            continue
+        fol = "ka_all" if lone else folder_of.get(d.get("doc_type") or "")
+        fname = d.get("filename") or f"{doc_id}.pdf"
+        if not fol:
+            continue
+        try:
+            blob = w.files.download(
+                f"{pipeline.VOL_ROOT}/inbox/{fname}").contents.read()
+            w.files.upload(f"{pipeline.VOL_ROOT}/{fol}/{fname}",
+                           io.BytesIO(blob), overwrite=True)
+            sent[fol] = sent.get(fol, 0) + 1
+            pipeline._ev(doc_id, "indexed",
+                         f"classifier routed it to {fol} for Q&A")
+        except Exception as e:
+            _log("Routed to assistants", "warn",
+                 f"{fname}: {str(e)[:120]}")
+    detail = " · ".join(f"{n} to {f.replace('ka_', '')}" for f, n in sorted(sent.items()))
+    _log("Routed to assistants", "ok",
+         (detail or "no Q&A-lane documents this run") +
+         " — decided by ai_classify, not by setup")
+    sync_assistant_sources()
+    _section("Route documents to assistants", time.time() - t0)
 
 
 def sync_assistant_sources() -> None:
@@ -995,6 +1043,14 @@ def platform_questions() -> dict:
     return out
 
 
+def _close_open_steps() -> None:
+    """The run reached its goal, so anything still marked live got there too."""
+    with _glock:
+        for x in GO["steps"]:
+            if x["status"] == "run":
+                x["status"] = "ok"
+
+
 def watch_stalls() -> None:
     """Say something when a step has been running an unreasonably long time."""
     def _run():
@@ -1029,7 +1085,8 @@ def watch_assistants() -> None:
     about = {spec["display"]: spec["about"] for spec in ASSISTANTS}
 
     def _run():
-        deadline = time.time() + 1800          # 30 min ceiling, then stop asking
+        t0 = time.time()
+        deadline = t0 + 1800               # 30 min ceiling, then stop asking
         pending = set(about)
         last = {}
         while pending and time.time() < deadline:
@@ -1044,19 +1101,28 @@ def watch_assistants() -> None:
                     pending.discard(disp)
                     continue
                 if st.get("endpoint") and st.get("sources"):
-                    msg = "endpoint live · indexing its documents"
-                elif st.get("endpoint"):
-                    msg = "endpoint live · waiting for documents to attach"
+                    # In this demo the folders hold nothing until the
+                    # classifier routes documents in act two — an endpoint
+                    # with its scoped source connected IS the finished state.
+                    _log(name, "ok", "endpoint live · scoped source connected · "
+                         "indexes documents once the classifier routes them")
+                    pending.discard(disp)
+                    continue
+                if st.get("endpoint"):
+                    msg = "endpoint live · connecting its scoped source"
                 else:
                     msg = "provisioning its endpoint, this is the slow part"
+                mins = int((time.time() - t0) / 60)
+                if mins >= 1:
+                    msg += f" · {mins}m — the room can keep talking, nothing waits on this"
                 if last.get(disp) != msg:
                     _log(name, "run", msg)
                     last[disp] = msg
             time.sleep(12)
         for disp in pending:
             _log(f"Assistant · {about[disp]}", "warn",
-                 "still indexing in the background · Ask falls back to governed "
-                 "SQL until it is ready, then switches on its own")
+                 "endpoint still provisioning in the background · Ask falls back "
+                 "to governed SQL until it is ready, then switches on its own")
 
     t = threading.Thread(target=_run, daemon=True)
     t.start()
@@ -1128,8 +1194,7 @@ def run_documents() -> None:
         raise RuntimeError(snap.get("error") or "pipeline error")
     _log("Process documents", "ok",
          f"{len(snap['docs'])} documents · caught ${snap['money'].get('caught_usd', 0):,.0f}")
-    for k, v in pipeline.STATE.stage_timings():
-        pass
+    route_to_assistants()
     for st in pipeline.STATE.stage_timings():
         _section(f"stage:{st['name']}", st["seconds"])
     _section("Process the documents", time.time() - t0)
@@ -1171,14 +1236,15 @@ def go(cfg: dict, stage: str = "all") -> None:
             watch_stalls()              # and never let a step sit silent
             research_company(cfg)
             build_corpus(cfg)
-            attach_assistant_sources()  # scoped folders now exist
-            sync_assistant_sources()    # fresh corpus -> re-index on demand
+            attach_assistant_sources()  # sources point at empty scoped folders;
+                                        # the classifier fills them in act two
             seed_assistant_examples()   # questions live on the platform objects
         if stage == "prepare":
             docs = GO["assets"].get("documents", {})
             n = int(docs.get("generated", 0)) + int(docs.get("customer", 0))
             with _glock:
                 GO["phase"] = "prepared"
+            _close_open_steps()
             _log("Staged", "ok",
                  f"{n} documents waiting in the inbox · agents deployed · "
                  f"press Process documents on the Flow page and watch")
@@ -1192,6 +1258,7 @@ def go(cfg: dict, stage: str = "all") -> None:
             GO["finished_at"] = time.strftime("%H:%M", time.localtime())
             GO["assets"]["run_label"] = (
                 f"run {pipeline.STATE.run_id} at {GO['finished_at']}")
+        _close_open_steps()
         _log("Ready", "ok", "ask a question on the Ask page")
         _section("Total, go to ready", GO["finished"] - GO["started"])
     except Exception as e:

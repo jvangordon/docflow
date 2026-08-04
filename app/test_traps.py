@@ -100,9 +100,19 @@ try:
     t1.start(); t2.start(); t1.join(); t2.join()
     time.sleep(1)
     rec("second press refused", results.count(True) == 1, f"accepted={results.count(True)}")
-    # let it settle rather than leaving a half run behind
-    for _ in range(120):
+    # Let it settle rather than leaving a half run behind. Without workspace
+    # auth the SDK's retry budgets stretch this unpredictably, so the wait is
+    # progress-aware: keep waiting while step activity advances (up to 8 min),
+    # and only call it wedged after two quiet minutes.
+    sig, quiet = None, 0.0
+    for _ in range(240):
         if orchestrator.GO["phase"] in ("done", "error", "idle", "prepared"):
+            break
+        steps = orchestrator.GO["steps"]
+        now_sig = (len(steps), max((x["t"] for x in steps), default=0))
+        quiet = 0.0 if now_sig != sig else quiet + 2
+        sig = now_sig
+        if quiet >= 120:
             break
         time.sleep(2)
     rec("run reached a terminal state",

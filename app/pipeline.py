@@ -827,11 +827,8 @@ def stage_route() -> None:
     """Lane = which Agent Bricks capability handles it (IE / KA / IE+KA / secure)."""
     for doc_id, d in list(STATE.docs.items()):
         lane = lane_for(d)
-        agent_lane = lane_from_record(d)
         with _lock:
             STATE.docs[doc_id]["lane"] = lane
-            STATE.docs[doc_id]["agent_lane"] = agent_lane
-            STATE.docs[doc_id]["policy_agrees"] = (lane == agent_lane)
             STATE.docs[doc_id]["route"] = {
                 "ie": ["Information Extraction"],
                 "ka": ["Knowledge Assistant"],

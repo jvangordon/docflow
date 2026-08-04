@@ -171,8 +171,10 @@ select.ctl{appearance:none}
 .snode::before{content:"";position:absolute;left:-25.5px;top:5px;width:8px;height:8px;border-radius:50%;
   background:var(--bg);border:1.5px solid var(--faint)}
 .snode.ok::before{border-color:var(--ie);background:var(--ie)}
-.snode.run::before{border-color:var(--lava);background:var(--lava);box-shadow:0 0 10px rgba(255,59,32,.6)}
-.snode.err::before{border-color:var(--warn);background:var(--warn)}
+.snode.run::before{border-color:var(--lava);background:transparent;animation:steppulse 1.6s ease-in-out infinite}
+.snode.err::before{border-color:var(--lava);background:var(--lava);box-shadow:0 0 10px rgba(255,59,32,.6)}
+.snode.warn::before{border-color:var(--warn);background:var(--warn)}
+@keyframes steppulse{0%,100%{box-shadow:0 0 0 0 rgba(255,54,33,.5)}50%{box-shadow:0 0 0 5px rgba(255,54,33,0)}}
 .snode .st{font:600 11px var(--mono);color:var(--faint);margin-right:10px}
 .snode .det{display:block;font:500 11px var(--mono);color:var(--faint);margin-top:2px}
 .riverwrap{position:relative;width:100%;aspect-ratio:2/1;max-height:560px}
@@ -551,7 +553,7 @@ function renderGolog(){
   const g=S.golog;
   if(!g || !g.steps || !g.steps.length)
     return `<div class="snode"><span class="st">—</span>Waiting for go. The log streams here.</div>`;
-  return g.steps.map(x=>`<div class="snode ${x.status==="ok"?"ok":x.status==="err"?"err":"run"}">
+  return g.steps.map(x=>`<div class="snode ${x.status==="ok"?"ok":x.status==="err"?"err":x.status==="warn"?"warn":"run"}">
     <span class="st num">${x.t}s</span>${esc(x.name)}<span class="det">${esc(x.detail)}</span></div>`).join("")
     + (g.phase==="running"?`<div class="snode run"><span class="st"><span class="spin"></span></span>working</div>`:"");
 }
@@ -728,7 +730,6 @@ function docLabels(d){
   if(t) chips.push(`<span class="tag ie" style="font-size:9px">${esc(t)}</span>`);
   if(d.sensitivity) chips.push(`<span class="tag ${d.sensitivity==="sensitive"?"warn":"mut"}" style="font-size:9px">${esc(d.sensitivity)}</span>`);
   if(d.retention_class) chips.push(`<span class="tag sec" style="font-size:9px">${esc(d.retention_class)}</span>`);
-  if(d.policy_agrees===false) chips.push(`<span class="tag warn" style="font-size:9px">agent disagreed</span>`);
   return chips.length? `<div style="display:flex;gap:5px;flex-wrap:wrap">${chips.join("")}</div>` : "—";
 }
 function laneTag(l){

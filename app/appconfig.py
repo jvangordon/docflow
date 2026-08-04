@@ -800,7 +800,6 @@ def metrics() -> dict:
     }
 
     lanes: dict[str, int] = {k: 0 for k in LANE_NAMES}
-    disagreements = []
     conf_buckets = {"0.90-1.00": 0, "0.80-0.90": 0, "below 0.80": 0}
     confs: list[float] = []
     sens: dict[str, int] = {}
@@ -808,9 +807,6 @@ def metrics() -> dict:
         lane = d.get("lane")
         if lane in lanes:
             lanes[lane] += 1
-        if d.get("policy_agrees") is False:
-            disagreements.append({"doc_id": doc_id, "policy_lane": d.get("lane"),
-                                  "agent_lane": d.get("agent_lane")})
         c = d.get("confidence")
         if isinstance(c, (int, float)):
             confs.append(float(c))
@@ -821,7 +817,6 @@ def metrics() -> dict:
             sens[s] = sens.get(s, 0) + 1
     out["lanes"] = lanes
     out["lane_names"] = LANE_NAMES
-    out["policy_disagreements"] = disagreements
     if confs:
         confs.sort()
         out["confidence"] = {
