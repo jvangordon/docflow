@@ -623,6 +623,7 @@ def create_assistants_early() -> None:
             except Exception:
                 pass
             made = 0
+            _single_only = False
             for spec in ASSISTANTS:
                 try:
                     ka = existing.get(spec["display"])
@@ -633,6 +634,11 @@ def create_assistants_early() -> None:
                              f"'{spec['display']}' already exists here and was not "
                              f"created by this demo — leaving it untouched. Rename "
                              f"it or remove it to let the demo build its own.")
+                        continue
+                    if ka is None and made and _single_only:
+                        _log(f"Assistant · {spec['about']}", "ok",
+                             "this tier allows one assistant, so the first one "
+                             "indexes every document type instead")
                         continue
                     if ka is None and made and not _capacity_ok():
                         _log(f"Assistant · {spec['about']}", "warn",
@@ -660,7 +666,13 @@ def create_assistants_early() -> None:
                         "about": spec["about"]}
                     made += 1
                 except Exception as e:
-                    _log(f"Assistant · {spec['about']}", "warn", _ka_hint(e))
+                    if "limit of 1" in str(e).lower() or "reached your limit" in str(e).lower():
+                        _single_only = True
+                        _log(f"Assistant · {spec['about']}", "ok",
+                             "this tier allows one assistant, so the first one "
+                             "indexes every document type instead")
+                    else:
+                        _log(f"Assistant · {spec['about']}", "warn", _ka_hint(e))
         except Exception as e:
             _log("Assistants", "warn", _ka_hint(e))
     th = threading.Thread(target=_run, daemon=True)
@@ -681,7 +693,11 @@ def attach_assistant_sources() -> None:
             ka = _KA_THREAD["created"].get(spec["display"])
             if ka is None:
                 continue
-            folder = f"{pipeline.VOL_ROOT}/{spec['folder']}"
+            # When the tier allowed only one assistant, that one indexes the
+            # whole inbox so contract AND claim questions still get answers.
+            lone = len(_KA_THREAD["created"]) == 1 and len(ASSISTANTS) > 1
+            folder = (f"{pipeline.VOL_ROOT}/inbox" if lone
+                      else f"{pipeline.VOL_ROOT}/{spec['folder']}")
             have = False
             try:
                 for src in w.knowledge_assistants.list_knowledge_sources(ka.name):
@@ -1092,6 +1108,7 @@ def _attach_source_async() -> None:
             for x in w.knowledge_assistants.list_knowledge_assistants():
                 by_display[x.display_name or ""] = x
             made = 0
+            _single_only = False
             for spec in ASSISTANTS:
                 ka = by_display.get(spec["display"])
                 if ka is None:

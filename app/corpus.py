@@ -288,7 +288,7 @@ def _invoice(inv_id, company, vendor, inv_date, items, contact, phone, planted):
     subtotal = sum(q * p for _, q, p in items)
     tax = (subtotal * 825 + 5000) // 10000  # 8.25 percent, half-up, exact cents
     total, due = subtotal + tax, inv_date + timedelta(days=30)
-    story = _form("INVOICE", f"{_esc(vendor)} - {_esc(VENDORS[vendor])}",
+    story = _form("INVOICE", f"{_esc(vendor)} - {_esc(VENDORS.get(vendor, '1 Industrial Way, Demoville'))}",
                   [("Invoice number", inv_id), ("Invoice date", inv_date.isoformat()),
                    ("Payment due", due.isoformat()), ("Terms", "Net 30"),
                    ("Bill to", f"{company}, Receiving Dept, {FICTIONAL_SITE}"),
@@ -305,7 +305,7 @@ def _build_invoices(company, rng):
     planted_items = [("Servo actuator assembly, serial SN-44781", 1, 198000),
                      ("Actuator mounting bracket kit", 2, 4550),
                      ("On-site commissioning service, 1 day", 1, 35000)]
-    docs = [_invoice("INV-88213", company, "Miller Tooling LLC", date(2023, 11, 2),
+    docs = [_invoice("INV-88213", company, CONTRACT["supplier"], date(2023, 11, 2),
                      planted_items, rng.choice(PEOPLE), _phone(rng), True)]
     for i in range(4):
         vendor = rng.choice(VENDOR_NAMES)
@@ -325,7 +325,7 @@ def _build_pos(company, rng):
         story = _form("PURCHASE ORDER", f"{_esc(company)} - Procurement",
                       [("PO number", po_id), ("Order date", od.isoformat()),
                        ("Need-by date", need.isoformat()),
-                       ("Vendor", f"{vendor}, {VENDORS[vendor]}"),
+                       ("Vendor", f"{vendor}, {VENDORS.get(vendor, '1 Industrial Way, Demoville')}"),
                        ("Ship to", f"{company}, {FICTIONAL_SITE}"),
                        ("Buyer", f"{buyer} - {_email(buyer)} - {_phone(rng)}")],
                       Spacer(0, 14), _items_grid(items), Spacer(0, 8),
