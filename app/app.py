@@ -310,10 +310,13 @@ def api_scan():
     except Exception:
         pass
     try:
-        out["models"] = pipeline.models_available()
+        disc = pipeline.discover_models()
+        out["models"] = disc["models"]
+        out["model_errors"] = disc["errors"]
+        out["model_sources"] = disc["sources"]
         out["model_resolved"] = pipeline._MODEL["name"]
-    except Exception:
-        pass
+    except Exception as e:
+        out["model_errors"] = [str(e)[:120]]
     return out
 
 

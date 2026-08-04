@@ -436,8 +436,13 @@ function renderStart(){
                   x===scan.model_resolved?" · answers":x===cur&&!m.includes(cur)?" · configured, not seen here":""}</option>`).join("");
               })(scan.models||[])}
             </select>
-            <div class="hint">Every model found in this workspace — serving endpoints and AI
-              Gateway. If the pick stops answering, go finds one that does and says so in the log.</div>
+            <div class="hint">${(scan.models||[]).length
+              ? `${(scan.models||[]).length} model${(scan.models||[]).length>1?"s":""} found in this
+                 workspace${scan.model_sources&&scan.model_sources.ai_gateway
+                   ? ` · ${scan.model_sources.ai_gateway} from AI Gateway`:""}. Names are read from
+                 the workspace, so they match what the Playground shows.`
+              : `No models discovered${(scan.model_errors||[]).length
+                   ? ` — ${esc((scan.model_errors||[])[0])}`:""}. Go still probes for one that answers.`}</div>
           </div>
         </details>
       </div>

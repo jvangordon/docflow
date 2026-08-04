@@ -221,44 +221,65 @@ def model_candidates() -> list[str]:
         return len(_FAMILIES)
     for n in sorted(uc, key=rank):
         push(n)
-    for fam in _FAMILIES:                    # blind spellings, last resort
-        push(f"databricks-{fam}")
-        push(f"system.ai.{fam}")
-        push(fam)
+    # Blind spellings are a last resort only. When discovery worked, every real
+    # name is already above and guessing further just produces names that do not
+    # exist — which reads to a user as a model refusing to answer.
+    if len(out) <= 2:
+        for fam in _FAMILIES:
+            push(f"databricks-{fam}")
+            push(f"system.ai.{fam}")
+            push(fam)
     return out
 
 
-def models_available() -> list[str]:
-    """Model names actually discovered in this workspace, quality-ranked.
-    Feeds the Start page picker, so no blind spellings belong here."""
-    out: list[str] = []
+def discover_models() -> dict:
+    """Exactly what this workspace serves, with the reason for any gap.
 
-    def push(n):
+    The picker must offer real names, never guesses: a guessed name that does
+    not exist reads to the user as a model that refused to answer. Failures are
+    reported rather than swallowed, so an empty list is explained instead of
+    silently becoming a fallback.
+    """
+    out: list[str] = []
+    errs: list[str] = []
+    sources: dict[str, int] = {"serving_endpoints": 0, "ai_gateway": 0}
+
+    def push(n, src):
         if n and n not in out:
             out.append(n)
+            sources[src] = sources.get(src, 0) + 1
 
-    try:
+    skip = ("embed", "gte-", "gte_", "bge", "image", "rerank")
+    try:                                    # classic pay-per-token endpoints
         for e in wc().serving_endpoints.list():
             n = e.name or ""
-            if n.startswith("databricks-") and not any(
-                    k in n for k in ("embed", "gte-", "bge-", "image")):
-                push(n)
-    except Exception:
-        pass
-    try:
+            if n.startswith("databricks-") and not any(k in n.lower() for k in skip):
+                push(n, "serving_endpoints")
+    except Exception as e:
+        errs.append(f"serving endpoints: {str(e)[:90]}")
+    try:                                    # AI Gateway, where Free Edition lives
         for cat, sch in (("system", "ai"), ("workspace", "default")):
-            for m in wc().registered_models.list(catalog_name=cat, schema_name=sch):
-                if m.name and not any(k in m.name for k in ("embed", "gte", "bge")):
-                    push(f"{cat}.{sch}.{m.name}")
-    except Exception:
-        pass
+            try:
+                for m in wc().registered_models.list(catalog_name=cat, schema_name=sch):
+                    if m.name and not any(k in m.name.lower() for k in skip):
+                        push(f"{cat}.{sch}.{m.name}", "ai_gateway")
+            except Exception as e:
+                errs.append(f"{cat}.{sch}: {str(e)[:80]}")
+    except Exception as e:
+        errs.append(f"ai gateway: {str(e)[:90]}")
 
     def rank(n):
         for i, fam in enumerate(_FAMILIES):
             if fam in n:
                 return i
         return len(_FAMILIES)
-    return sorted(out, key=lambda n: (rank(n), n))[:30]
+    return {"models": sorted(out, key=lambda n: (rank(n), n))[:40],
+            "errors": errs, "sources": sources}
+
+
+def models_available() -> list[str]:
+    """Just the names, for callers that do not care why the list is short."""
+    return discover_models()["models"]
 
 
 def chat_model() -> str:
