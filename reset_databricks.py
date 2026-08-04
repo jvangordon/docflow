@@ -211,21 +211,6 @@ except Exception as e:
     print(f"cannot list genie spaces: {str(e)[:120]}")
 
 # the app, by exact name only
-WATCHER_JOB = "DocFlow · process new documents"
-watcher_ids = []
-try:
-    for j in w.jobs.list(name=WATCHER_JOB):
-        full = w.jobs.get(j.job_id)
-        tags = (full.settings.tags or {}) if full.settings else {}
-        if "docflow-demo-app" in tags:
-            watcher_ids.append(j.job_id)
-            plan_delete.append(f"job {WATCHER_JOB} ({j.job_id})")
-        else:
-            print(f"job '{WATCHER_JOB}' exists without the DocFlow tag — left alone.")
-            blocked.append(f"job {WATCHER_JOB} (not tagged as this demo's)")
-except Exception as e:
-    print(f"cannot list jobs: {str(e)[:100]}")
-
 app_is_ours = False
 try:
     for a in w.apps.list():
@@ -326,14 +311,6 @@ else:
                 print(f"schema {CATALOG}.{SCHEMA}: dropped (it was empty)")
             except Exception as e:
                 print(f"schema kept: {str(e)[:120]}")
-
-    # 3d2. the watcher job, by tag proof
-    for jid in watcher_ids:
-        try:
-            w.jobs.delete(jid)
-            print(f"deleted job {WATCHER_JOB} ({jid})")
-        except Exception as e:
-            print(f"job {jid}: {str(e)[:90]}")
 
     # 3e. the app last — its identity owns the assistants above
     try:
