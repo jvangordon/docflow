@@ -1545,6 +1545,8 @@ def go(cfg: dict, stage: str = "all") -> None:
 
 
 def start(cfg: dict, stage: str = "all") -> bool:
+    _restore()      # a fresh process may not have served a page yet; without
+                    # this, 'process' right after a restart sees idle and balks
     with _glock:
         if GO["phase"] == "running":
             return False
