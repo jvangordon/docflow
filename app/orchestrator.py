@@ -120,24 +120,18 @@ def _restore() -> None:
     # recorded asset still exists before trusting the file; the checks are
     # Files/REST calls only, so a cold warehouse cannot stall app startup.
     if prev.get("phase") in ("prepared", "done"):
-        alive = False
+        # Discard the record ONLY on a positive finding that its world is gone
+        # (inbox listed successfully and held nothing). An API hiccup during
+        # boot is inconclusive — one deleted the record live and left the app
+        # amnesiac, so inconclusive now restores as before.
+        verdict = "unknown"
         try:
-            pipeline.wc().files.get_directory_metadata(
-                f"{pipeline.VOL_ROOT}/inbox")
             names = [f.name for f in pipeline.wc().files.list_directory_contents(
                 f"{pipeline.VOL_ROOT}/inbox") if not f.is_directory]
-            alive = bool(names)
+            verdict = "alive" if names else "gone"
         except Exception:
-            alive = False
-        if alive and prev.get("phase") == "done":
-            gid = (prev.get("assets") or {}).get("genie_space_id")
-            if gid:
-                try:
-                    alive = any(sp.space_id == gid
-                                for sp in (pipeline.wc().genie.list_spaces().spaces or []))
-                except Exception:
-                    pass                      # listing failing must not wipe a run
-        if not alive:
+            verdict = "unknown"
+        if verdict == "gone":
             try:
                 pipeline.wc().files.delete(_state_path())
             except Exception:
