@@ -49,7 +49,8 @@ GO = {
 _glock = threading.Lock()
 
 
-def _log(name: str, status: str, detail: str = "") -> None:
+def _log(name: str, status: str, detail: str = "", done: int | None = None,
+         total: int | None = None) -> None:
     """A step that finishes updates its own line rather than adding a second
     one, so a completed run never leaves a stale in-progress marker behind."""
     with _glock:
@@ -62,10 +63,17 @@ def _log(name: str, status: str, detail: str = "") -> None:
                 # about steps that had already finished.
                 step.update({"status": status, "detail": detail[:300], "t": t,
                              "started_at": step.get("started_at", step["t"])})
+                if total:
+                    step["done"], step["total"] = int(done or 0), int(total)
+                elif status != "run":
+                    step.pop("done", None); step.pop("total", None)
                 break
         else:
-            GO["steps"].append({"t": t, "name": name, "status": status,
-                                "detail": detail[:300], "started_at": t})
+            rec = {"t": t, "name": name, "status": status,
+                   "detail": detail[:300], "started_at": t}
+            if total:
+                rec["done"], rec["total"] = int(done or 0), int(total)
+            GO["steps"].append(rec)
     if status != "run":
         _persist()
 
@@ -724,9 +732,10 @@ def build_corpus(cfg: dict) -> None:
                 except Exception as e:
                     failed.append(f"{item['filename']}: {str(e)[:60]}")
                     break
-            if i % 8 == 0:
+            if i % 4 == 0:
                 _log("Generated documents", "run",
-                     f"{i} of {len(man['generated'])} uploaded")
+                     f"{i} of {len(man['generated'])} uploaded",
+                     done=i, total=len(man["generated"]))
         if failed:
             raise RuntimeError(
                 f"{len(failed)} of {len(man['generated'])} documents could not be "
@@ -967,9 +976,15 @@ def route_to_assistants() -> None:
     sent: dict[str, int] = {}
     with pipeline._lock:
         docs = {k: dict(v) for k, v in pipeline.STATE.docs.items()}
+    ka_docs = [x for x in docs.items() if x[1].get("lane") in ("ka", "ie_ka")]
+    moved = 0
     for doc_id, d in docs.items():
         if d.get("lane") not in ("ka", "ie_ka"):
             continue
+        moved += 1
+        _log("Routed to assistants", "run",
+             f"{d.get('filename') or doc_id} → its assistant's folder",
+             done=moved, total=len(ka_docs))
         fol = "ka_all" if lone else folder_of.get(d.get("doc_type") or "")
         fname = d.get("filename") or f"{doc_id}.pdf"
         if not fol:
@@ -1058,7 +1073,8 @@ def seed_assistant_examples() -> None:
             n = 0
             for q in split.get(spec["display"], [])[:3]:
                 _log("Assistant examples", "run",
-                     f"writing onto {spec['about']}: \u201c{q[:70]}\u201d")
+                     f"writing onto {spec['about']}: \u201c{q[:70]}\u201d",
+                     done=seeded, total=min(len(qs), 6))
                 try:
                     w.knowledge_assistants.create_example(
                         ka.name, K.Example(question=q))
@@ -1181,9 +1197,11 @@ def watch_assistants() -> None:
                 mins = int((time.time() - t0) / 60)
                 if mins >= 1:
                     msg += f" · {mins}m — the room can keep talking, nothing waits on this"
-                if last.get(disp) != msg:
-                    _log(name, "run", msg)
-                    last[disp] = msg
+                # Log every poll, changed or not: the line's timestamp is the
+                # proof the app really checked, and the page shows it as
+                # "checked Ns ago" rather than implying progress it cannot know.
+                _log(name, "run", msg)
+                last[disp] = msg
             time.sleep(12)
         for disp in pending:
             _log(f"Assistant · {about[disp]}", "warn",

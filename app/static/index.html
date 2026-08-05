@@ -178,10 +178,9 @@ select.ctl{appearance:none}
 .nowstrip{border:1px solid var(--hair);border-left:3px solid var(--nc,var(--sec));
   border-radius:10px;background:var(--bg2);padding:10px 14px;margin:0 0 16px -25.5px}
 .nowstrip b{display:block;font:700 10.5px var(--mono);letter-spacing:.14em;color:var(--nc,var(--sec))}
-.nowstrip .nbar{display:block;height:2px;border-radius:2px;margin-top:9px;
-  background:linear-gradient(90deg,transparent 0%,var(--nc,var(--sec)) 45%,transparent 90%);
-  background-size:220% 100%;animation:nbar 1.5s linear infinite}
-@keyframes nbar{0%{background-position:120% 0}100%{background-position:-120% 0}}
+.nowstrip .nbar{display:block;height:3px;border-radius:2px;margin-top:9px;background:var(--hair)}
+.nowstrip .nbar b{display:block;height:100%;border-radius:2px;background:var(--nc,var(--sec));
+  transition:width .6s ease}
 .nowstrip span{display:block;font:500 11px var(--mono);color:var(--dim);margin-top:3px}
 .snode{position:relative;padding:0 0 14px;font-size:13px;color:var(--ink2)}
 .snode::before{content:"";position:absolute;left:-25.5px;top:5px;width:8px;height:8px;border-radius:50%;
@@ -618,9 +617,12 @@ function renderGolog(){
   const nowRel=g.started?Math.max(0,Date.now()/1000-g.started):0;
   const elap=x=>{const e=Math.round(nowRel-(x.started_at!=null?x.started_at:x.t));
     return e>2?` · ${e>=120?Math.floor(e/60)+"m"+String(e%60).padStart(2,"0")+"s":e+"s"}`:"";};
+  const ago=x=>{const a=Math.round(nowRel-x.t); return a>=5?` · checked ${a}s ago`:" · just checked";};
   const strip = g.phase==="running"
     ? {c:"var(--sec)", t:act?`NOW · ${act.name}${elap(act)}`:"NOW · between steps",
-       d:act?act.detail:"the next step reports in a moment", bar:true}
+       d:act?act.detail+(act.total?"":ago(act)):"the next step reports in a moment",
+       pct:act&&act.total?Math.round(100*(act.done||0)/act.total):null,
+       frac:act&&act.total?`${act.done||0} of ${act.total}`:""}
     : g.phase==="prepared"
     ? {c:"var(--ie)", t:"STAGED · waiting for your cue",
        d:"press Process documents on the Flow page and the lanes come alive"}
@@ -630,9 +632,10 @@ function renderGolog(){
     ? {c:"var(--lava)", t:`STOPPED · ${g.failed_step||"see below"}`, d:(g.error||"").slice(0,120)}
     : null;
   return (strip?`<div class="nowstrip" style="--nc:${strip.c}">
-      <b>${esc(strip.t)}</b><span>${esc(strip.d||"")}</span>${strip.bar?`<i class="nbar"></i>`:""}</div>`:"")
+      <b>${esc(strip.t)}${strip.frac?` · ${strip.frac}`:""}</b><span>${esc(strip.d||"")}</span>
+      ${strip.pct!=null?`<i class="nbar"><b style="width:${strip.pct}%"></b></i>`:""}</div>`:"")
     + g.steps.map(x=>`<div class="snode ${x.status==="ok"?"ok":x.status==="err"?"err":x.status==="warn"?"warn":"run"}">
-    <span class="st num">${x.t}s</span>${esc(x.name)}${x.status==="run"&&g.phase==="running"?`<b style="color:var(--sec);font-weight:600">${elap(x)}</b>`:""}<span class="det">${esc(x.detail)}</span></div>`).join("")
+    <span class="st num">${x.t}s</span>${esc(x.name)}${x.status==="run"&&g.phase==="running"?`<b style="color:var(--sec);font-weight:600">${elap(x)}${x.total?` · ${x.done||0} of ${x.total}`:ago(x)}</b>`:""}<span class="det">${esc(x.detail)}</span></div>`).join("")
     + (g.phase==="running" && !g.steps.some(x=>x.status==="run")
        ? `<div class="snode run"><span class="st"><span class="spin"></span></span>${esc(g.steps[g.steps.length-1].name)} finished · next step reporting</div>`
        : "");
