@@ -22,9 +22,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import corpus  # noqa: E402
 
 ROOT = "/tmp/docflow-corpus-test"
-EXPECTED_COUNTS = {"supplier_invoice": 5, "purchase_order": 2, "warranty_claim": 5,
+EXPECTED_COUNTS = {"supplier_invoice": 4, "purchase_order": 2, "warranty_claim": 5,
                    "quality_inspection": 4, "safety_incident": 2, "hr_document": 1,
-                   "shipping_manifest": 2, "marketing": 1, "supplier_contract": 2}
+                   "shipping_manifest": 1, "marketing": 1, "supplier_contract": 4}
 PREFIX = {"supplier_invoice": "INV-", "purchase_order": "PO-", "warranty_claim": "WC-",
           "quality_inspection": "QIR-", "safety_incident": "SI-", "hr_document": "HR-",
           "shipping_manifest": "SM-", "marketing": "MKT-", "supplier_contract": "CT-"}

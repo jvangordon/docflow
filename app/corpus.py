@@ -63,15 +63,15 @@ _DEFAULT_PARTS = list(PARTS)
 
 # type -> corpus shape (count, doc-id prefix, printed title)
 TAXONOMY = {
-    "supplier_invoice":   {"count": 5, "prefix": "INV", "title": "Supplier Invoice"},
+    "supplier_invoice":   {"count": 4, "prefix": "INV", "title": "Supplier Invoice"},
     "purchase_order":     {"count": 2, "prefix": "PO",  "title": "Purchase Order"},
     "warranty_claim":     {"count": 5, "prefix": "WC",  "title": "Warranty Claim"},
     "quality_inspection": {"count": 4, "prefix": "QIR", "title": "Quality Inspection Report"},
     "safety_incident":    {"count": 2, "prefix": "SI",  "title": "Safety Incident Report"},
     "hr_document":        {"count": 1, "prefix": "HR",  "title": "HR Document"},
-    "shipping_manifest":  {"count": 2, "prefix": "SM",  "title": "Shipping Manifest"},
+    "shipping_manifest":  {"count": 1, "prefix": "SM",  "title": "Shipping Manifest"},
     "marketing":          {"count": 1, "prefix": "MKT", "title": "Marketing Mail"},
-    "supplier_contract":  {"count": 2, "prefix": "CT",  "title": "Supplier Agreement"},
+    "supplier_contract":  {"count": 4, "prefix": "CT",  "title": "Supplier Agreement"},
 }
 _DEFAULT_TITLES = {t: m["title"] for t, m in TAXONOMY.items()}
 
@@ -459,8 +459,8 @@ def _build_invoices(company, rng):
         if GEN.get("invoices") else "INV-88213"
     docs = [_invoice(inv_id, company, CONTRACT["supplier"], anchor[2],
                      planted_items, rng.choice(PEOPLE), _phone(rng), True)]
-    extra = (GEN.get("invoices") or [])[1:5]
-    for i in range(4):
+    extra = (GEN.get("invoices") or [])[1:4]
+    for i in range(3):
         spec_i = extra[i] if i < len(extra) else {}
         vendor = str(spec_i.get("vendor") or rng.choice(VENDOR_NAMES))[:60]
         inv_date = date(2026, 4, 6) + timedelta(days=rng.randrange(70))
@@ -589,8 +589,7 @@ def _build_hr(company, rng):
 
 def _build_manifests(company, rng):
     docs = []
-    for i, (mid, ship) in enumerate([("SM-0451", date(2026, 5, 14)),
-                                     ("SM-0452", date(2026, 6, 5))]):
+    for i, (mid, ship) in enumerate([("SM-0451", date(2026, 5, 14))]):
         carrier, dest = rng.choice(CARRIERS), DESTINATIONS[i]
         rows, gt_rows, tc, tw = [], [], 0, 0
         for j, (desc, _) in enumerate(rng.sample(PARTS, rng.randint(3, 4))):
@@ -708,7 +707,49 @@ def _build_contracts(company, rng):
                      "of liability.", S_BODY)]
     gt_pol = {"contract_id": "CT-7702", "policy": "Warranty Terms and Service Policy",
               "claim_filing_deadline_days": K["filing_days"]}
-    return [("CT-7701", msa, gt_msa, False), ("CT-7702", pol, gt_pol, False)]
+    # Two more contracts so the assistant's folder never rides on a single
+    # classification: an SLA addendum and a liability rider, both written from
+    # the same world narratives the assistant cites.
+    v2 = VENDOR_NAMES[1 % len(VENDOR_NAMES)]
+    sla = [Paragraph("SERVICE LEVEL ADDENDUM", S_TITLE),
+           Paragraph(f"CT-7703 - addendum to the master agreement between {c} (Buyer) "
+                     f"and {_esc(v2)} (Supplier) - effective March 2025", S_SUB),
+           Spacer(0, 8),
+           Paragraph("1. Service levels", S_H2),
+           Paragraph(_esc(_narr("contract_service_levels")), S_BODY),
+           Spacer(0, 6),
+           Paragraph("2. Remedies", S_H2),
+           Paragraph(f"Failure to meet a committed service level for two consecutive "
+                     f"months entitles Buyer to the remedies of the master agreement, "
+                     f"including the late-delivery credit of {K['penalty_pct']}% per full "
+                     f"week, capped at {K['cap_pct']}% of the affected order.", S_BODY),
+           Spacer(0, 6),
+           Paragraph("3. Reporting", S_H2),
+           Paragraph("Supplier delivers a monthly service report covering fill rate, "
+                     "on-time delivery and open corrective actions. Reports are due the "
+                     "fifth business day and are reviewed at the quarterly business "
+                     "review. This is fictional demonstration material.", S_BODY)]
+    gt_sla = {"contract_id": "CT-7703", "supplier": v2,
+              "late_delivery_penalty": f"{K['penalty_pct']}% per full week"}
+    rider = [Paragraph("LIABILITY AND INDEMNITY RIDER", S_TITLE),
+             Paragraph(f"CT-7704 - rider to the master agreement - {c} - "
+                       f"revision A, April 2025", S_SUB),
+             Spacer(0, 8),
+             Paragraph("1. Allocation of liability", S_H2),
+             Paragraph(_esc(_narr("contract_liability")), S_BODY),
+             Spacer(0, 6),
+             Paragraph("2. Warranty interaction", S_H2),
+             Paragraph(f"Nothing in this rider extends the component warranty of "
+                       f"{K['warranty_months']} months or the claim filing deadline of "
+                       f"{K['filing_days']} days; remedies for covered failures remain "
+                       f"repair, replacement or credit at Supplier's election.", S_BODY),
+             Spacer(0, 6),
+             Paragraph("3. Survival", S_H2),
+             Paragraph("Obligations under this rider survive termination for two years. "
+                       "This is fictional demonstration material and binds nobody.", S_BODY)]
+    gt_rider = {"contract_id": "CT-7704", "policy": "Liability and Indemnity Rider"}
+    return [("CT-7701", msa, gt_msa, False), ("CT-7702", pol, gt_pol, False),
+            ("CT-7703", sla, gt_sla, False), ("CT-7704", rider, gt_rider, False)]
 
 def apply_world(world: dict | None) -> dict:
     """Reskin the corpus content from the research call's world spec.
