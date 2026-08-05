@@ -886,12 +886,44 @@ def create_assistants_early() -> None:
     _KA_THREAD["thread"] = th
 
 
+def _rediscover_assistants() -> dict:
+    """Refill the in-memory assistant handles after an app restart.
+
+    _KA_THREAD lives in the process; a restarted app found it empty and then
+    silently skipped every attach and sync in act two. Rediscovery uses the
+    same proof as adoption: the fingerprint, or sources inside our volume.
+    """
+    if _KA_THREAD["created"]:
+        return _KA_THREAD["created"]
+    try:
+        w = _w()
+        by_display = {spec["display"]: spec for spec in ASSISTANTS}
+        for ka in w.knowledge_assistants.list_knowledge_assistants():
+            disp = ka.display_name or ""
+            if disp not in by_display:
+                continue
+            ours = pipeline.FINGERPRINT in (ka.description or "")
+            if not ours:
+                try:
+                    ours = any(str(getattr(getattr(x, "files", None), "path", ""))
+                               .startswith(pipeline.VOL_ROOT)
+                               for x in w.knowledge_assistants.list_knowledge_sources(ka.name))
+                except Exception:
+                    ours = False
+            if ours:
+                _KA_THREAD["created"][disp] = ka
+    except Exception:
+        pass
+    return _KA_THREAD["created"]
+
+
 def attach_assistant_sources() -> None:
     """Point each assistant at its own folder — never the whole inbox."""
     t0 = time.time()
     th = _KA_THREAD.get("thread")
     if th:
         th.join(90)
+    _rediscover_assistants()
     try:
         from databricks.sdk.service import knowledgeassistants as K
         w = _w()
@@ -1030,6 +1062,7 @@ def sync_assistant_sources() -> None:
     POST {assistant}/knowledge-sources:sync, and the index catches up without
     deleting or re-attaching anything.
     """
+    _rediscover_assistants()
     try:
         w = _w()
         for spec in ASSISTANTS:
