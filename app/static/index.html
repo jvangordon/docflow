@@ -1435,7 +1435,8 @@ async function loadPlaybook(){
       tables; the third reads the documents through a Knowledge Assistant. Paste the combined block
       as ONE submittal and watch it fan out.</p>
     ${(d.questions&&d.questions.genie||[]).map(q=>chip("Genie", q)).join("")}
-    ${(d.questions&&d.questions.assistant||[]).map(q=>chip("Assistant", q)).join("")}
+    ${(d.questions&&d.questions.contracts||[]).map(q=>chip("KA · contracts", q)).join("")}
+    ${(d.questions&&d.questions.claims||[]).map(q=>chip("KA · claims", q)).join("")}
     ${d.questions&&d.questions.combined?`
     <div class="pbrow"><span class="pbl">One submittal</span>
       <pre class="code mono" style="flex:1;white-space:pre-wrap">${esc(d.questions.combined)}</pre>

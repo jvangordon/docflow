@@ -82,29 +82,40 @@ ORDER BY claim_amount DESC"""},
 
 
 def questions() -> dict:
-    """Two Genie questions and one assistant question, plus a single block
-    that asks all of them in one submittal — for Genie, the app's Ask page,
-    or Databricks One. Platform-owned questions lead; fallbacks are the
-    corpus's own planted story, so the numbers always resolve."""
+    """Two Genie questions and two per assistant, plus one combined submittal.
+
+    Platform-owned questions lead where present; fallbacks are the corpus's
+    own planted story, so every answer resolves."""
     genie = ["How many warranty claims are outside their coverage window, "
              "and what is the total amount?",
              "Which vendor billed the most across the supplier invoices?"]
-    ka = ["What does the supplier contract say about the penalty for late "
-          "delivery, and who signs off on a warranty claim?"]
+    contracts = ["What does the supplier contract say about the penalty for "
+                 "late delivery, and who signs off on a warranty claim?",
+                 "What must be included when filing a warranty claim, and what "
+                 "is the filing deadline?"]
+    claims = ["What did the inspector find on the failed unit, and what "
+              "failure mode is described?",
+              "What does the largest claim say happened, and what was the "
+              "operational impact?"]
     try:
         import orchestrator
-        # The examples API hung a run for 13 minutes on one workspace — a page
-        # load must never wait on it. Six seconds, then the fallbacks.
         pq = orchestrator._call(orchestrator.platform_questions, 6,
                                 "reading the platform's questions")
         if pq.get("genie"):
             genie = [q for q in pq["genie"] if q][:2] or genie
-        if pq.get("assistant"):
-            ka = [q for q in pq["assistant"] if q][:1] or ka
+        plat = [q for q in (pq.get("assistant") or []) if q]
+        if plat:
+            kw = ("contract", "agreement", "clause", "penalt", "policy",
+                  "terms", "deadline", "notice", "filing")
+            pc = [q for q in plat if any(k in q.lower() for k in kw)]
+            pl = [q for q in plat if q not in pc]
+            contracts = (pc + contracts)[:2]
+            claims = (pl + claims)[:2]
     except Exception:
         pass
-    combined = " ".join(genie + ka)
-    return {"genie": genie, "assistant": ka, "combined": combined}
+    combined = " ".join(genie + [contracts[0], claims[0]])
+    return {"genie": genie, "contracts": contracts, "claims": claims,
+            "combined": combined}
 
 
 def payload() -> dict:
