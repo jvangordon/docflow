@@ -171,10 +171,10 @@ select.ctl{appearance:none}
 .snode::before{content:"";position:absolute;left:-25.5px;top:5px;width:8px;height:8px;border-radius:50%;
   background:var(--bg);border:1.5px solid var(--faint)}
 .snode.ok::before{border-color:var(--ie);background:var(--ie)}
-.snode.run::before{border-color:var(--lava);background:transparent;animation:steppulse 1.6s ease-in-out infinite}
+.snode.run::before{border-color:var(--sec);background:transparent;animation:steppulse 1.6s ease-in-out infinite}
 .snode.err::before{border-color:var(--lava);background:var(--lava);box-shadow:0 0 10px rgba(255,59,32,.6)}
 .snode.warn::before{border-color:var(--warn);background:var(--warn)}
-@keyframes steppulse{0%,100%{box-shadow:0 0 0 0 rgba(255,54,33,.5)}50%{box-shadow:0 0 0 5px rgba(255,54,33,0)}}
+@keyframes steppulse{0%,100%{box-shadow:0 0 0 0 rgba(92,168,232,.5)}50%{box-shadow:0 0 0 5px rgba(92,168,232,0)}}
 .snode .st{font:600 11px var(--mono);color:var(--faint);margin-right:10px}
 .snode .det{display:block;font:500 11px var(--mono);color:var(--faint);margin-top:2px}
 .riverwrap{position:relative;width:100%}
@@ -213,8 +213,8 @@ select.ctl{appearance:none}
 .fchip.csec{border-color:rgba(92,168,232,.4)} .fchip.csec .ct{color:var(--sec)}
 .fchip.cmut .ct{color:var(--faint)}
 .fthen{font:600 8px var(--mono);letter-spacing:.12em;color:var(--faint)}
-.flane .fnow{display:none;position:absolute;right:12px;bottom:9px;font:600 8.5px var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--lava2)}
-.flane.working{border-color:rgba(255,122,69,.55);box-shadow:0 0 0 1px rgba(255,122,69,.22)}
+.flane .fnow{display:none;position:absolute;right:12px;bottom:9px;font:600 8.5px var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--sec)}
+.flane.working{border-color:rgba(92,168,232,.6);box-shadow:0 0 0 1px rgba(92,168,232,.25)}
 .flane.working .fnow{display:block}
 .ffcard{border:1px dashed var(--hair2);border-radius:12px;padding:10px 12px;align-self:stretch;display:flex;flex-direction:column;justify-content:center}
 .ffcard .fpath{margin-bottom:3px}
@@ -318,7 +318,7 @@ select.ctl{appearance:none}
 .prompter .px:hover{color:var(--ink)}
 body[data-prompter="1"] main{padding-bottom:150px}
 .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--hair2);
-  border-top-color:var(--lava);border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px}
+  border-top-color:var(--sec);border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important}}
 </style>
 </head>
