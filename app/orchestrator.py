@@ -1245,9 +1245,13 @@ def report_ka() -> None:
                 _log(f"Assistant · {spec['about']}", "ok",
                      f"ready · {st.get('endpoint', '')} answers with citations")
             elif st.get("endpoint"):
+                ing = st.get("ingestion") or {}
+                prog = (f"{ing.get('success', 0)} of {ing.get('total', 0)} documents "
+                        f"indexed" + (f" · {ing['failed']} FAILED" if ing.get("failed") else "")
+                        ) if ing.get("total") else "still indexing its own folder"
                 _log(f"Assistant · {spec['about']}", "ok",
-                     f"still indexing its own folder · Ask answers from the "
-                     f"extracted tables until it is ready, then switches on its own")
+                     f"{prog} · Ask answers from the extracted tables until it "
+                     f"is ready, then switches on its own")
         except Exception:
             pass
 
@@ -1517,6 +1521,21 @@ def ka_state(display: str | None = None) -> dict:
                     srcs = list(w.knowledge_assistants.list_knowledge_sources(x.name))
                     out["sources"] = [str(sc.state).split(".")[-1] if sc.state else ""
                                       for sc in srcs]
+                    # Real per-file progress, the same numbers the UI shows:
+                    # total/success/failed from the ingestion service itself.
+                    ing = {"total": 0, "success": 0, "failed": 0, "skipped": 0}
+                    for sc in srcs:
+                        det = (sc.as_dict() or {}).get("ingestion_details") or {}
+                        for k_src, k_dst in (("total_file_count", "total"),
+                                             ("success_file_count", "success"),
+                                             ("failed_file_count", "failed"),
+                                             ("skipped_file_count", "skipped")):
+                            try:
+                                ing[k_dst] += int(det.get(k_src) or 0)
+                            except Exception:
+                                pass
+                    if ing["total"]:
+                        out["ingestion"] = ing
                 except Exception:
                     out["sources"] = []
                 out["ready"] = bool(out.get("endpoint")) and bool(out["sources"])
