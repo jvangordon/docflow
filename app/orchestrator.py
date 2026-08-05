@@ -1292,7 +1292,9 @@ def ensure_genie() -> None:
                 break
         if sid:
             w.genie.update_space(sid, serialized_space=ser,
-                                 warehouse_id=pipeline.warehouse_id())
+                                 warehouse_id=pipeline.warehouse_id(),
+                                 description=("Structured answers over the "
+                                              f"extracted tables. {pipeline.FINGERPRINT}"))
             _log("Genie space", "ok", "updated · tables and general instructions "
                  "refreshed, prose questions route to the assistants")
         else:

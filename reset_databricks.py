@@ -106,6 +106,23 @@ def sql(stmt, deadline_s=420):
 
 plan_delete, plan_keep, blocked = [], [], []
 
+# If the widgets point at a schema with no DocFlow install, every proof below
+# fails and the reset looks broken. Find the real install first and say so.
+def _locate_install():
+    hits = []
+    try:
+        for c in w.catalogs.list():
+            try:
+                for sc in w.schemas.list(c.name):
+                    if SCHEMA_MARKER in (sc.comment or ""):
+                        hits.append(f"{c.name}.{sc.name}")
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return hits
+
+
 # The app records what it created in run_state.json on its own volume. Reading
 # that first gives teardown hard identifiers — ids the app wrote down — instead
 # of inferring ownership from names. Read before anything is deleted.
@@ -118,6 +135,15 @@ for _p in (f"/Volumes/{CATALOG}/{SCHEMA}/docs/run_state.json",
         RECORDED.update((_json.loads(_raw) or {}).get("assets") or {})
     except Exception:
         pass
+if not RECORDED:
+    _installs = [h for h in _locate_install() if h != f"{CATALOG}.{SCHEMA}"]
+    if _installs:
+        print("\n" + "!" * 74)
+        print(f"!! No DocFlow record at {CATALOG}.{SCHEMA}, but a DocFlow install")
+        print(f"!! EXISTS at: {', '.join(_installs)}")
+        print(f"!! Set the catalog/schema widgets to that location and run again —")
+        print(f"!! with the wrong target, every safety proof fails and nothing deletes.")
+        print("!" * 74 + "\n")
 if RECORDED:
     print(f"read the app's own record of what it created: "
           f"{', '.join(sorted(RECORDED))[:120]}")
@@ -232,7 +258,16 @@ try:
             assistants_ours.append(x)
             plan_delete.append(f"assistant {x.display_name}")
         else:
+            try:
+                _srcs = [str(getattr(getattr(sx, "files", None), "path", ""))
+                         for sx in w.knowledge_assistants.list_knowledge_sources(x.name)]
+            except Exception as _se:
+                _srcs = [f"(sources unreadable: {str(_se)[:60]})"]
             print(f"assistant '{x.display_name}' shows no link to this demo — left alone.")
+            print(f"    its description: '{(x.description or '')[:80]}'")
+            print(f"    its sources: {_srcs}")
+            print(f"    proof requires: the DocFlow fingerprint, a recorded name, or a")
+            print(f"    source under /Volumes/{CATALOG}/{SCHEMA}/ — check the widgets.")
             blocked.append(f"assistant {x.display_name} (no proof it is this demo's)")
 except Exception as e:
     print(f"cannot list assistants: {str(e)[:120]}")
