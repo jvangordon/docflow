@@ -167,6 +167,10 @@ select.ctl{appearance:none}
 .spine{position:relative;padding-left:26px;margin-top:8px}
 .spine::before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:1.5px;
   background:linear-gradient(180deg,var(--lava),rgba(255,122,69,.4) 30%,var(--hair2))}
+.nowstrip{border:1px solid var(--hair);border-left:3px solid var(--nc,var(--sec));
+  border-radius:10px;background:var(--bg2);padding:10px 14px;margin:0 0 16px -25.5px}
+.nowstrip b{display:block;font:700 10.5px var(--mono);letter-spacing:.14em;color:var(--nc,var(--sec))}
+.nowstrip span{display:block;font:500 11px var(--mono);color:var(--dim);margin-top:3px}
 .snode{position:relative;padding:0 0 14px;font-size:13px;color:var(--ink2)}
 .snode::before{content:"";position:absolute;left:-25.5px;top:5px;width:8px;height:8px;border-radius:50%;
   background:var(--bg);border:1.5px solid var(--faint)}
@@ -596,7 +600,22 @@ function renderGolog(){
   const g=S.golog;
   if(!g || !g.steps || !g.steps.length)
     return `<div class="snode"><span class="st">—</span>Waiting for go. The log streams here.</div>`;
-  return g.steps.map(x=>`<div class="snode ${x.status==="ok"?"ok":x.status==="err"?"err":x.status==="warn"?"warn":"run"}">
+  const live=g.steps.filter(x=>x.status==="run");
+  const act=live[live.length-1];
+  const strip = g.phase==="running"
+    ? {c:"var(--sec)", t:act?`NOW · ${act.name}`:"NOW · between steps",
+       d:act?act.detail:"the next step reports in a moment"}
+    : g.phase==="prepared"
+    ? {c:"var(--ie)", t:"STAGED · waiting for your cue",
+       d:"press Process documents on the Flow page and the lanes come alive"}
+    : g.phase==="done"
+    ? {c:"var(--ie)", t:"READY", d:"ask a question on the Ask page · decide a case on Recover"}
+    : g.phase==="error"
+    ? {c:"var(--lava)", t:`STOPPED · ${g.failed_step||"see below"}`, d:(g.error||"").slice(0,120)}
+    : null;
+  return (strip?`<div class="nowstrip" style="--nc:${strip.c}">
+      <b>${esc(strip.t)}</b><span>${esc(strip.d||"")}</span></div>`:"")
+    + g.steps.map(x=>`<div class="snode ${x.status==="ok"?"ok":x.status==="err"?"err":x.status==="warn"?"warn":"run"}">
     <span class="st num">${x.t}s</span>${esc(x.name)}<span class="det">${esc(x.detail)}</span></div>`).join("")
     + (g.phase==="running" && !g.steps.some(x=>x.status==="run")
        ? `<div class="snode run"><span class="st"><span class="spin"></span></span>${esc(g.steps[g.steps.length-1].name)} finished · next step reporting</div>`
