@@ -506,6 +506,11 @@ else:
 
 # COMMAND ----------
 
+try:
+    displayHTML   # noqa: B018
+except NameError:
+    def displayHTML(_html):  # headless runs get the plain-text summary above
+        pass
 displayHTML("""
 <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;padding:26px 28px;
      border-radius:14px;background:#12161A;border:1px solid rgba(242,240,236,.15);max-width:660px">
