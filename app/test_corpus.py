@@ -209,3 +209,25 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# ---- hostile world shapes: the model ignoring the schema must cost nothing --
+import tempfile as _tf
+_hostile = [
+    "just a sentence describing the company",
+    {"contract": "a supply agreement with Acme covering pumps",
+     "type_labels": ["not", "a", "dict"],
+     "generated": "twenty-four documents about pumps",
+     "narratives": "one long paragraph",
+     "vendors": "Acme Industrial",
+     "site": ["a list", "of sites"]},
+    {"narratives": {"claim_impacts": "a single string not a list",
+                    "contract_warranty_procedure": ["list", "for", "scalar"]}},
+]
+for _w in _hostile:
+    _out = apply_world(_w) if "apply_world" in dir() else __import__("corpus").apply_world(_w)
+    assert _out["contract"]["penalty_pct"] == "5", "hostile world leaked into contract"
+with _tf.TemporaryDirectory() as _td:
+    _man = __import__("corpus").generate_corpus("Hostile Shapes Inc", _td, seed=38,
+                                                world=_hostile[1])
+    assert len(_man["generated"]) == 24, f"hostile world broke generation: {len(_man['generated'])}"
+print("hostile world shapes survived: defaults used, 24 PDFs generated")

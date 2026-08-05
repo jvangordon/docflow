@@ -721,10 +721,20 @@ def apply_world(world: dict | None) -> dict:
     the applied values (defaults where the spec is silent) for the manifest.
     """
     global VENDORS, VENDOR_NAMES, PARTS, FICTIONAL_SITE, CARRIERS, DESTINATIONS
-    w = world or {}
+    # The model does not always honor the schema: any field can arrive as
+    # prose, a list, or a JSON string. Wrong shapes fall back to defaults —
+    # a live run died on contract arriving as a sentence and .get() on it.
+    def _dic(x):
+        return x if isinstance(x, dict) else {}
+    def _lst(x):
+        if isinstance(x, list):
+            return x
+        if isinstance(x, str) and x.strip():
+            return [x]
+        return []
+    w = _dic(world)
     def strs(key, n, default):
-        v = w.get(key) or []
-        v = [str(x).strip()[:80] for x in v if str(x).strip()]
+        v = [str(x).strip()[:80] for x in _lst(w.get(key)) if str(x).strip()]
         return (v + default)[:max(n, len(v))] if v else default
     vendors = strs("vendors", 3, list(_DEFAULT_VENDORS))
     addresses = list(_DEFAULT_VENDORS.values())
@@ -736,24 +746,27 @@ def apply_world(world: dict | None) -> dict:
     FICTIONAL_SITE = str(w.get("site") or _DEFAULT_SITE)[:80]
     CARRIERS = strs("carriers", 2, list(_DEFAULT_CARRIERS))
     DESTINATIONS = strs("destinations", 2, list(_DEFAULT_DESTINATIONS))
-    labels = w.get("type_labels") or {}
+    labels = _dic(w.get("type_labels"))
     for t, meta in TAXONOMY.items():
         meta["title"] = str(labels.get(t) or _DEFAULT_TITLES[t])[:48]
-    g = w.get("generated") or {}
-    GEN["claims"] = [x for x in (g.get("claims") or []) if isinstance(x, dict)][:6]
-    GEN["invoices"] = [x for x in (g.get("invoices") or []) if isinstance(x, dict)][:5]
-    n = w.get("narratives") or {}
+    g = _dic(w.get("generated"))
+    GEN["claims"] = [x for x in _lst(g.get("claims")) if isinstance(x, dict)][:6]
+    GEN["invoices"] = [x for x in _lst(g.get("invoices")) if isinstance(x, dict)][:5]
+    n = _dic(w.get("narratives"))
     for k, dflt in _DEFAULT_NARR.items():
         v = n.get(k)
         # Long-form prose is the point of the assistant lane: cap generously,
         # not at a tweet.
         cap = 1400
         if isinstance(dflt, list):
-            vv = [str(x).strip()[:cap] for x in (v or []) if str(x).strip()]
+            vv = [str(x).strip()[:cap] for x in _lst(v)
+                  if isinstance(x, str) and str(x).strip()]
             NARR[k] = vv if vv else list(dflt)
         else:
-            NARR[k] = (str(v).strip()[:cap] or dflt) if v else dflt
-    c = w.get("contract") or {}
+            if not isinstance(v, str):
+                v = next((x for x in _lst(v) if isinstance(x, str)), None)
+            NARR[k] = (v.strip()[:cap] or dflt) if v else dflt
+    c = _dic(w.get("contract"))
     CONTRACT.update({
         "supplier": str(c.get("supplier") or VENDOR_NAMES[0])[:60],
         "penalty_pct": str(c.get("penalty_pct") or "5"),
