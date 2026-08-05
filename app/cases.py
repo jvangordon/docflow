@@ -52,8 +52,30 @@ def ensure_instance() -> dict:
                                dns=d.get("read_write_dns") or "")
                 return dict(_LB)
         from databricks.sdk.service.database import DatabaseInstance
-        w.database.create_database_instance(
-            DatabaseInstance(name=INSTANCE, capacity="CU_1"))
+
+        def _create():
+            w.database.create_database_instance(
+                DatabaseInstance(name=INSTANCE, capacity="CU_1"))
+        try:
+            _create()
+        except Exception as ce:
+            low = str(ce).lower()
+            if "exist" not in low and "slug" not in low:
+                raise
+            # The name is held by a soft-deleted husk (a UI delete without
+            # purge). Finishing that purge is completing the user's own
+            # deletion of the app's fixed name — then create fresh.
+            try:
+                w.database.delete_database_instance(INSTANCE, purge=True)
+                time.sleep(3)
+                _create()
+            except Exception:
+                with _LOCK:
+                    _LB.update(state="unavailable", detail=(
+                        f"a deleted instance named {INSTANCE} is still "
+                        f"releasing its name — press Go again in a few "
+                        f"minutes; decisions write to Delta until then"))
+                return dict(_LB)
         with _LOCK:
             _LB["created_by_us"] = True
         for _ in range(60):                     # AVAILABLE arrives in seconds

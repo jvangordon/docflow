@@ -33,11 +33,19 @@
 # a notebook, the two widgets at the top do the same job.
 CATALOG = "workspace"
 SCHEMA = "docflow"
+# Widgets persist on a notebook between runs, and a stale widget must never
+# silently override an edited constant: the widget only wins when it was
+# actually changed from its factory default.
+_DEF_CAT, _DEF_SCH = "workspace", "docflow"
 try:
-    dbutils.widgets.text("catalog", CATALOG)          # noqa: F821
-    dbutils.widgets.text("schema", SCHEMA)            # noqa: F821
-    CATALOG = dbutils.widgets.get("catalog").strip() or CATALOG  # noqa: F821
-    SCHEMA = dbutils.widgets.get("schema").strip() or SCHEMA     # noqa: F821
+    dbutils.widgets.text("catalog", _DEF_CAT)         # noqa: F821
+    dbutils.widgets.text("schema", _DEF_SCH)          # noqa: F821
+    _wcat = dbutils.widgets.get("catalog").strip()    # noqa: F821
+    _wsch = dbutils.widgets.get("schema").strip()     # noqa: F821
+    if _wcat and _wcat != _DEF_CAT:
+        CATALOG = _wcat
+    if _wsch and _wsch != _DEF_SCH:
+        SCHEMA = _wsch
 except NameError:
     pass
 
@@ -56,7 +64,8 @@ from databricks.sdk import WorkspaceClient
 APP_NAME = "docflow"
 OWNED_TABLES = ["documents", "events", "extract_warranty_claims",
                 "extract_supplier_invoices", "audit_findings",
-                "parsed", "labeled", "run_metrics"]
+                "parsed", "labeled", "run_metrics",
+                "docflow_cases", "docflow_case_actions"]
 OWNED_VOLUMES = ["docs", "secure"]
 # Names only this demo would ever use. Generic names like 'documents' or
 # 'events' prove nothing on their own — a customer could plausibly own those —
@@ -515,3 +524,16 @@ displayHTML("""
     <b style="color:#F2F0EC">Run all</b>.</p>
 </div>
 """)
+
+# COMMAND ----------
+
+# The last word: what this run actually did, in four lines.
+print("\n" + "=" * 70)
+print(f"TARGET   : {CATALOG}.{SCHEMA}   ·   CONFIRM was {CONFIRM}")
+if CONFIRM:
+    print(f"REMOVED  : {len(plan_delete)} item(s)" if plan_delete else "REMOVED  : nothing — see BLOCKED")
+else:
+    print(f"PLANNED  : {len(plan_delete)} item(s) — NOTHING deleted, CONFIRM is False")
+print(f"BLOCKED  : " + ("; ".join(blocked) if blocked else "none"))
+print("=" * 70)
+

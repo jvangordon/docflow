@@ -226,6 +226,18 @@ rec("app default catalog follows the install, not a literal",
 rec("frontend carries no hardcoded catalog target",
     "workspace.docflow" not in spa_src, "picker is config-driven")
 
+# --- 9b. the reset's own inventory can never drift from the app's ------------
+import ast as _ast
+_rsrc = "\n".join(l for l in open(os.path.join(os.path.dirname(here2), "reset_databricks.py")).read().split("\n")
+                   if not l.startswith("# MAGIC"))
+_rtables = None
+for _node in _ast.walk(_ast.parse(_rsrc)):
+    if isinstance(_node, _ast.Assign) and getattr(_node.targets[0], "id", "") == "OWNED_TABLES":
+        _rtables = {getattr(e, "value", None) for e in _node.value.elts}
+rec("reset's table inventory covers everything the app creates",
+    _rtables is not None and set(pipeline.OWNED_TABLES) <= _rtables,
+    f"missing: {sorted(set(pipeline.OWNED_TABLES) - (_rtables or set()))}" if _rtables else "not found")
+
 # --- 10. the lakebase instance is deleted only on the app's own record -------
 rcode10 = "\n".join(l for l in open(os.path.join(os.path.dirname(here2), "reset_databricks.py")).read().split("\n")
                      if not l.startswith("# MAGIC"))
