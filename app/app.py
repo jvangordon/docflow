@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 import appconfig
 import cases
+import playbook
 import orchestrator
 import pipeline
 
@@ -373,6 +374,22 @@ class PageGen(BaseModel):
     slug: str = ""
     title: str = ""
     model: str = ""
+
+
+@app.get("/api/playbook")
+def api_playbook():
+    try:
+        return playbook.payload()
+    except Exception as e:
+        return JSONResponse({"error": str(e)[:250]}, status_code=500)
+
+
+@app.post("/api/playbook/notebook")
+def api_playbook_notebook():
+    try:
+        return playbook.create_notebook()
+    except Exception as e:
+        return JSONResponse({"error": appconfig._clean(str(e))[:250]}, status_code=500)
 
 
 @app.get("/api/pages")

@@ -167,6 +167,14 @@ select.ctl{appearance:none}
 .spine{position:relative;padding-left:26px;margin-top:8px}
 .spine::before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:1.5px;
   background:linear-gradient(180deg,var(--lava),rgba(255,122,69,.4) 30%,var(--hair2))}
+.code{border:1px solid var(--hair);border-radius:10px;background:var(--surf);
+  padding:12px 14px;font:500 11.5px var(--mono);color:var(--ink2);line-height:1.55;
+  overflow-x:auto;white-space:pre;margin:0}
+.pbrow{display:flex;align-items:flex-start;gap:10px;margin-top:10px}
+.pbl{flex:none;width:96px;font:600 9.5px var(--mono);letter-spacing:.12em;
+  text-transform:uppercase;color:var(--faint);padding-top:4px}
+.pbv{flex:1;font-size:12px;color:var(--ink2);word-break:break-all;padding-top:3px}
+.pbc{flex:none;padding:4px 12px;font-size:11px}
 .nowstrip{border:1px solid var(--hair);border-left:3px solid var(--nc,var(--sec));
   border-radius:10px;background:var(--bg2);padding:10px 14px;margin:0 0 16px -25.5px}
 .nowstrip b{display:block;font:700 10.5px var(--mono);letter-spacing:.14em;color:var(--nc,var(--sec))}
@@ -336,6 +344,7 @@ body[data-prompter="1"] main{padding-bottom:150px}
     <button data-go="ask">Ask</button>
     <button data-go="recover">Recover</button>
     <button data-go="built">Built</button>
+    <button data-go="playbook">Playbook</button>
     <span id="custompages" style="display:contents"></span>
     <button data-go="newpage" title="Add a page for this audience" style="opacity:.55">+ Page</button>
   </nav>
@@ -1312,6 +1321,71 @@ async function loadBuilt(){
   <p>A Databricks App, agents governed by Unity Catalog, a Genie space over Delta tables, deployed from one bundle. Everything on this page works the same way in your own workspace.</p></div>`;
 }
 
+/* ---------------- PLAYBOOK ---------------- */
+async function loadPlaybook(){
+  let d; try{ d=await j("/api/playbook"); }catch(e){ d={error:e.message}; }
+  if(d.error){ stage.innerHTML=`<div class="empty"><b>Playbook unavailable</b>${esc(d.error)}</div>`; return; }
+  const t=d.tiles||{};
+  const chip=(label,val)=>`<div class="pbrow"><span class="pbl">${esc(label)}</span>
+    <code class="pbv mono">${esc(val)}</code>
+    <button class="btn pbc" data-copy="${esc(val)}">Copy</button></div>`;
+  const listblock=(label,items)=>`<div class="pbrow"><span class="pbl">${esc(label)}</span>
+    <pre class="code mono" style="flex:1">${esc(items.join("\n"))}</pre>
+    <button class="btn pbc" data-copy="${esc(items.join("\n"))}">Copy</button></div>`;
+  stage.innerHTML=`
+  <div class="over">Show the code</div>
+  <h1>The playbook.</h1>
+  <p class="dek">Every capability in this demo is one SQL function — here they are with this
+    install's own catalog, schema and model already filled in. Copy any block into the SQL
+    editor, or let the app write the whole set as a notebook.</p>
+  <div class="rule"></div>
+  <div class="gobar" style="margin-bottom:6px">
+    <button class="btn hot" id="pb-nb">Create the notebook in this workspace</button>
+    <span class="msg" id="pb-msg">Lands in /Workspace/Shared/docflow, values baked in.</span>
+  </div>
+  <div class="sect">SQL, runnable as-is · ${esc(d.catalog)}.${esc(d.schema)} · ${esc(d.model)}</div>
+  ${(d.blocks||[]).map(b=>`
+    <div class="fcard" style="margin-bottom:14px">
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <b style="font-size:13px">${esc(b.title)}</b>
+        <button class="btn pbc" style="margin-left:auto" data-copy="${esc(b.sql)}">Copy</button>
+      </div>
+      <p class="hint" style="margin:6px 0 10px">${esc(b.note)}</p>
+      <pre class="code mono">${esc(b.sql)}</pre>
+    </div>`).join("")}
+  <div class="sect">Agent Bricks tiles · created once, by hand — there is no create API for these</div>
+  <p class="hint" style="margin:0 0 12px">Agents → Create agent. The values below match this
+    install, so the tiles tell the same story as the pipeline. Reset never deletes hand-made
+    agents — remove these two and their tables yourself after the demo.</p>
+  <div class="fcard" style="margin-bottom:14px">
+    <b style="font-size:13px">Text Classification — the router, as a tile</b>
+    ${chip("Name", t.tc.name)}${chip("Source", t.tc.source)}${chip("Output table", t.tc.table)}
+    ${listblock("Labels", t.tc.labels)}
+  </div>
+  <div class="fcard" style="margin-bottom:14px">
+    <b style="font-size:13px">Information Extraction — claims fields, as a tile</b>
+    ${chip("Name", t.ie.name)}${chip("Source", t.ie.source)}${chip("Output table", t.ie.table)}
+    ${listblock("Fields", t.ie.fields)}
+    <p class="hint" style="margin-top:8px">${esc(t.ie.lesson)}</p>
+  </div>`;
+  document.querySelectorAll(".pbc").forEach(b=>b.onclick=async()=>{
+    try{ await navigator.clipboard.writeText(b.dataset.copy); }
+    catch(e){ const ta=document.createElement("textarea"); ta.value=b.dataset.copy;
+      document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
+    const old=b.textContent; b.textContent="Copied"; setTimeout(()=>b.textContent=old, 1200);
+  });
+  $("#pb-nb").onclick=async(ev)=>{
+    const btn=ev.currentTarget, msg=$("#pb-msg");
+    btn.disabled=true; btn.innerHTML=`<span class="spin"></span> Writing`;
+    let out=null; try{ out=await post("/api/playbook/notebook", {}); }catch(e){ out={error:e.message}; }
+    btn.disabled=false; btn.textContent="Create the notebook in this workspace";
+    if(!out||out.error){ msg.textContent=(out&&out.error)||"Could not write it — copy the blocks instead."; return; }
+    msg.innerHTML=`Written to <span class="mono">${esc(out.path)}</span>`
+      + (out.url?` · <a class="dlink" href="${esc(out.url)}" target="_blank" rel="noopener">Open the notebook ↗</a>`:"");
+  };
+  renderPrompter("");
+}
+
 /* ---------------- SA-authored pages ----------------
    A page added from inside the app: describe it, pick a model from the
    gateway, iterate in the same box. Stored on the volume, so it survives
@@ -1478,7 +1552,7 @@ function renderPrompter(page){
 }
 
 /* ---------------- router ---------------- */
-const LOADERS={start:loadStart,docs:loadDocs,flow:loadFlow,ask:loadAsk,recover:loadRecover,built:loadBuilt,newpage:loadPageBuilder};
+const LOADERS={start:loadStart,docs:loadDocs,flow:loadFlow,ask:loadAsk,recover:loadRecover,built:loadBuilt,playbook:loadPlaybook,newpage:loadPageBuilder};
 async function go(page, push){
   if(page && page.startsWith("p-")){ return goCustom(page.slice(2), push); }
   if(page==="claims"||page==="suppliers") page="recover";
