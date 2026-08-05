@@ -250,8 +250,13 @@ rec("lakebase deletion is exact-name, from a constant",
     'LAKEBASE = "docflow-lakebase"' in rcode10
     and "delete_database_instance(LAKEBASE" in rcode10, "constant name")
 csrc = open(os.path.join(here2, "cases.py")).read()
-rec("the app never deletes a database instance itself",
-    "delete_database_instance" not in csrc, "create/adopt only")
+_dels = csrc.count("delete_database_instance")
+_husk = "soft-deleted husk" in csrc.split("delete_database_instance")[0][-600:] \
+    if _dels else False
+rec("the app never deletes a live database instance",
+    _dels == 1 and _husk and 'if "exist" not in low and "slug" not in low' in csrc,
+    "single call: completing the user's own delete of the app's fixed name, "
+    "only after create fails on the reserved slug")
 
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)
