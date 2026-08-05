@@ -348,6 +348,7 @@ body[data-prompter="1"] main{padding-bottom:150px}
     <button data-go="recover">Recover</button>
     <button data-go="built">Built</button>
     <button data-go="playbook">Playbook</button>
+    <button data-go="brief">Brief</button>
     <span id="custompages" style="display:contents"></span>
     <button data-go="newpage" title="Add a page for this audience" style="opacity:.55">+ Page</button>
   </nav>
@@ -1331,6 +1332,96 @@ async function loadBuilt(){
   <p>A Databricks App, agents governed by Unity Catalog, a Genie space over Delta tables, deployed from one bundle. Everything on this page works the same way in your own workspace.</p></div>`;
 }
 
+/* ---------------- BRIEF ---------------- */
+function loadBrief(){
+  const EXEC = `Most operational data arrives as documents nobody reads: invoices, claims, contracts, inspection reports. The information inside them is real money and real risk, but it is trapped in prose — so it waits for a person, and mostly it waits forever.
+
+This pattern puts agents on that pile. Documents are classified the moment they arrive, routed to the capability each one needs — fields extracted into governed tables, prose indexed for cited answers, sensitive material sealed untouched — and the findings become decisions: recover this claim, escalate this invoice, close this case. Every step is governed in Unity Catalog, every answer shows its work, and decisions land in an operational database the moment they are made.
+
+The value shows up three ways: money found (out-of-coverage claims, duplicate or off-contract spend), cycle time (hours of reading becomes minutes of deciding), and defensibility (every routing decision, extraction and answer traceable to the source page).`;
+  const IDEAS = [
+    ["Accounts payable", "invoice-to-PO matching, duplicate detection, off-contract spend flagged before payment"],
+    ["Warranty & quality", "out-of-coverage recovery, defect-trend answers cited to inspection reports"],
+    ["Contracts", "obligation and renewal tracking, penalty windows surfaced before they lapse"],
+    ["Claims operations", "triage in minutes, coverage math from extracted dates, drafted next steps"],
+    ["Safety & compliance", "incident narratives answerable with citations; sensitive files sealed, provably untouched"],
+    ["Field service", "manuals and procedures answering technicians' questions with the page cited"],
+  ];
+  const BRICKS = [
+    {name:"Knowledge Assistant", cls:"cka",
+     what:"A chatbot over your documents that answers with citations.",
+     made:["A serving endpoint — the agent your apps and Databricks One call",
+           "Knowledge sources — Unity Catalog volumes of files, parsed and vector-indexed with managed embeddings",
+           "Example questions and instructions living on the object, plus an MLflow experiment for its traces"],
+     levers:["Scope each source narrowly — one folder per domain beats one folder of everything",
+             "Feed it real prose — long-form documents make retrieval and citations dramatically better",
+             "Sync on arrival (one API call) and seed example questions to steer first impressions"]},
+    {name:"Information Extraction", cls:"cie",
+     what:"Unlabeled documents in, a typed table of fields out.",
+     made:["An extraction agent endpoint built over ai_parse_document + ai_extract",
+           "An output table in Unity Catalog — rows you can query, join and audit",
+           "Optionally a scheduled pipeline (one click) for documents that keep arriving"],
+     levers:["The field name IS the prompt — 'vendor' reads the Bill-to party; 'vendor_company_that_issued_this_invoice' reads the right one",
+             "Field descriptions disambiguate; try_cast + review lanes keep bad reads from becoming bad data",
+             "Sample a few documents, inspect, rename fields, re-run — the tuning loop is minutes"]},
+    {name:"Text Classification", cls:"csec",
+     what:"Routes each document to what should happen next.",
+     made:["A classifier endpoint over ai_classify — the same function you can call in SQL",
+           "A label set with descriptions — the entire configuration surface",
+           "Downstream policy: your code decides what each label triggers"],
+     levers:["Write labels in the business's own language — classification accuracy follows vocabulary",
+             "One-line label descriptions resolve lookalikes (invoice vs purchase order)",
+             "Route low-confidence and unknown to a review lane instead of forcing a guess"]},
+    {name:"Genie + AI Gateway", cls:"cmut",
+     what:"Plain-language answers over the extracted tables; every model call governed.",
+     made:["A Genie space: a warehouse, the curated tables, and General Instructions",
+           "The AI Gateway: which models serve, with governance, limits and logging in one place",
+           "Structured outputs — model answers forced into schemas your code can trust"],
+     levers:["Curate ruthlessly — a space over three purpose-built tables beats one over three hundred",
+             "General Instructions route what Genie shouldn't answer (prose questions) to the assistant",
+             "Pick models per task; swap without touching the application"]},
+  ];
+  stage.innerHTML=`
+  <div class="over">Talk track</div>
+  <h1>The bricks, and where the levers are.</h1>
+  <p class="dek">Surface level by design — enough to present each brick and answer the first
+    question about tuning it. The deep dive is a follow-up session.</p>
+  <div class="rule"></div>
+  <div class="sect">Executive brief · copy and reuse</div>
+  <div class="fcard" style="margin-bottom:16px">
+    <div style="display:flex;gap:10px"><div style="flex:1;font-size:13.5px;line-height:1.65;color:var(--ink2);white-space:pre-line">${esc(EXEC)}</div>
+    <button class="btn pbc" data-copy="${esc(EXEC)}">Copy</button></div>
+  </div>
+  <div class="sect">Where this pattern applies · the art of the possible</div>
+  <div class="fcard" style="margin-bottom:16px">
+    ${IDEAS.map(([k,v])=>`<div class="pbrow"><span class="pbl">${esc(k)}</span>
+      <span style="flex:1;font-size:12.5px;color:var(--dim);padding-top:2px">${esc(v)}</span></div>`).join("")}
+  </div>
+  <div class="sect">The bricks · what each is made of, and how to make it better</div>
+  ${BRICKS.map(b=>`
+  <div class="fcard" style="margin-bottom:14px">
+    <div style="display:flex;align-items:baseline;gap:10px">
+      <span class="fchip ${b.cls}" style="padding:4px 9px"><span class="ct">${esc(b.name.toUpperCase())}</span></span>
+      <span style="font-size:13px;color:var(--ink2)">${esc(b.what)}</span></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:12px">
+      <div><div class="fover" style="margin-bottom:6px">Made of</div>
+        ${b.made.map(x=>`<p class="hint" style="margin:0 0 6px">· ${esc(x)}</p>`).join("")}</div>
+      <div><div class="fover" style="margin-bottom:6px">Levers</div>
+        ${b.levers.map(x=>`<p class="hint" style="margin:0 0 6px">· ${esc(x)}</p>`).join("")}</div>
+    </div>
+  </div>`).join("")}
+  <p class="hint" style="margin-top:14px">If the room wants more: evaluation and traces (MLflow),
+    on-behalf-of authorization, scheduled extraction pipelines, and index tuning are the natural
+    deep-dive follow-ups.</p>`;
+  document.querySelectorAll(".pbc").forEach(b=>b.onclick=async()=>{
+    try{ await navigator.clipboard.writeText(b.dataset.copy); }
+    catch(e){ const ta=document.createElement("textarea"); ta.value=b.dataset.copy;
+      document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
+    const old=b.textContent; b.textContent="Copied"; setTimeout(()=>b.textContent=old, 1200);
+  });
+  renderPrompter("");
+}
+
 /* ---------------- PLAYBOOK ---------------- */
 async function loadPlaybook(){
   let d; try{ d=await j("/api/playbook"); }catch(e){ d={error:e.message}; }
@@ -1574,7 +1665,7 @@ function renderPrompter(page){
 }
 
 /* ---------------- router ---------------- */
-const LOADERS={start:loadStart,docs:loadDocs,flow:loadFlow,ask:loadAsk,recover:loadRecover,built:loadBuilt,playbook:loadPlaybook,newpage:loadPageBuilder};
+const LOADERS={start:loadStart,docs:loadDocs,flow:loadFlow,ask:loadAsk,recover:loadRecover,built:loadBuilt,playbook:loadPlaybook,brief:loadBrief,newpage:loadPageBuilder};
 async function go(page, push){
   if(page && page.startsWith("p-")){ return goCustom(page.slice(2), push); }
   if(page==="claims"||page==="suppliers") page="recover";
