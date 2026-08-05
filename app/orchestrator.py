@@ -1096,10 +1096,14 @@ def seed_assistant_examples() -> None:
                         n_, K.Example(question=q_)), 20, "writing an example question")
                     n += 1
                 except Exception as e:
+                    # One failed write means this workspace's examples API is
+                    # not cooperating — stand the whole step down rather than
+                    # burning the budget on every remaining question.
                     _log("Assistant examples", "warn",
-                         f"could not write onto {spec['about']} "
-                         f"({str(e)[:90]}) — moving on")
-                    break
+                         f"the examples API refused a write here "
+                         f"({str(e)[:90]}) — skipping the rest; the Ask page "
+                         f"uses the run's own questions")
+                    return
             seeded += n
             if n:
                 _log(f"Assistant · {spec['about']}", "ok",
