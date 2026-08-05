@@ -106,6 +106,35 @@ def _restore() -> None:
         return
     if not isinstance(prev, dict) or not prev.get("steps"):
         return
+    # A record is only as real as the assets it describes. After a manual
+    # cleanup the volume (and this file) can outlive everything else — adopting
+    # it then paints a finished run over an empty workspace. Verify one
+    # recorded asset still exists before trusting the file; the checks are
+    # Files/REST calls only, so a cold warehouse cannot stall app startup.
+    if prev.get("phase") in ("prepared", "done"):
+        alive = False
+        try:
+            pipeline.wc().files.get_directory_metadata(
+                f"{pipeline.VOL_ROOT}/inbox")
+            names = [f.name for f in pipeline.wc().files.list_directory_contents(
+                f"{pipeline.VOL_ROOT}/inbox") if not f.is_directory]
+            alive = bool(names)
+        except Exception:
+            alive = False
+        if alive and prev.get("phase") == "done":
+            gid = (prev.get("assets") or {}).get("genie_space_id")
+            if gid:
+                try:
+                    alive = any(sp.space_id == gid
+                                for sp in (pipeline.wc().genie.list_spaces().spaces or []))
+                except Exception:
+                    pass                      # listing failing must not wipe a run
+        if not alive:
+            try:
+                pipeline.wc().files.delete(_state_path())
+            except Exception:
+                pass
+            return
     with _glock:
         GO.update(prev)
         if GO.get("phase") == "running":

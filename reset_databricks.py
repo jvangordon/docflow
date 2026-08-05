@@ -400,6 +400,17 @@ else:
     except Exception as e:
         print(f"lakebase: {str(e)[:140]}")
 
+    # 3b3. the app's state files go first, so a volume that somehow survives
+    # can never resurrect a finished run in a fresh install
+    if schema_exists and schema_is_ours:
+        for _sf in (f"/Volumes/{CATALOG}/{SCHEMA}/docs/run_state.json",
+                    f"/Volumes/{CATALOG}/{SCHEMA}/docs/config.json"):
+            try:
+                w.files.delete(_sf)
+                print(f"deleted state file {_sf.rsplit('/', 1)[1]}")
+            except Exception:
+                pass
+
     # 3c. tables and volumes, one at a time, by exact name
     if schema_exists and schema_is_ours:
         for t in OWNED_TABLES:
