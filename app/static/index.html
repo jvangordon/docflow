@@ -598,7 +598,9 @@ function renderGolog(){
     return `<div class="snode"><span class="st">—</span>Waiting for go. The log streams here.</div>`;
   return g.steps.map(x=>`<div class="snode ${x.status==="ok"?"ok":x.status==="err"?"err":x.status==="warn"?"warn":"run"}">
     <span class="st num">${x.t}s</span>${esc(x.name)}<span class="det">${esc(x.detail)}</span></div>`).join("")
-    + (g.phase==="running"?`<div class="snode run"><span class="st"><span class="spin"></span></span>working</div>`:"");
+    + (g.phase==="running" && !g.steps.some(x=>x.status==="run")
+       ? `<div class="snode run"><span class="st"><span class="spin"></span></span>${esc(g.steps[g.steps.length-1].name)} finished · next step reporting</div>`
+       : "");
 }
 /* Save without re-rendering: a rebuild mid-keystroke is how entries get lost. */
 let _saveTimer=null;

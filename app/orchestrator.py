@@ -998,6 +998,10 @@ def seed_assistant_examples() -> None:
     qs = [q for q in (theme.get("assistant_questions") or []) if q]
     if not qs:
         return
+    seeded = 0
+    _log("Assistant examples", "run",
+         f"writing {len(qs)} demo questions onto the assistants — they show as "
+         f"example questions when the assistant is opened in the workspace")
     contract_kw = ("contract", "agreement", "clause", "penalt", "policy",
                    "terms", "deadline", "notice", "filing")
     split = {"docflow-ka-contracts": [], "docflow-ka-claims": []}
@@ -1030,6 +1034,7 @@ def seed_assistant_examples() -> None:
                     n += 1
                 except Exception:
                     break
+            seeded += n
             if n:
                 _log(f"Assistant · {spec['about']}", "ok",
                      f"{n} example question{'s' if n > 1 else ''} written onto "
@@ -1037,6 +1042,9 @@ def seed_assistant_examples() -> None:
     except Exception:
         pass
 
+    _log("Assistant examples", "ok",
+         f"{seeded} questions live on the platform objects · the Ask page "
+         f"mirrors them")
 
 def platform_questions() -> dict:
     """Questions as Databricks holds them; the app is a mirror, not the owner."""
