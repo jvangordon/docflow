@@ -934,10 +934,22 @@ def attach_assistant_sources() -> None:
                       else f"{pipeline.VOL_ROOT}/{spec['folder']}")
             have = False
             try:
+                # Raw read: the state string races (the platform flips a wedged
+                # index between UPDATING and FAILED_UPDATE), but the ingestion
+                # counters do not — a source that has never indexed a file and
+                # carries an error is a wedge whatever its state says.
+                raw = w.api_client.do("GET", f"/api/2.1/{ka.name}/knowledge-sources")
+                raw_by_id = {r.get("id"): r for r in (raw or {}).get("knowledge_sources", [])}
                 for src in w.knowledge_assistants.list_knowledge_sources(ka.name):
                     path = (src.files.path or "") if src.files else ""
                     state = str(getattr(src, "state", "") or "")
-                    if path == folder and ("FAILED" in state):
+                    rd = raw_by_id.get(getattr(src, "id", None), {})
+                    ing = rd.get("ingestion_details", {}) or {}
+                    wedged = (int(ing.get("failed_file_count") or 0) > 0
+                              or bool(ing.get("error_info"))
+                              or "FAILED" in state) and \
+                             int(ing.get("success_file_count") or 0) == 0
+                    if path == folder and wedged:
                         # Our own source, wedged (the empty-bootstrap bug or a
                         # platform hiccup). Replace it: delete + fresh attach
                         # builds a clean index over the real documents.
