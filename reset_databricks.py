@@ -307,12 +307,12 @@ except Exception as e:
 
 # Lakebase instance. Deleted ONLY when the app's own run record says it created
 # it — an instance that merely shares the name is a customer's, and stays.
-LAKEBASE = "docflow-lakebase"
+rec_lb = RECORDED.get("lakebase") or {}
+LAKEBASE = rec_lb.get("instance") or "docflow-lakebase"
 lakebase_ours = False
 try:
     have_lb = any((i.as_dict().get("name") == LAKEBASE)
                   for i in w.database.list_database_instances())
-    rec_lb = RECORDED.get("lakebase") or {}
     if have_lb:
         if rec_lb.get("instance") == LAKEBASE and rec_lb.get("created_by_us"):
             lakebase_ours = True

@@ -20,7 +20,8 @@ import uuid
 
 import pipeline
 
-INSTANCE = "docflow-lakebase"
+INSTANCE = "docflow-lakebase"      # may gain a numeric suffix if the platform
+                                   # refuses to release a deleted name's slug
 _LB = {"state": "unknown", "dns": "", "detail": "", "created_by_us": False}
 _LOCK = threading.Lock()
 _CONN: dict = {"conn": None, "born": 0.0}
@@ -42,11 +43,19 @@ ACTIONS_DDL = """CREATE TABLE IF NOT EXISTS docflow_case_actions(
 def ensure_instance() -> dict:
     """Create or adopt the app's database instance. Fast: Lakebase provisions
     in seconds, which is itself a talking point."""
+    global INSTANCE
     w = pipeline.wc()
     try:
+        base = INSTANCE.split("-v")[0]
         for i in w.database.list_database_instances():
             d = i.as_dict()
-            if d.get("name") == INSTANCE:
+            nm = d.get("name") or ""
+            # docflow-lakebase or docflow-lakebase-vN: both are this app's
+            # naming scheme — adopt whichever exists so a restart never
+            # creates a second instance beside its own suffixed one.
+            if nm == INSTANCE or nm == base or (
+                    nm.startswith(base + "-v") and nm[len(base) + 2:].isdigit()):
+                INSTANCE = nm
                 with _LOCK:
                     _LB.update(state=str(d.get("state") or ""),
                                dns=d.get("read_write_dns") or "")
@@ -63,19 +72,36 @@ def ensure_instance() -> dict:
             if "exist" not in low and "slug" not in low:
                 raise
             # The name is held by a soft-deleted husk (a UI delete without
-            # purge). Finishing that purge is completing the user's own
-            # deletion of the app's fixed name — then create fresh.
+            # purge). Finish that purge if the platform lets us; if the slug
+            # still will not release (API-created, UI-deleted names have been
+            # seen to wedge), take a suffixed name instead of losing the demo.
+            recovered = False
             try:
                 w.database.delete_database_instance(INSTANCE, purge=True)
                 time.sleep(3)
                 _create()
+                recovered = True
             except Exception:
-                with _LOCK:
-                    _LB.update(state="unavailable", detail=(
-                        f"a deleted instance named {INSTANCE} is still "
-                        f"releasing its name — press Go again in a few "
-                        f"minutes; decisions write to Delta until then"))
-                return dict(_LB)
+                pass
+            if not recovered:
+                base = INSTANCE.split("-v")[0]
+                for i in range(2, 6):
+                    try:
+                        INSTANCE = f"{base}-v{i}"
+                        _create()
+                        recovered = True
+                        break
+                    except Exception as se:
+                        if "exist" not in str(se).lower() and "slug" not in str(se).lower():
+                            break
+                if not recovered:
+                    INSTANCE = base
+                    with _LOCK:
+                        _LB.update(state="unavailable", detail=(
+                            f"the workspace will not release the name "
+                            f"{INSTANCE} nor accept a suffixed one — decisions "
+                            f"write to Delta tables instead, same story"))
+                    return dict(_LB)
         with _LOCK:
             _LB["created_by_us"] = True
         for _ in range(60):                     # AVAILABLE arrives in seconds
@@ -100,7 +126,16 @@ def _pg():
     with _LOCK:
         conn, born = _CONN["conn"], _CONN["born"]
     if conn is not None and time.time() - born < 2400:
-        return conn
+        try:
+            with conn.cursor() as c:
+                c.execute("SELECT 1")
+            return conn
+        except Exception:
+            # The instance died under us (deleted mid-session). Drop the
+            # corpse and rebuild — or fail into the Delta path honestly.
+            with _LOCK:
+                _CONN.update(conn=None, born=0.0)
+                _LB.update(state="unknown", dns="")
     import psycopg
     w = pipeline.wc()
     if not _LB.get("dns"):
@@ -166,19 +201,31 @@ def seed_from_findings() -> dict:
         f"LEFT JOIN {pipeline.FQ}.extract_warranty_claims c USING (doc_id)")
     n = 0
     use = mode()
+    if use == "lakebase":
+        try:
+            for doc_id, finding, sev, detail, amount in finds:
+                cid = re.sub(r"[^a-z0-9]+", "-",
+                             f"{doc_id}-{finding}".lower()).strip("-")[:80]
+                _rows("""INSERT INTO docflow_cases
+                           (case_id, doc_id, kind, title, severity, amount_usd, detail)
+                         VALUES (%s,%s,%s,%s,%s,%s,%s)
+                         ON CONFLICT (case_id) DO UPDATE
+                           SET severity=EXCLUDED.severity, detail=EXCLUDED.detail,
+                               amount_usd=EXCLUDED.amount_usd""",
+                      (cid, doc_id, finding, f"{finding} · {doc_id}", sev,
+                       float(amount or 0), detail))
+                n += 1
+            return {"cases": n, "store": "lakebase"}
+        except Exception:
+            with _LOCK:
+                _CONN.update(conn=None, born=0.0)
+                _LB.update(state="unknown", dns="")
+            use, n = "delta", 0
     for doc_id, finding, sev, detail, amount in finds:
         cid = re.sub(r"[^a-z0-9]+", "-",
                      f"{doc_id}-{finding}".lower()).strip("-")[:80]
         title = f"{finding} · {doc_id}"
-        if use == "lakebase":
-            _rows("""INSERT INTO docflow_cases
-                       (case_id, doc_id, kind, title, severity, amount_usd, detail)
-                     VALUES (%s,%s,%s,%s,%s,%s,%s)
-                     ON CONFLICT (case_id) DO UPDATE
-                       SET severity=EXCLUDED.severity, detail=EXCLUDED.detail,
-                           amount_usd=EXCLUDED.amount_usd""",
-                  (cid, doc_id, finding, title, sev, float(amount or 0), detail))
-        else:
+        if True:
             _delta_ensure()
             pipeline.sql(
                 f"DELETE FROM {pipeline.FQ}.docflow_cases WHERE case_id = :c",
@@ -195,14 +242,20 @@ def seed_from_findings() -> dict:
 def list_cases() -> dict:
     use = mode()
     if use == "lakebase":
-        cs = _rows("""SELECT case_id, doc_id, kind, title, severity, amount_usd,
-                             detail, status, advice, opened_at::text
-                      FROM docflow_cases
-                      ORDER BY CASE severity WHEN 'HIGH' THEN 0 ELSE 1 END,
-                               amount_usd DESC""")
-        acts = _rows("""SELECT case_id, action, note, actor, taken_at::text
-                        FROM docflow_case_actions ORDER BY id""")
-    else:
+        try:
+            cs = _rows("""SELECT case_id, doc_id, kind, title, severity, amount_usd,
+                                 detail, status, advice, opened_at::text
+                          FROM docflow_cases
+                          ORDER BY CASE severity WHEN 'HIGH' THEN 0 ELSE 1 END,
+                                   amount_usd DESC""")
+            acts = _rows("""SELECT case_id, action, note, actor, taken_at::text
+                            FROM docflow_case_actions ORDER BY id""")
+        except Exception:
+            with _LOCK:
+                _CONN.update(conn=None, born=0.0)
+                _LB.update(state="unknown", dns="")
+            use = "delta"
+    if use == "delta":
         _delta_ensure()
         cs = pipeline.sql(
             f"SELECT case_id, doc_id, kind, title, severity, amount_usd, detail, "
@@ -292,13 +345,21 @@ def act(case_id: str, action: str, note: str = "", actor: str = "") -> dict:
     actor = (actor or "the app")[:120]
     use = mode()
     if use == "lakebase":
-        _rows("INSERT INTO docflow_case_actions(case_id, action, note, actor) "
-              "VALUES (%s,%s,%s,%s)", (case_id, action, note, actor))
-        _rows("UPDATE docflow_cases SET status=%s WHERE case_id=%s",
-              (STATUS_OF[action], case_id))
-        row = _rows("SELECT taken_at::text FROM docflow_case_actions "
-                    "WHERE case_id=%s ORDER BY id DESC LIMIT 1", (case_id,))
-    else:
+        try:
+            _rows("INSERT INTO docflow_case_actions(case_id, action, note, actor) "
+                  "VALUES (%s,%s,%s,%s)", (case_id, action, note, actor))
+            _rows("UPDATE docflow_cases SET status=%s WHERE case_id=%s",
+                  (STATUS_OF[action], case_id))
+            row = _rows("SELECT taken_at::text FROM docflow_case_actions "
+                        "WHERE case_id=%s ORDER BY id DESC LIMIT 1", (case_id,))
+        except Exception:
+            # The instance vanished between the health check and the write.
+            # The decision still lands — in Delta — rather than erroring out.
+            with _LOCK:
+                _CONN.update(conn=None, born=0.0)
+                _LB.update(state="unknown", dns="")
+            use = "delta"
+    if use == "delta":
         _delta_ensure()
         pipeline.sql(
             f"INSERT INTO {pipeline.FQ}.docflow_case_actions VALUES "

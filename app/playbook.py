@@ -93,7 +93,10 @@ def questions() -> dict:
           "delivery, and who signs off on a warranty claim?"]
     try:
         import orchestrator
-        pq = orchestrator.platform_questions()
+        # The examples API hung a run for 13 minutes on one workspace — a page
+        # load must never wait on it. Six seconds, then the fallbacks.
+        pq = orchestrator._call(orchestrator.platform_questions, 6,
+                                "reading the platform's questions")
         if pq.get("genie"):
             genie = [q for q in pq["genie"] if q][:2] or genie
         if pq.get("assistant"):

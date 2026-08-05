@@ -431,7 +431,8 @@ def api_questions():
     """Suggestion chips come from Databricks (assistant examples, the Genie
     space) with the run's theme as fallback — the platform owns the questions."""
     try:
-        return orchestrator.platform_questions()
+        return orchestrator._call(orchestrator.platform_questions, 6,
+                                  "reading the platform's questions")
     except Exception as e:
         return JSONResponse({"assistant": [], "genie": [], "source": "app",
                              "error": str(e)[:120]}, status_code=200)

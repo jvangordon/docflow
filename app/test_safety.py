@@ -246,9 +246,9 @@ rec("lakebase deletion requires the app's creation record",
     "record required")
 rec("an unrecorded lakebase instance is left alone",
     "no creation record" in rcode10, "blocked, not deleted")
-rec("lakebase deletion is exact-name, from a constant",
-    'LAKEBASE = "docflow-lakebase"' in rcode10
-    and "delete_database_instance(LAKEBASE" in rcode10, "constant name")
+rec("lakebase deletion is exact-name, from the app's own record",
+    'LAKEBASE = rec_lb.get("instance") or "docflow-lakebase"' in rcode10
+    and "delete_database_instance(LAKEBASE" in rcode10, "recorded name")
 csrc = open(os.path.join(here2, "cases.py")).read()
 _dels = csrc.count("delete_database_instance")
 _husk = "soft-deleted husk" in csrc.split("delete_database_instance")[0][-600:] \
