@@ -1353,6 +1353,18 @@ async function loadPlaybook(){
     <button class="btn hot" id="pb-nb">Create the notebook in this workspace</button>
     <span class="msg" id="pb-msg">Lands in /Workspace/Shared/docflow, values baked in.</span>
   </div>
+  <div class="sect">Questions to ask on stage · Genie, Databricks One, or the Ask page</div>
+  <div class="fcard" style="margin-bottom:14px">
+    <p class="hint" style="margin:0 0 4px">The first two pull from the Genie space over the extracted
+      tables; the third reads the documents through a Knowledge Assistant. Paste the combined block
+      as ONE submittal and watch it fan out.</p>
+    ${(d.questions&&d.questions.genie||[]).map(q=>chip("Genie", q)).join("")}
+    ${(d.questions&&d.questions.assistant||[]).map(q=>chip("Assistant", q)).join("")}
+    ${d.questions&&d.questions.combined?`
+    <div class="pbrow"><span class="pbl">One submittal</span>
+      <pre class="code mono" style="flex:1;white-space:pre-wrap">${esc(d.questions.combined)}</pre>
+      <button class="btn pbc" data-copy="${esc(d.questions.combined)}">Copy</button></div>`:""}
+  </div>
   <div class="sect">SQL, runnable as-is · ${esc(d.catalog)}.${esc(d.schema)} · ${esc(d.model)}</div>
   ${(d.blocks||[]).map(b=>`
     <div class="fcard" style="margin-bottom:14px">

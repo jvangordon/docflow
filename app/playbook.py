@@ -81,10 +81,34 @@ ORDER BY claim_amount DESC"""},
     ]
 
 
+def questions() -> dict:
+    """Two Genie questions and one assistant question, plus a single block
+    that asks all of them in one submittal — for Genie, the app's Ask page,
+    or Databricks One. Platform-owned questions lead; fallbacks are the
+    corpus's own planted story, so the numbers always resolve."""
+    genie = ["How many warranty claims are outside their coverage window, "
+             "and what is the total amount?",
+             "Which vendor billed the most across the supplier invoices?"]
+    ka = ["What does the supplier contract say about the penalty for late "
+          "delivery, and who signs off on a warranty claim?"]
+    try:
+        import orchestrator
+        pq = orchestrator.platform_questions()
+        if pq.get("genie"):
+            genie = [q for q in pq["genie"] if q][:2] or genie
+        if pq.get("assistant"):
+            ka = [q for q in pq["assistant"] if q][:1] or ka
+    except Exception:
+        pass
+    combined = " ".join(genie + ka)
+    return {"genie": genie, "assistant": ka, "combined": combined}
+
+
 def payload() -> dict:
     """Everything the Playbook page renders, with live values substituted."""
     cat, sch = pipeline.CATALOG, pipeline.SCHEMA
     return {
+        "questions": questions(),
         "catalog": cat, "schema": sch, "model": pipeline.chat_model(),
         "volume": pipeline.VOL_ROOT,
         "blocks": _blocks(),
