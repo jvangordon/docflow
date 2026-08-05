@@ -1470,6 +1470,11 @@ def go(cfg: dict, stage: str = "all") -> None:
                  f"{n} documents waiting in the inbox · agents deployed · "
                  f"press Process documents on the Flow page and watch")
             return
+        if not pipeline._MODEL.get("name"):
+            # An app restart wipes the resolved model; a process-only run then
+            # calls the configured default, which may not exist here (Free has
+            # no databricks-* endpoints — this 404ed live). Resolve first.
+            resolve_model()
         run_documents()
         ensure_genie()               # after tables exist
         report_ka()                  # honest status, never a wait
