@@ -114,8 +114,14 @@ def questions() -> dict:
     except Exception:
         pass
     combined = " ".join(genie + [contracts[0], claims[0]])
+    digest = ("Summarize the current document intake: how many warranty claims "
+              "are within warranty, outside their coverage window, and needing "
+              "review, and the total dollar amount in each group — show a bar "
+              "chart of amounts by status. Then list the three largest "
+              "outside-window claims with unit serial, amount, and days past "
+              "coverage, and finish with one sentence on what changed most.")
     return {"genie": genie, "contracts": contracts, "claims": claims,
-            "combined": combined}
+            "combined": combined, "digest": digest}
 
 
 def payload() -> dict:
