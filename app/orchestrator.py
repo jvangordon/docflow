@@ -1057,6 +1057,13 @@ def seed_assistant_examples() -> None:
     for k in split:
         if not split[k]:
             split[k] = qs[:1]
+    # A nicety must never cost minutes. Every call here gets a hard deadline
+    # (the SDK otherwise retries a failing call silently for up to 5 minutes —
+    # that is exactly what a "quick step" stuck at 5:00 looks like), and the
+    # whole step gets a budget: past it, skip and say so. The Ask page falls
+    # back to the theme's questions, so skipping loses nothing on stage.
+    t0 = time.time()
+    BUDGET_S = 75
     try:
         from databricks.sdk.service import knowledgeassistants as K
         w = _w()
@@ -1064,22 +1071,34 @@ def seed_assistant_examples() -> None:
             ka = _KA_THREAD["created"].get(spec["display"])
             if ka is None:
                 continue
+            if time.time() - t0 > BUDGET_S:
+                _log("Assistant examples", "warn",
+                     "the examples API is slow here — skipped the rest, the "
+                     "Ask page uses the run's own questions instead")
+                break
             try:
-                have = list(w.knowledge_assistants.list_examples(ka.name))
+                have = _call(lambda n=ka.name: list(
+                    w.knowledge_assistants.list_examples(n)), 15,
+                    "listing an assistant's examples")
             except Exception:
                 have = []
             if have:
                 continue
             n = 0
             for q in split.get(spec["display"], [])[:3]:
+                if time.time() - t0 > BUDGET_S:
+                    break
                 _log("Assistant examples", "run",
                      f"writing onto {spec['about']}: \u201c{q[:70]}\u201d",
                      done=seeded, total=min(len(qs), 6))
                 try:
-                    w.knowledge_assistants.create_example(
-                        ka.name, K.Example(question=q))
+                    _call(lambda n_=ka.name, q_=q: w.knowledge_assistants.create_example(
+                        n_, K.Example(question=q_)), 20, "writing an example question")
                     n += 1
-                except Exception:
+                except Exception as e:
+                    _log("Assistant examples", "warn",
+                         f"could not write onto {spec['about']} "
+                         f"({str(e)[:90]}) — moving on")
                     break
             seeded += n
             if n:
