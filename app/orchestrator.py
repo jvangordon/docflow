@@ -1057,6 +1057,8 @@ def seed_assistant_examples() -> None:
                 continue
             n = 0
             for q in split.get(spec["display"], [])[:3]:
+                _log("Assistant examples", "run",
+                     f"writing onto {spec['about']}: \u201c{q[:70]}\u201d")
                 try:
                     w.knowledge_assistants.create_example(
                         ka.name, K.Example(question=q))
