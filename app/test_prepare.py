@@ -210,6 +210,8 @@ steps = orchestrator.GO["steps"]
 names = [s["name"] for s in steps]
 errs = [s for s in steps if s["status"] == "err"]
 
+orchestrator.GO["_sources_at_prepare"] = len(
+    getattr(fakew.knowledge_assistants, "sources", {}) or {})
 rec("prepare completes without raising", not crashed, crashed or f"{time.time()-t0:.1f}s")
 rec("reaches phase 'prepared'", orchestrator.GO["phase"] == "prepared",
     orchestrator.GO["phase"] + (f" · {orchestrator.GO.get('error','')[:80]}" if orchestrator.GO.get("error") else ""))
@@ -245,6 +247,10 @@ rec("classifier verdicts routed documents to their assistants",
     f"{len(routed)} routed by label")
 rec("secure-lane documents never reach an assistant folder",
     not any(hr_f in p for p in routed), "HR file stayed out")
+rec("sources attach in act two, never over empty folders",
+    len(getattr(fakew.knowledge_assistants, "sources", {}) or {}) > 0
+    and not orchestrator.GO.get("_sources_at_prepare"),
+    "attached after routing")
 rec("assistants were told their documents changed",
     len(getattr(fakew.knowledge_assistants, "synced", [])) >= 1,
     f"{len(getattr(fakew.knowledge_assistants, 'synced', []))} sync calls")

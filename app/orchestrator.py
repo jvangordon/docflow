@@ -910,6 +910,19 @@ def attach_assistant_sources() -> None:
             try:
                 for src in w.knowledge_assistants.list_knowledge_sources(ka.name):
                     path = (src.files.path or "") if src.files else ""
+                    state = str(getattr(src, "state", "") or "")
+                    if path == folder and ("FAILED" in state):
+                        # Our own source, wedged (the empty-bootstrap bug or a
+                        # platform hiccup). Replace it: delete + fresh attach
+                        # builds a clean index over the real documents.
+                        try:
+                            w.knowledge_assistants.delete_knowledge_source(src.name)
+                            _log(f"Assistant · {spec['about']}", "run",
+                                 "replacing its failed document index with a "
+                                 "fresh one over the routed files")
+                        except Exception:
+                            have = True      # could not remove; leave attached
+                        continue
                     if path == folder:
                         have = True
                     elif path:
@@ -1004,6 +1017,8 @@ def route_to_assistants() -> None:
     _log("Routed to assistants", "ok",
          (detail or "no Q&A-lane documents this run") +
          " — decided by ai_classify, not by setup")
+    attach_assistant_sources()   # folders are real now; a fresh index builds
+                                 # over actual documents and never wedges
     sync_assistant_sources()
     _section("Route documents to assistants", time.time() - t0)
 
@@ -1205,16 +1220,15 @@ def watch_assistants() -> None:
                     _log(name, "ok", "ready · answering with page citations")
                     pending.discard(disp)
                     continue
-                if st.get("endpoint") and st.get("sources"):
-                    # In this demo the folders hold nothing until the
-                    # classifier routes documents in act two — an endpoint
-                    # with its scoped source connected IS the finished state.
-                    _log(name, "ok", "endpoint live · scoped source connected · "
-                         "indexes documents once the classifier routes them")
+                if st.get("endpoint"):
+                    # Sources attach in act two, after the classifier fills
+                    # the folders — a live endpoint IS prepare's finished state.
+                    _log(name, "ok", "endpoint live · the classifier connects "
+                         "its documents when you press Process documents")
                     pending.discard(disp)
                     continue
-                if st.get("endpoint"):
-                    msg = "endpoint live · connecting its scoped source"
+                if False:
+                    msg = ""
                 else:
                     msg = "provisioning its endpoint, this is the slow part"
                 mins = int((time.time() - t0) / 60)
@@ -1441,8 +1455,10 @@ def go(cfg: dict, stage: str = "all") -> None:
             research_company(cfg)
             ensure_lakebase()
             build_corpus(cfg)
-            attach_assistant_sources()  # sources point at empty scoped folders;
-                                        # the classifier fills them in act two
+            # Sources are NOT attached here: an index bootstrapped over an
+            # empty folder wedges permanently ("Vector search index is not
+            # able to sync", every file FAILED — reproduced live). Act two
+            # attaches after the classifier has filled the folders.
             seed_assistant_examples()   # questions live on the platform objects
         if stage == "prepare":
             docs = GO["assets"].get("documents", {})
