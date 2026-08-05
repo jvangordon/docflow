@@ -1335,7 +1335,7 @@ async function loadBuilt(){
 /* ---------------- BRIEF ---------------- */
 function loadBrief(){
   const EXEC = `Documents are trapped operational data — real money and risk waiting on a person.
-Agents classify, extract, answer and act the moment documents arrive, governed end to end.
+Agent Bricks puts agents on the pile: classified, extracted, answerable and acted on as documents arrive, governed end to end in Unity Catalog.
 Value: money found · hours of reading becomes minutes of deciding · every answer traceable to its page.`;
   const IDEAS = [
     ["Accounts payable", "invoice-to-PO matching · duplicates caught before payment"],
@@ -1346,11 +1346,11 @@ Value: money found · hours of reading becomes minutes of deciding · every answ
     ["Field service", "manuals answer technicians, page cited"],
   ];
   const RECOVER = [
-    "Every audit finding opened a case by itself — nobody triaged",
-    "Suggest next step = one governed model call: diagnosis, action, who, urgency, filing note",
-    "Approve / Escalate / Dismiss writes a Postgres row to Lakebase — live, timestamped, on stage",
-    "Lakebase provisioned by the app in seconds — that's the operational-database story",
-    "The flagged $ here is the same number as the audit math and the documents — it reconciles",
+    "Findings become cases on their own — recovery starts without a triage queue",
+    "Every case arrives with a recommended move: diagnosis, next step, who owns it, how urgent",
+    "One click decides — approve, escalate, dismiss — and the decision is recorded the moment it is made",
+    "Decisions live in an operational database (Lakebase) with a full audit trail, ready for downstream systems",
+    "Every dollar on this page traces back to the source document that proves it",
   ];
   const LEVERS = [
     {name:"KNOWLEDGE ASSISTANT", cls:"cka", rows:[
@@ -1358,17 +1358,17 @@ Value: money found · hours of reading becomes minutes of deciding · every answ
       "Long-form prose in = better retrieval and citations out",
       "Sync API on new files · seed example questions to steer it"]},
     {name:"INFORMATION EXTRACTION", cls:"cie", rows:[
-      "The field name IS the prompt — 'vendor' reads Bill-to; 'vendor_company_that_issued_this_invoice' reads right",
+      "The field name IS the prompt — 'vendor' reads the Bill-to party; 'vendor_company_that_issued_this_invoice' reads the right one",
       "Field descriptions disambiguate lookalike values",
-      "try_cast + review lane: bad reads never become bad data · tune by rename-and-rerun"]},
+      "Route uncertain reads to human review — tune by renaming fields and re-running, minutes per loop"]},
     {name:"TEXT CLASSIFICATION", cls:"csec", rows:[
       "Labels in the business's own words — accuracy follows vocabulary",
       "One-line label descriptions split lookalikes (invoice vs PO)",
       "Low confidence routes to review, never a forced guess"]},
     {name:"GENIE + AI GATEWAY", cls:"cmut", rows:[
-      "Curate hard — three purpose-built tables beat three hundred",
-      "General Instructions route prose questions to the assistant",
-      "Model per task via the gateway — swap without touching the app"]},
+      "Curate hard — a space over three purpose-built tables beats three hundred",
+      "General Instructions route prose questions to the Knowledge Assistant",
+      "Pick the model per task in the gateway — swap models without changing anything downstream"]},
   ];
   stage.innerHTML=`
   <div class="over">Talk track</div>
@@ -1380,11 +1380,11 @@ Value: money found · hours of reading becomes minutes of deciding · every answ
       <div style="flex:1;font-size:13px;line-height:1.7;color:var(--ink2);white-space:pre-line">${esc(EXEC)}</div>
       <button class="btn pbc" data-copy="${esc(EXEC)}">Copy</button></div>
   </div>
-  <div class="sect">Recover page · say this while you click</div>
+  <div class="sect">The recovery desk · what your team gets</div>
   <div class="fcard" style="margin-bottom:16px">
     ${RECOVER.map(x=>`<p class="hint" style="margin:0 0 7px;font-size:12.5px;color:var(--ink2)">· ${esc(x)}</p>`).join("")}
   </div>
-  <div class="sect">Levers per brick · what to turn and what it does</div>
+  <div class="sect">Agent Bricks · the levers that raise quality</div>
   ${LEVERS.map(b=>`
   <div class="fcard" style="margin-bottom:12px">
     <div style="display:flex;align-items:flex-start;gap:14px">
